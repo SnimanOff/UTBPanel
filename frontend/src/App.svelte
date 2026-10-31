@@ -4,6 +4,8 @@
   import Placeholder from './routes/Placeholder.svelte'
   import Home from './routes/Home.svelte'
   import Bot from './routes/Bot.svelte'
+  import Keys from './routes/Keys.svelte'
+  import Audit from './routes/Audit.svelte'
 
   const titles: Record<string, string> = {
     home: 'Главная',
@@ -26,6 +28,10 @@
       <Home />
     {:else if r.name === 'bot'}
       {#key r.id}<Bot id={r.id} tab={r.tab} />{/key}
+    {:else if r.name === 'keys'}
+      <Keys />
+    {:else if r.name === 'audit'}
+      <Audit />
     {:else}
       <Placeholder title={titles[r.name]} />
     {/if}
