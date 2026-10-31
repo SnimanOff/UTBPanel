@@ -73,7 +73,8 @@ func New(ca *pki.CA, w *store.Writer, log *slog.Logger) *Server {
 	s := &Server{CA: ca, W: w, Log: log, Mux: NewMux()}
 	s.Use(Guard)
 	s.Mux.HandleFunc("GET /api/ping", func(w http.ResponseWriter, r *http.Request) {
-		WriteJSON(w, http.StatusOK, map[string]string{"pong": CallerFrom(r.Context()).Name})
+		c := CallerFrom(r.Context())
+		WriteJSON(w, http.StatusOK, map[string]string{"pong": c.Name, "kind": string(c.Kind)})
 	})
 	return s
 }
