@@ -17,6 +17,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
 	"github.com/SnimanOff/UTBPanel/backend/internal/deploy"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
+	"github.com/SnimanOff/UTBPanel/backend/internal/ingress"
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/logs"
 	"github.com/SnimanOff/UTBPanel/backend/internal/procstat"
@@ -50,10 +51,12 @@ type Core struct {
 	Logs     *logs.Store
 	Journal  *journal.Journal
 	Releases *deploy.Store
+	Pipe     *ingress.Pipeline
 
-	mu    sync.Mutex
-	procs map[string]procstat.Stats
-	edge  edgeSync
+	mu      sync.Mutex
+	procs   map[string]procstat.Stats
+	edge    edgeSync
+	targets targets
 
 	// closers run in reverse order on shutdown.
 	closers []func(context.Context) error
@@ -117,6 +120,8 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerReleases()
 	c.registerSettings()
 	c.registerEdgeSync()
+	c.Pipe = c.newPipeline()
+	c.registerIngress()
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
 	})
