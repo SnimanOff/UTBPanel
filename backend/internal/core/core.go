@@ -114,6 +114,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerLifecycle()
 	c.Releases = c.newReleases()
 	c.registerReleases()
+	c.registerSettings()
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
 	})

@@ -84,7 +84,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	annotate := func(r *http.Request, action, object string, details map[string]any) {
 		audit.Annotate(r, action, object, details)
 	}
-	p.Bots = &bots.Service{Core: p.Core}
+	p.Bots = &bots.Service{Core: p.Core, Groups: &bots.Groups{DB: db}}
 	p.Bots.Register(p.API.Mux)
 	(&sources.Uploads{Core: p.Core}).Register(p.API.Mux)
 	(&api.Keys{CA: ca, GateExe: cfg.GateExe, Servers: p.GateServers, Audit: annotate}).Register(p.API.Mux)

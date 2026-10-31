@@ -249,7 +249,7 @@ func (l *Log) List(ctx context.Context, q Query) ([]Entry, error) {
 }
 
 // Register adds GET /api/audit.
-func (l *Log) Register(mux *http.ServeMux) {
+func (l *Log) Register(mux *api.Mux) {
 	mux.HandleFunc("GET /api/audit", func(w http.ResponseWriter, r *http.Request) {
 		v := r.URL.Query()
 		q := Query{Action: v.Get("action"), Source: v.Get("source")}

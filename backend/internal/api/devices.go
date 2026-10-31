@@ -18,7 +18,7 @@ type Devices struct {
 }
 
 // Register adds the routes.
-func (d *Devices) Register(mux *http.ServeMux) {
+func (d *Devices) Register(mux *Mux) {
 	// Called by gate.exe with its enrollment certificate.
 	mux.HandleFunc("POST /enroll", d.enroll)
 	mux.HandleFunc("GET /enroll/{id}", d.status)

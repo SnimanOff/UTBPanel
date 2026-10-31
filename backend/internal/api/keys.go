@@ -21,7 +21,7 @@ type Keys struct {
 }
 
 // Register adds the key routes.
-func (k *Keys) Register(mux *http.ServeMux) {
+func (k *Keys) Register(mux *Mux) {
 	mux.HandleFunc("GET /api/keys", k.list)
 	mux.HandleFunc("POST /api/keys", k.issue)
 	mux.HandleFunc("POST /api/keys/{serial}/revoke", k.revoke)

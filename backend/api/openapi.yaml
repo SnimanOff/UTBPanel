@@ -1,0 +1,574 @@
+openapi: 3.1.0
+info:
+  title: TG Panel API
+  version: "1"
+  description: |
+    API of the panel. It is reachable only through gate (mTLS with a device
+    key). Changing requests need `X-Panel: 1` and a JSON body (uploads:
+    multipart/form-data).
+
+    Every operation has `x-mcp` — its level for neural networks:
+    `read` (reading), `write` (changes at once), `confirm` (waits for the
+    owner to confirm by holding a button), `never` (not available over MCP).
+servers:
+  - url: http://127.0.0.1:47100
+
+tags:
+  - name: bots
+  - name: lifecycle
+  - name: settings
+  - name: logs
+  - name: releases
+  - name: groups
+  - name: audit
+  - name: keys
+  - name: system
+
+paths:
+  /api/ping:
+    get:
+      operationId: ping
+      tags: [system]
+      summary: Check the connection and see the key name
+      x-mcp: read
+      responses:
+        "200": { description: OK }
+
+  /enroll:
+    post:
+      operationId: enroll
+      tags: [keys]
+      summary: Request a device certificate (gate.exe with its enrollment certificate)
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnrollRequest" }
+      responses:
+        "202": { description: Waiting for approval, content: { application/json: { schema: { $ref: "#/components/schemas/EnrollStatus" } } } }
+  /enroll/{id}:
+    get:
+      operationId: enroll_status
+      tags: [keys]
+      summary: State of an enrollment request (gate.exe polls it)
+      x-mcp: never
+      parameters: [{ $ref: "#/components/parameters/ID" }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EnrollStatus" } } } }
+
+  /api/bots:
+    get:
+      operationId: list_bots
+      tags: [bots]
+      summary: Bots with statuses, groups and versions
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/BotView" } } } } }
+    post:
+      operationId: create_bot
+      tags: [bots]
+      summary: Add a bot; the token is checked with getMe and never returned
+      x-mcp: write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, token]
+              properties:
+                name: { type: string }
+                token: { type: string, writeOnly: true }
+                group_id: { type: integer }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Bot" } } } }
+        "422": { $ref: "#/components/responses/Telegram" }
+
+  /api/bots/order:
+    put:
+      operationId: order_bots
+      tags: [groups]
+      summary: Put bots into a group in this order (0 = no group)
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                group_id: { type: integer }
+                ids: { type: array, items: { type: integer } }
+      responses:
+        "204": { description: Done }
+
+  /api/bots/{id}:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_bot
+      tags: [bots]
+      summary: One bot
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/BotView" } } } }
+    patch:
+      operationId: rename_bot
+      tags: [bots]
+      summary: Rename the bot in the panel (the Telegram name is in the profile)
+      x-mcp: write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string } } }
+      responses:
+        "200": { description: OK }
+    delete:
+      operationId: delete_bot
+      tags: [bots]
+      summary: Stop the bot, remove its webhook and delete all its data
+      x-mcp: never
+      responses:
+        "204": { description: Deleted }
+
+  /api/bots/{id}/token:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    put:
+      operationId: set_token
+      tags: [settings]
+      summary: Replace the token (checked with getMe). Neural networks use request_secret instead
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [token], properties: { token: { type: string, writeOnly: true } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Bot" } } } }
+        "422": { $ref: "#/components/responses/Telegram" }
+
+  /api/bots/{id}/group:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    put:
+      operationId: set_bot_group
+      tags: [groups]
+      summary: Move the bot to another group
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { group_id: { type: integer } } }
+      responses:
+        "200": { description: OK }
+
+  /api/bots/{id}/start:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: start
+      tags: [lifecycle]
+      summary: Start the bot
+      x-mcp: write
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Status" } } } }
+  /api/bots/{id}/stop:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: stop
+      tags: [lifecycle]
+      summary: Stop the bot; updates wait at Telegram
+      x-mcp: confirm
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Status" } } } }
+  /api/bots/{id}/restart:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: restart
+      tags: [lifecycle]
+      summary: Restart the bot
+      x-mcp: write
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Status" } } } }
+
+  /api/bots/{id}/settings:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_settings
+      tags: [settings]
+      summary: Settings of the bot (env, renames, limits)
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+    patch:
+      operationId: update_settings
+      tags: [settings]
+      summary: Change env, variable renames and limits; applies after a restart
+      x-mcp: confirm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SettingsUpdate" }
+      responses:
+        "200": { description: OK }
+
+  /api/bots/{id}/secrets:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: list_secrets
+      tags: [settings]
+      summary: Names of the bot's secrets; values are never returned
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/SecretInfo" } } } } }
+  /api/bots/{id}/secrets/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: set_secret
+      tags: [settings]
+      summary: Set a secret (write-only). Neural networks use request_secret instead
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { value: { type: string, writeOnly: true } } }
+          multipart/form-data:
+            schema: { type: object, properties: { file: { type: string, format: binary } } }
+      responses:
+        "200": { description: OK }
+    delete:
+      operationId: delete_secret
+      tags: [settings]
+      summary: Delete a secret
+      x-mcp: confirm
+      responses:
+        "204": { description: Deleted }
+
+  /api/bots/{id}/logs:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_logs
+      tags: [logs]
+      summary: Last lines, or a search with from/to/search=1
+      x-mcp: read
+      parameters:
+        - { name: level, in: query, schema: { type: string, enum: [debug, info, warn, error] } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: search, in: query, schema: { type: string, enum: ["1"] } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/LogLine" } } } } }
+  /api/bots/{id}/logs/stream:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: stream_logs
+      tags: [logs]
+      summary: Live log lines (Server-Sent Events)
+      x-mcp: never
+      responses:
+        "200": { description: text/event-stream }
+  /api/bots/{id}/logs/download:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: download_logs
+      tags: [logs]
+      summary: All log files as zip
+      x-mcp: never
+      responses:
+        "200": { description: application/zip }
+
+  /api/bots/{id}/releases:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: list_versions
+      tags: [releases]
+      summary: Stored versions with build data
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Release" } } } } }
+    post:
+      operationId: upload_release
+      tags: [releases]
+      summary: Upload a static linux/amd64 binary as a new version (does not deploy it)
+      x-mcp: write
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                version: { type: string }
+                file: { type: string, format: binary }
+      responses:
+        "201": { description: Stored, content: { application/json: { schema: { $ref: "#/components/schemas/Release" } } } }
+  /api/bots/{id}/releases/{version}/switch:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: version, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: deploy_release
+      tags: [releases]
+      summary: Switch the bot to a stored version
+      x-mcp: confirm
+      responses:
+        "200": { description: OK }
+
+  /api/groups:
+    get:
+      operationId: list_groups
+      tags: [groups]
+      summary: Groups in order
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Group" } } } } }
+    post:
+      operationId: create_group
+      tags: [groups]
+      summary: Create a group
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string } } }
+      responses:
+        "201": { description: Created }
+  /api/groups/order:
+    put:
+      operationId: order_groups
+      tags: [groups]
+      summary: Reorder groups
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { ids: { type: array, items: { type: integer } } } }
+      responses:
+        "204": { description: Done }
+  /api/groups/{gid}:
+    parameters: [{ name: gid, in: path, required: true, schema: { type: integer } }]
+    patch:
+      operationId: rename_group
+      tags: [groups]
+      summary: Rename a group
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string } } }
+      responses:
+        "204": { description: Done }
+    delete:
+      operationId: delete_group
+      tags: [groups]
+      summary: Delete a group; its bots move to "No group"
+      x-mcp: never
+      responses:
+        "204": { description: Deleted }
+
+  /api/audit:
+    get:
+      operationId: get_audit
+      tags: [audit]
+      summary: Action log with filters
+      x-mcp: read
+      parameters:
+        - { name: bot, in: query, schema: { type: integer } }
+        - { name: action, in: query, schema: { type: string } }
+        - { name: source, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: before, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } } } } }
+
+  /api/keys:
+    get:
+      operationId: list_keys
+      tags: [keys]
+      summary: Access keys
+      x-mcp: never
+      responses:
+        "200": { description: OK }
+    post:
+      operationId: issue_key
+      tags: [keys]
+      summary: Issue a child key; returns gate-<name>.exe (owner only)
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string } } }
+      responses:
+        "200": { description: application/vnd.microsoft.portable-executable }
+  /api/keys/{serial}/revoke:
+    parameters: [{ name: serial, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: revoke_key
+      tags: [keys]
+      summary: Revoke a key (owner only; the owner key only over SSH)
+      x-mcp: never
+      responses:
+        "200": { description: OK }
+  /api/devices:
+    get:
+      operationId: list_devices
+      tags: [keys]
+      summary: Devices waiting for approval
+      x-mcp: never
+      responses:
+        "200": { description: OK }
+  /api/devices/{id}/approve:
+    parameters: [{ $ref: "#/components/parameters/ID" }]
+    post:
+      operationId: approve_device
+      tags: [keys]
+      summary: Approve a device after comparing the code (owner only)
+      x-mcp: never
+      responses:
+        "200": { description: OK }
+  /api/devices/{id}/reject:
+    parameters: [{ $ref: "#/components/parameters/ID" }]
+    post:
+      operationId: reject_device
+      tags: [keys]
+      summary: Reject a device (owner only)
+      x-mcp: never
+      responses:
+        "200": { description: OK }
+
+components:
+  parameters:
+    BotID: { name: id, in: path, required: true, schema: { type: integer } }
+    ID: { name: id, in: path, required: true, schema: { type: integer } }
+  responses:
+    Telegram:
+      description: Telegram refused; its answer is passed as is in "telegram"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        telegram: { type: object, description: Answer of the Bot API }
+    Bot:
+      type: object
+      required: [id, name, username, tg_id, state, port, version, created_at]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        username: { type: string, x-untrusted: false }
+        tg_id: { type: integer }
+        state: { type: string, enum: [running, stopped, paused, crashed, error] }
+        port: { type: integer }
+        version: { type: string }
+        created_at: { type: string, format: date-time }
+    Status:
+      type: object
+      properties:
+        restarts: { type: integer }
+        last_exit: { type: integer }
+        last_exit_at: { type: string, format: date-time }
+        running: { type: boolean }
+        pid: { type: integer }
+        started: { type: string, format: date-time }
+    BotView:
+      allOf:
+        - { $ref: "#/components/schemas/Bot" }
+        - type: object
+          properties:
+            group_id: { type: integer }
+            position: { type: integer }
+            status: { $ref: "#/components/schemas/Status" }
+    Limits:
+      type: object
+      properties:
+        memory: { type: integer, description: bytes }
+        file: { type: integer }
+        files_total: { type: integer }
+        open_files: { type: integer }
+        threads: { type: integer }
+    SettingsUpdate:
+      type: object
+      properties:
+        env: { type: object, additionalProperties: { type: string } }
+        rename: { type: object, additionalProperties: { type: string } }
+        limits: { $ref: "#/components/schemas/Limits" }
+    SecretInfo:
+      type: object
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [value, file] }
+        updated_at: { type: string, format: date-time }
+    LogLine:
+      type: object
+      properties:
+        seq: { type: integer }
+        t: { type: string, format: date-time }
+        s: { type: string, enum: [stdout, stderr, core, canary] }
+        l: { type: string, enum: [debug, info, warn, error] }
+        m: { type: string, x-untrusted: true }
+    Release:
+      type: object
+      properties:
+        version: { type: string }
+        sha256: { type: string }
+        size: { type: integer }
+        uploaded: { type: string, format: date-time }
+        source: { type: string }
+        current: { type: boolean }
+        previous: { type: boolean }
+        build:
+          type: object
+          properties:
+            module: { type: string }
+            go_version: { type: string }
+            version: { type: string }
+            revision: { type: string }
+    Group:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        position: { type: integer }
+        mcp_mode: { type: string, enum: ["off", read, full] }
+    AuditEntry:
+      type: object
+      properties:
+        id: { type: integer }
+        ts: { type: string, format: date-time }
+        key: { type: string }
+        ip: { type: string }
+        source: { type: string }
+        action: { type: string }
+        bot_id: { type: integer }
+        object: { type: string }
+        details: { type: object }
+        result: { type: string }
+    EnrollRequest:
+      type: object
+      properties:
+        csr: { type: string, format: byte }
+    EnrollStatus:
+      type: object
+      properties:
+        id: { type: integer }
+        state: { type: string, enum: [pending, approved, rejected, expired] }
+        code: { type: string }
+        cert: { type: string, format: byte }
+        ca: { type: string, format: byte }
