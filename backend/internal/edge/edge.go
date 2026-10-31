@@ -18,6 +18,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
+	"github.com/SnimanOff/UTBPanel/backend/internal/updrules"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
 
@@ -39,6 +40,8 @@ type Edge struct {
 	settings settings
 	limiter  limiter
 	certPEM  []byte
+	queue    queue
+	replies  *updrules.Limiter
 
 	cmu      sync.Mutex
 	counters map[string]int64
@@ -49,10 +52,6 @@ func (e *Edge) count(name string) {
 	e.counters[name]++
 	e.cmu.Unlock()
 }
-
-// withoutCore answers when the core does not take the update; the rules
-// of maintenance replies come next.
-func (e *Edge) withoutCore(u Update) Reply { return Reply{Status: http.StatusOK} }
 
 // New prepares the edge.
 func New(cfg config.Edge, log *slog.Logger) (*Edge, error) {
@@ -65,6 +64,9 @@ func New(cfg config.Edge, log *slog.Logger) (*Edge, error) {
 	e := &Edge{Cfg: cfg, Log: log, Mux: wire.NewMux(), telegram: cfg.TelegramPrefixes(),
 		limiter: limiter{max: 60}, counters: map[string]int64{}}
 	e.settings.path = filepath.Join(cfg.DataDir, "settings")
+	e.queue.dir = filepath.Join(cfg.DataDir, "queue")
+	e.queue.recover()
+	e.replies = updrules.NewLimiter()
 	if err := e.settings.load(); err != nil && !os.IsNotExist(err) {
 		log.Warn("saved settings unreadable", "err", err)
 	}
@@ -74,7 +76,10 @@ func New(cfg config.Edge, log *slog.Logger) (*Edge, error) {
 		Hello: app.Hello(wire.ProtoEdgeCore, "edge", CoreVersion, 1),
 		OnConnect: func(c *wire.Conn) {
 			log.Info("connected to core", "peer", c.Peer().Hello.Name)
-			go e.onCoreConnect(c)
+			go func() {
+				e.onCoreConnect(c)
+				e.drainToCore(c)
+			}()
 		},
 		OnDisconnect: func(_ *wire.Conn, err error) { log.Warn("core connection lost", "err", err) },
 	}
