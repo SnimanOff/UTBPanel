@@ -76,6 +76,8 @@ type Hooks struct {
 	Started func(ctx context.Context, b Bot)
 	// Stopping runs before a stop by the owner (removes the webhook).
 	Stopping func(ctx context.Context, b Bot)
+	// Usage receives every measurement of the limits watcher (counters).
+	Usage func(botID int64, u Usage)
 }
 
 // Config of the runner.
@@ -92,6 +94,8 @@ type Config struct {
 	// `core exec-bot`, which sets limits and the uid and then becomes the bot.
 	ExecSelf      string
 	DefaultLimits Limits
+	// Proc reads /proc; nil means the real one.
+	Proc ProcReader
 }
 
 // Runner manages bot processes.
@@ -102,6 +106,7 @@ type Runner struct {
 	mu    sync.Mutex
 	procs map[int64]*proc
 	sups  map[int64]*supervisor
+	watch watchState
 }
 
 type proc struct {
@@ -119,7 +124,9 @@ func New(cfg Config) *Runner {
 	if cfg.Log == nil {
 		cfg.Log = slog.Default()
 	}
-	return &Runner{cfg: cfg, log: cfg.Log, procs: map[int64]*proc{}}
+	return &Runner{cfg: cfg, log: cfg.Log, procs: map[int64]*proc{}, watch: watchState{
+		usage: map[int64]Usage{}, warned: map[string]time.Time{}, reached: map[string]bool{}, lastDisk: map[int64]time.Time{},
+	}}
 }
 
 // BotDir is /data/core/bots/<id>.
