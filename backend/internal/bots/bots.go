@@ -83,7 +83,7 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var b core.Bot
-	if err := s.Call(r.Context(), "bots.create", core.CreateBot{Name: in.Name, Token: in.Token}, &b); err != nil {
+	if err := s.Call(r.Context(), "bots.create", core.CreateBot{Name: in.Name, Token: in.Token, Actor: api.Actor(r.Context())}, &b); err != nil {
 		WriteCoreError(w, err)
 		return
 	}
@@ -103,7 +103,7 @@ func (s *Service) setToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var b core.Bot
-	if err := s.Call(r.Context(), "bots.set_token", core.SetToken{BotID: id, Token: in.Token}, &b); err != nil {
+	if err := s.Call(r.Context(), "bots.set_token", core.SetToken{BotID: id, Token: in.Token, Actor: api.Actor(r.Context())}, &b); err != nil {
 		WriteCoreError(w, err)
 		return
 	}

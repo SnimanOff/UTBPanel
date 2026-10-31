@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
+	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
 	"github.com/SnimanOff/UTBPanel/backend/internal/bots"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
@@ -44,6 +46,7 @@ type Panel struct {
 	CA      *pki.CA
 	API     *api.Server
 	Bots    *bots.Service
+	Audit   *audit.Log
 
 	closers []func(context.Context) error
 	runners []func(context.Context)
@@ -74,10 +77,16 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		CA:      ca,
 	}
 	p.API = api.New(ca, p.W, log)
+	p.Audit = &audit.Log{DB: db, W: p.W, Log: log}
+	p.API.Use(p.Audit.Middleware)
+	p.Audit.Register(p.API.Mux)
+	annotate := func(r *http.Request, action, object string, details map[string]any) {
+		audit.Annotate(r, action, object, details)
+	}
 	p.Bots = &bots.Service{Core: p.Core}
 	p.Bots.Register(p.API.Mux)
-	(&api.Keys{CA: ca, GateExe: cfg.GateExe, Servers: p.GateServers}).Register(p.API.Mux)
-	(&api.Devices{CA: ca, OnNew: func(d pki.DeviceRequest) {
+	(&api.Keys{CA: ca, GateExe: cfg.GateExe, Servers: p.GateServers, Audit: annotate}).Register(p.API.Mux)
+	(&api.Devices{CA: ca, Audit: annotate, OnNew: func(d pki.DeviceRequest) {
 		log.Info("new device waiting for approval", "name", d.Name, "kind", d.Kind, "ip", d.IP, "code", d.Code)
 	}}).Register(p.API.Mux)
 	p.Go(func(ctx context.Context) {
@@ -119,6 +128,23 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		defer cancel()
 		if err := p.Events.CatchUp(ctx, c); err != nil {
 			log.Warn("fetching missed core events failed", "err", err)
+		}
+	})
+	// The core journal (SSH, autorollback, schedule) flows into the audit.
+	p.Go(func(ctx context.Context) {
+		t := time.NewTicker(10 * time.Second)
+		defer t.Stop()
+		for {
+			if c := p.Core.Conn(); c != nil {
+				if err := p.Audit.MergeJournal(ctx, c); err != nil && ctx.Err() == nil {
+					log.Warn("merging core journal failed", "err", err)
+				}
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
 		}
 	})
 	return p, nil
