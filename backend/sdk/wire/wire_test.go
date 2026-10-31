@@ -440,3 +440,18 @@ func TestSeveralProtocolsOnOneSocket(t *testing.T) {
 		t.Fatal("unknown protocol must fail")
 	}
 }
+
+func TestTimeKeepsUTC(t *testing.T) {
+	in := time.Date(2026, 10, 31, 12, 0, 0, 123456789, time.UTC)
+	b, err := Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out time.Time
+	if err := Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !out.Equal(in) || out.Location() != time.UTC {
+		t.Fatalf("got %v (%v)", out, out.Location())
+	}
+}

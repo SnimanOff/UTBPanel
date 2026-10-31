@@ -77,6 +77,18 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		EdgeMux: wire.NewMux(),
 		CA:      ca,
 	}
+	p.Events = events.NewSink(db, p.CoreMux, log)
+	p.Core = &wire.Client{
+		Path: wire.CoreSock(cfg.RunDir), Mux: p.CoreMux, Log: log,
+		Hello: app.Hello(wire.ProtoCorePanel, "panel", CoreVersion, 1),
+		OnConnect: func(c *wire.Conn) {
+			log.Info("connected to core", "peer", c.Peer().Hello.Name)
+			for _, fn := range p.onCore {
+				safe.Go(log, "on core connect", func() { fn(c) })
+			}
+		},
+		OnDisconnect: func(_ *wire.Conn, err error) { log.Warn("core connection lost", "err", err) },
+	}
 	p.API = api.New(ca, p.W, log)
 	p.Audit = &audit.Log{DB: db, W: p.W, Log: log}
 	p.API.Use(p.Audit.Middleware)
@@ -106,18 +118,6 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 			}
 		}
 	})
-	p.Events = events.NewSink(db, p.CoreMux, log)
-	p.Core = &wire.Client{
-		Path: wire.CoreSock(cfg.RunDir), Mux: p.CoreMux, Log: log,
-		Hello: app.Hello(wire.ProtoCorePanel, "panel", CoreVersion, 1),
-		OnConnect: func(c *wire.Conn) {
-			log.Info("connected to core", "peer", c.Peer().Hello.Name)
-			for _, fn := range p.onCore {
-				safe.Go(log, "on core connect", func() { fn(c) })
-			}
-		},
-		OnDisconnect: func(_ *wire.Conn, err error) { log.Warn("core connection lost", "err", err) },
-	}
 	p.EdgeSrv = &wire.Server{
 		Mux: p.EdgeMux, Log: log,
 		Hello: app.Hello(wire.ProtoEdgePanel, "panel", EdgeVersion, 1),

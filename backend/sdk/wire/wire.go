@@ -43,7 +43,11 @@ const (
 type Raw = cbor.RawMessage
 
 var (
-	encMode, _ = cbor.CoreDetEncOptions().EncMode()
+	encMode, _ = func() (cbor.EncMode, error) {
+		o := cbor.CoreDetEncOptions()
+		o.Time = cbor.TimeRFC3339Nano // keeps UTC and sub-second precision
+		return o.EncMode()
+	}()
 	decMode, _ = cbor.DecOptions{MaxArrayElements: 1 << 20, MaxMapPairs: 1 << 20}.DecMode()
 )
 
