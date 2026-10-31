@@ -147,6 +147,7 @@ func (c *Core) Run(ctx context.Context) error {
 	}
 	safe.Go(c.Log, "core socket", func() { c.Srv.Serve(ln) })
 	safe.Go(c.Log, "events", func() { c.Ev.Run(ctx) })
+	safe.Go(c.Log, "restore bots", func() { c.Runner.Restore(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)

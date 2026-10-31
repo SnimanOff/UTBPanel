@@ -5,6 +5,7 @@
 //	crash      exit 2 right away
 //	slow       listen only after 30 s
 //	stubborn   ignore SIGTERM
+//	crashlater exit 3 shortly after becoming ready
 package main
 
 import (
@@ -30,6 +31,12 @@ func main() {
 		time.Sleep(30 * time.Second)
 	case "stubborn":
 		signal.Ignore(syscall.SIGTERM)
+	case "crashlater":
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			fmt.Println("panic: later")
+			os.Exit(3)
+		}()
 	}
 	http.HandleFunc("/env", func(w http.ResponseWriter, r *http.Request) {
 		env := os.Environ()

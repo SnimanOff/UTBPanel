@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
@@ -111,7 +112,8 @@ func newEnv(t *testing.T) *env {
 func (e *env) addBot(t *testing.T, id int64, settings Settings) Bot {
 	t.Helper()
 	port := freePort(t)
-	_, err := e.db.W.Exec(`INSERT INTO bots (id, name, port, current_version, created_at) VALUES (?, ?, ?, 'v1', 'x')`, id, "bot"+strconv.FormatInt(id, 10), port)
+	js, _ := json.Marshal(settings)
+	_, err := e.db.W.Exec(`INSERT INTO bots (id, name, port, current_version, settings, created_at) VALUES (?, ?, ?, 'v1', ?, 'x')`, id, "bot"+strconv.FormatInt(id, 10), port, string(js))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,5 +206,89 @@ func TestNoVersion(t *testing.T) {
 	e := newEnv(t)
 	if err := e.r.Start(context.Background(), Bot{ID: 9}); err != ErrNoVersion {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func waitState(t *testing.T, db *store.DB, id int64, want string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for state(t, db, id) != want {
+		if time.Now().After(deadline) {
+			t.Fatalf("state = %s, want %s", state(t, db, id), want)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func shortBackoff(t *testing.T) {
+	oldMin, oldMax, oldWin := backoffMin, backoffMax, loopWindow
+	backoffMin, backoffMax, loopWindow = 50*time.Millisecond, 200*time.Millisecond, time.Minute
+	t.Cleanup(func() { backoffMin, backoffMax, loopWindow = oldMin, oldMax, oldWin })
+}
+
+func TestRestartAfterCrashAndLoop(t *testing.T) {
+	shortBackoff(t)
+	e := newEnv(t)
+	b := e.addBot(t, 1, Settings{Env: map[string]string{"MODE": "crashlater"}})
+	if err := e.r.Start(context.Background(), b); err != nil {
+		t.Fatal(err)
+	}
+	// It keeps crashing: restarts happen and after five crashes → error.
+	waitState(t, e.db, 1, Errored)
+	st := e.r.Status(1)
+	if st.Restarts < 4 || st.LastExit != 3 {
+		t.Fatalf("status = %+v", st)
+	}
+	evs := strings.Join(e.eventList(), ",")
+	if !strings.Contains(evs, "bot_crashed") || !strings.Contains(evs, "bot_restarted") || !strings.Contains(evs, "bot_crash_loop") {
+		t.Fatalf("events = %s", evs)
+	}
+	// The owner stops it: no more restarts.
+	e.r.Stop(context.Background(), 1)
+	time.Sleep(500 * time.Millisecond)
+	if e.r.IsRunning(1) || state(t, e.db, 1) != Stopped {
+		t.Fatal("restarted after an owner stop")
+	}
+}
+
+func TestStopKillsStubborn(t *testing.T) {
+	old := StopTimeout
+	StopTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { StopTimeout = old })
+	e := newEnv(t)
+	b := e.addBot(t, 1, Settings{Env: map[string]string{"MODE": "stubborn"}})
+	if err := e.r.Start(context.Background(), b); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	e.r.Stop(context.Background(), 1)
+	if e.r.IsRunning(1) || time.Since(start) > 3*time.Second {
+		t.Fatal("stubborn bot not killed")
+	}
+	if !strings.Contains(e.output(), "killing") {
+		t.Fatal("no kill line in the log")
+	}
+}
+
+func TestRestoreStates(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t)
+	for id := int64(1); id <= 3; id++ {
+		e.addBot(t, id, Settings{})
+	}
+	e.db.W.Exec(`UPDATE bots SET state = 'running' WHERE id = 1`)
+	e.db.W.Exec(`UPDATE bots SET state = 'paused' WHERE id = 2`)
+	e.db.W.Exec(`UPDATE bots SET state = 'stopped' WHERE id = 3`)
+	e.r.Restore(ctx)
+	if !e.r.IsRunning(1) || !e.r.IsRunning(2) || e.r.IsRunning(3) {
+		t.Fatal("wrong bots restored")
+	}
+	if state(t, e.db, 2) != Paused || state(t, e.db, 1) != Running {
+		t.Fatalf("states %s %s", state(t, e.db, 1), state(t, e.db, 2))
+	}
+	// Core shutdown keeps the saved state.
+	e.r.Shutdown()
+	if state(t, e.db, 1) != Running {
+		t.Fatal("shutdown changed the saved state")
 	}
 }

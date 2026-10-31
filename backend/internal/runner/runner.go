@@ -24,7 +24,7 @@ import (
 const UIDBase = 10000
 
 // Timeouts of the life cycle.
-const (
+var (
 	ReadyTimeout = 15 * time.Second
 	StopTimeout  = 10 * time.Second
 )
@@ -96,6 +96,7 @@ type Runner struct {
 
 	mu    sync.Mutex
 	procs map[int64]*proc
+	sups  map[int64]*supervisor
 }
 
 type proc struct {
@@ -303,10 +304,28 @@ func (r *Runner) Start(ctx context.Context, b Bot) error {
 
 	if err := waitPort(ctx, b.Port, p.done, ReadyTimeout); err != nil {
 		r.coreLine(b.ID, "not ready: %v", err)
-		r.kill(p)
+		if err != ErrExited {
+			r.mu.Lock()
+			p.stopping = true
+			r.mu.Unlock()
+			r.kill(p)
+			r.setState(ctx, b.ID, Crashed)
+		}
 		return err
 	}
-	r.setState(ctx, b.ID, Running)
+	if r.inLoop(b.ID) {
+		// Still "error" until it survives the crash window.
+		time.AfterFunc(loopWindow, func() {
+			r.mu.Lock()
+			alive := r.procs[b.ID] == p
+			r.mu.Unlock()
+			if alive {
+				r.markRunning(context.Background(), b.ID)
+			}
+		})
+	} else {
+		r.markRunning(ctx, b.ID)
+	}
 	r.coreLine(b.ID, "ready on port %d", b.Port)
 	r.emit(b.ID, "bot_started", "info", map[string]any{"version": b.Version, "pid": cmd.Process.Pid})
 	if r.cfg.Hooks.Started != nil {
@@ -342,6 +361,7 @@ func waitPort(ctx context.Context, port int, done <-chan struct{}, timeout time.
 
 // Stop stops the bot: SIGTERM to its process group, SIGKILL after 10 s.
 func (r *Runner) Stop(ctx context.Context, id int64) error {
+	r.cancelRestart(id)
 	r.mu.Lock()
 	p, ok := r.procs[id]
 	if ok {
@@ -406,8 +426,8 @@ func (r *Runner) exited(p *proc) {
 	}
 	code := exitCode(p.exit)
 	r.coreLine(p.bot.ID, "exited: %v", p.exit)
-	r.setState(context.Background(), p.bot.ID, Crashed)
 	r.emit(p.bot.ID, "bot_crashed", "error", map[string]any{"exit": code, "error": fmt.Sprint(p.exit), "uptime_s": int(time.Since(p.started).Seconds())})
+	r.crashed(p, code)
 }
 
 func exitCode(err error) int {
@@ -427,6 +447,17 @@ func (r *Runner) setState(ctx context.Context, id int64, state string) {
 	}
 	if _, err := r.cfg.DB.W.ExecContext(ctx, `UPDATE bots SET state = ? WHERE id = ?`, state, id); err != nil {
 		r.log.Error("saving bot state failed", "bot", id, "state", state, "err", err)
+	}
+}
+
+// markRunning saves "running" unless the bot is paused: a paused bot's
+// process runs, but updates do not reach it.
+func (r *Runner) markRunning(ctx context.Context, id int64) {
+	if r.cfg.DB == nil {
+		return
+	}
+	if _, err := r.cfg.DB.W.ExecContext(ctx, `UPDATE bots SET state = 'running' WHERE id = ? AND state != 'paused'`, id); err != nil {
+		r.log.Error("saving bot state failed", "bot", id, "err", err)
 	}
 }
 
