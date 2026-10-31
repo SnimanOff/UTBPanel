@@ -16,6 +16,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
+	"github.com/SnimanOff/UTBPanel/backend/internal/logs"
 	"github.com/SnimanOff/UTBPanel/backend/internal/procstat"
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
@@ -44,6 +45,7 @@ type Core struct {
 	Sec    *secrets.Store
 	TG     *telegram.Client
 	Runner *runner.Runner
+	Logs   *logs.Store
 
 	mu    sync.Mutex
 	procs map[string]procstat.Stats
@@ -101,6 +103,8 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.Ev = events.NewBus(db, c.Srv, c.Mux, log)
 	c.registerSecrets()
 	c.registerBots()
+	c.Logs = c.newLogs()
+	c.registerLogs()
 	c.Runner = c.newRunner()
 	c.registerLifecycle()
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
@@ -173,7 +177,7 @@ func (c *Core) Run(ctx context.Context) error {
 	steps = append(steps,
 		// Bots stop, their saved state and webhooks stay: they come back
 		// when the core starts again.
-		func(context.Context) error { c.Runner.Shutdown(); return nil },
+		func(context.Context) error { c.Runner.Shutdown(); c.Logs.Close(); return nil },
 		func(context.Context) error {
 			for _, conn := range c.Srv.Conns() {
 				conn.Close()

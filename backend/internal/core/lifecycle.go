@@ -45,9 +45,7 @@ func (c *Core) newRunner() *runner.Runner {
 			OpenFiles: int64(l.OpenFiles), Threads: int64(l.Threads),
 		},
 		Hooks: runner.Hooks{
-			Output: func(l runner.Line) {
-				c.Log.Debug("bot output", "bot", l.BotID, "stream", l.Stream, "line", l.Text)
-			},
+			Output: func(l runner.Line) { c.Logs.Add(l.BotID, l.Stream, l.Text, l.Time) },
 			Event: func(id int64, typ, sev string, data map[string]any) {
 				c.Ev.Emit(typ, id, sev, data)
 			},
