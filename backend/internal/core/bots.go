@@ -194,6 +194,7 @@ func (c *Core) CreateBot(ctx context.Context, in CreateBot) (Bot, error) {
 		return Bot{}, err
 	}
 	c.Log.Info("bot created", "bot", b.ID, "username", b.Username)
+	go c.PushEdge(context.Background())
 	return b, nil
 }
 

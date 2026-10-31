@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -63,10 +64,18 @@ func New(cfg config.Edge, log *slog.Logger) (*Edge, error) {
 	}
 	e := &Edge{Cfg: cfg, Log: log, Mux: wire.NewMux(), telegram: cfg.TelegramPrefixes(),
 		limiter: limiter{max: 60}, counters: map[string]int64{}}
+	e.settings.path = filepath.Join(cfg.DataDir, "settings")
+	if err := e.settings.load(); err != nil && !os.IsNotExist(err) {
+		log.Warn("saved settings unreadable", "err", err)
+	}
+	e.registerSettings()
 	e.Core = &wire.Client{
 		Path: wire.CoreSock(cfg.RunDir), Mux: e.Mux, Log: log,
-		Hello:        app.Hello(wire.ProtoEdgeCore, "edge", CoreVersion, 1),
-		OnConnect:    func(c *wire.Conn) { log.Info("connected to core", "peer", c.Peer().Hello.Name) },
+		Hello: app.Hello(wire.ProtoEdgeCore, "edge", CoreVersion, 1),
+		OnConnect: func(c *wire.Conn) {
+			log.Info("connected to core", "peer", c.Peer().Hello.Name)
+			go e.onCoreConnect(c)
+		},
 		OnDisconnect: func(_ *wire.Conn, err error) { log.Warn("core connection lost", "err", err) },
 	}
 	e.Panel = &wire.Client{

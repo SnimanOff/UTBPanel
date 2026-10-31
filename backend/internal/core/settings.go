@@ -113,6 +113,7 @@ func (c *Core) DeleteBot(ctx context.Context, id int64) error {
 		return err
 	}
 	c.Logs.Remove(id)
+	go c.PushEdge(context.Background())
 	dir := filepath.Join(c.Cfg.DataDir, "bots", strconv.FormatInt(id, 10))
 	return os.RemoveAll(dir)
 }

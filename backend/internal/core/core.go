@@ -53,6 +53,7 @@ type Core struct {
 
 	mu    sync.Mutex
 	procs map[string]procstat.Stats
+	edge  edgeSync
 
 	// closers run in reverse order on shutdown.
 	closers []func(context.Context) error
@@ -115,6 +116,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.Releases = c.newReleases()
 	c.registerReleases()
 	c.registerSettings()
+	c.registerEdgeSync()
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
 	})
