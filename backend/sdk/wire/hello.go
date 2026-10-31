@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 )
@@ -14,32 +15,72 @@ type Hello struct {
 	Name       string   `cbor:"5,keyasint,omitempty"` // program and version, for logs
 }
 
-// handshake sends our hello, reads the peer's and agrees on the lower
-// version. Incompatible peers get an error and the connection is dropped.
-func (c *Conn) handshake(self Hello) error {
-	if self.Version == 0 {
-		self.Version = 1
+func normalize(h Hello) Hello {
+	if h.Version == 0 {
+		h.Version = 1
 	}
-	if self.MinVersion == 0 {
-		self.MinVersion = 1
+	if h.MinVersion == 0 {
+		h.MinVersion = 1
 	}
-	c.self = self
-	if err := c.send(fHello, 0, self); err != nil {
-		return err
-	}
+	return h
+}
+
+func (c *Conn) readHello() (Hello, error) {
 	// The hello is the very first frame; read it unbuffered so that nothing
 	// after it is consumed before the read loop starts.
 	typ, _, payload, err := readFrame(c.nc)
 	if err != nil {
-		return fmt.Errorf("wire: reading hello: %w", err)
+		return Hello{}, fmt.Errorf("wire: reading hello: %w", err)
 	}
 	if typ != fHello {
-		return fmt.Errorf("wire: expected hello, got frame type %d", typ)
+		return Hello{}, fmt.Errorf("wire: expected hello, got frame type %d", typ)
 	}
 	var peer Hello
 	if err := Unmarshal(payload, &peer); err != nil {
-		return fmt.Errorf("wire: bad hello: %w", err)
+		return Hello{}, fmt.Errorf("wire: bad hello: %w", err)
 	}
+	return peer, nil
+}
+
+// clientHandshake sends our hello first, then reads the server's.
+func (c *Conn) clientHandshake(self Hello) error {
+	self = normalize(self)
+	if err := c.send(fHello, 0, self); err != nil {
+		return err
+	}
+	peer, err := c.readHello()
+	if err != nil {
+		return err
+	}
+	return c.agree(self, peer)
+}
+
+// serverHandshake reads the client's hello and answers with the hello of
+// the same protocol, so one socket can serve several protocols.
+func (c *Conn) serverHandshake(selves []Hello) error {
+	peer, err := c.readHello()
+	if err != nil {
+		return err
+	}
+	if len(selves) == 0 {
+		return errors.New("wire: server has no protocols")
+	}
+	self := normalize(selves[0])
+	for _, h := range selves {
+		if h.Proto == peer.Proto {
+			self = normalize(h)
+		}
+	}
+	if err := c.send(fHello, 0, self); err != nil {
+		return err
+	}
+	return c.agree(self, peer)
+}
+
+// agree picks the lower of the two versions. Incompatible peers get an
+// error and the connection is dropped.
+func (c *Conn) agree(self, peer Hello) error {
+	c.self = self
 	if peer.Proto != self.Proto {
 		return Errorf("incompatible", "protocol %q, expected %q", peer.Proto, self.Proto)
 	}
@@ -54,6 +95,9 @@ func (c *Conn) handshake(self Hello) error {
 	c.version.Store(int32(v))
 	return nil
 }
+
+// Proto returns the protocol of this connection.
+func (c *Conn) Proto() string { return c.self.Proto }
 
 // Peer returns the peer's hello and the negotiated version.
 func (c *Conn) Peer() PeerInfo { return c.info }

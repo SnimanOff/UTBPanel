@@ -416,3 +416,27 @@ func TestSocketMode(t *testing.T) {
 		t.Errorf("mode = %v", fi.Mode().Perm())
 	}
 }
+
+func TestSeveralProtocolsOnOneSocket(t *testing.T) {
+	path := sockPath(t)
+	ln, err := Listen(path, 0, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	srv := &Server{Mux: echoMux(), Hello: Hello{Proto: "a", Version: 1}, Also: []Hello{{Proto: "b", Version: 3}}}
+	go srv.Serve(ln)
+	for proto, version := range map[string]int{"a": 1, "b": 3} {
+		c, err := Dial(context.Background(), path, nil, Hello{Proto: proto, Version: 5}, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", proto, err)
+		}
+		if c.Proto() != proto || c.Version() != version {
+			t.Errorf("%s: proto %s version %d", proto, c.Proto(), c.Version())
+		}
+		c.Close()
+	}
+	if _, err := Dial(context.Background(), path, nil, Hello{Proto: "c"}, nil); err == nil {
+		t.Fatal("unknown protocol must fail")
+	}
+}

@@ -46,8 +46,10 @@ func Listen(path string, perm os.FileMode, gid int) (net.Listener, error) {
 
 // Server accepts connections and runs the handshake for each.
 type Server struct {
-	Mux          *Mux
-	Hello        Hello
+	Mux   *Mux
+	Hello Hello
+	// Also lists more protocols served on the same socket.
+	Also         []Hello
 	Log          *slog.Logger
 	OnConnect    func(*Conn)
 	OnDisconnect func(*Conn, error)
@@ -72,7 +74,7 @@ func (s *Server) Serve(ln net.Listener) error {
 
 func (s *Server) handle(nc net.Conn) {
 	c := newConn(nc, s.Mux, s.Log)
-	if err := c.handshake(s.Hello); err != nil {
+	if err := c.serverHandshake(append([]Hello{s.Hello}, s.Also...)); err != nil {
 		c.log.Warn("wire handshake failed", "proto", s.Hello.Proto, "err", err)
 		c.shutdown(err)
 		return
@@ -126,7 +128,7 @@ func Dial(ctx context.Context, path string, mux *Mux, hello Hello, log *slog.Log
 	if dl, ok := ctx.Deadline(); ok {
 		nc.SetDeadline(dl)
 	}
-	if err := c.handshake(hello); err != nil {
+	if err := c.clientHandshake(hello); err != nil {
 		c.shutdown(err)
 		return nil, err
 	}

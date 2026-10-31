@@ -1,0 +1,102 @@
+// Package panel wires the panel process: panel.db, the connection to the
+// core, the socket for the edge, and the HTTP API.
+package panel
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/SnimanOff/UTBPanel/backend/internal/app"
+	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
+	"github.com/SnimanOff/UTBPanel/backend/internal/config"
+	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
+	"github.com/SnimanOff/UTBPanel/backend/internal/store"
+	"github.com/SnimanOff/UTBPanel/backend/internal/store/migrations"
+	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
+)
+
+// Protocol versions spoken by the panel.
+const (
+	CoreVersion = 1
+	EdgeVersion = 1
+)
+
+// Panel is the running panel process.
+type Panel struct {
+	Cfg     config.Panel
+	Log     *slog.Logger
+	DB      *store.DB
+	W       *store.Writer
+	CoreMux *wire.Mux
+	Core    *wire.Client
+	EdgeMux *wire.Mux
+	EdgeSrv *wire.Server
+
+	closers []func(context.Context) error
+	runners []func(context.Context)
+}
+
+// New opens panel.db and prepares connections.
+func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error) {
+	for _, d := range []string{cfg.DataDir, cfg.RunDir} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			return nil, err
+		}
+	}
+	db, err := store.Open(ctx, filepath.Join(cfg.DataDir, "panel.db"), migrations.Panel())
+	if err != nil {
+		return nil, err
+	}
+	p := &Panel{
+		Cfg: cfg, Log: log, DB: db,
+		W:       store.NewWriter(db, 10*time.Second, log),
+		CoreMux: wire.NewMux(),
+		EdgeMux: wire.NewMux(),
+	}
+	p.Core = &wire.Client{
+		Path: wire.CoreSock(cfg.RunDir), Mux: p.CoreMux, Log: log,
+		Hello:        app.Hello(wire.ProtoCorePanel, "panel", CoreVersion, 1),
+		OnConnect:    func(c *wire.Conn) { log.Info("connected to core", "peer", c.Peer().Hello.Name) },
+		OnDisconnect: func(_ *wire.Conn, err error) { log.Warn("core connection lost", "err", err) },
+	}
+	p.EdgeSrv = &wire.Server{
+		Mux: p.EdgeMux, Log: log,
+		Hello: app.Hello(wire.ProtoEdgePanel, "panel", EdgeVersion, 1),
+	}
+	return p, nil
+}
+
+// OnClose registers a shutdown step.
+func (p *Panel) OnClose(fn func(context.Context) error) { p.closers = append(p.closers, fn) }
+
+// Go registers a background task started by Run.
+func (p *Panel) Go(fn func(context.Context)) { p.runners = append(p.runners, fn) }
+
+// Run works until ctx is done.
+func (p *Panel) Run(ctx context.Context) error {
+	ln, err := wire.Listen(wire.PanelSock(p.Cfg.RunDir), 0o660, -1)
+	if err != nil {
+		return fmt.Errorf("panel socket: %w", err)
+	}
+	safe.Go(p.Log, "panel socket", func() { p.EdgeSrv.Serve(ln) })
+	safe.Go(p.Log, "core client", func() { p.Core.Run(ctx) })
+	safe.Go(p.Log, "stats", func() { app.ReportStats(ctx, p.Core, "panel", 10*time.Second) })
+	for _, fn := range p.runners {
+		safe.Go(p.Log, "panel task", func() { fn(ctx) })
+	}
+	p.Log.Info("panel started", "version", buildinfo.Version)
+	<-ctx.Done()
+	p.Log.Info("panel stopping")
+	ln.Close()
+	steps := make([]func(context.Context) error, 0, len(p.closers)+1)
+	for i := len(p.closers) - 1; i >= 0; i-- {
+		steps = append(steps, p.closers[i])
+	}
+	steps = append(steps, func(context.Context) error { p.W.Close(); return p.DB.Close() })
+	app.Shutdown(p.Log, 15*time.Second, steps...)
+	return nil
+}

@@ -1,26 +1,34 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"fmt"
-	"os"
 
-	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
+	"github.com/SnimanOff/UTBPanel/backend/internal/app"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
+	"github.com/SnimanOff/UTBPanel/backend/internal/core"
 )
 
 func main() {
-	printConfig := flag.Bool("print-config", false, "print the resulting config and exit")
-	configPath := flag.String("config", "", "YAML config file")
-	flag.Parse()
+	app.Main("core", []app.Command{
+		{Name: "serve", Usage: "run the core", Run: serve},
+	})
+}
+
+func serve(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	cf := app.AddConfigFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 	cfg := config.DefaultCore()
-	if err := config.Load(&cfg, *configPath); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
+	if done, err := cf.Load(&cfg); done || err != nil {
+		return err
 	}
-	if *printConfig {
-		fmt.Print(config.Print(cfg))
-		return
+	log := app.Logger(cfg.Common, "core")
+	p, err := core.New(ctx, cfg, log)
+	if err != nil {
+		return err
 	}
-	fmt.Println(buildinfo.String("core"))
+	return p.Run(ctx)
 }
