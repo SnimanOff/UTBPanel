@@ -1,7 +1,7 @@
 //go:build windows
 
 // Command tpm checks that an ECDSA P-256 key kept in the TPM can drive a
-// TLS 1.3 client certificate handshake from Go (plan section 2.2).
+// TLS 1.3 client certificate handshake from Go.
 package main
 
 import (

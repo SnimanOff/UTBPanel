@@ -1,4 +1,4 @@
-// Command gate is the access key of the panel (plan 2): a local proxy that
+// Command gate is the access key of the panel: a local proxy that
 // forwards the browser to the panel over mTLS with a key kept in the TPM.
 package main
 

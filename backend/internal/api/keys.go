@@ -9,7 +9,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
 )
 
-// Keys serves the key management API (plan 2.3). Only the owner issues and
+// Keys serves the key management API. Only the owner issues and
 // revokes keys; child keys see the list.
 type Keys struct {
 	CA      *pki.CA

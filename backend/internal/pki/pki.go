@@ -1,4 +1,4 @@
-// Package pki is the panel's own certificate authority (plan 2).
+// Package pki is the panel's own certificate authority.
 //
 // The CA signs the server certificate for :443 and client certificates of
 // three kinds, told apart by a private extension: owner and child device

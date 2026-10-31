@@ -10,7 +10,7 @@ import (
 )
 
 // SecretSet is the request to store a secret. There is no request to read
-// one: secrets are write-only (plan 3.2).
+// one: secrets are write-only.
 type SecretSet struct {
 	BotID int64  `cbor:"1,keyasint"`
 	Name  string `cbor:"2,keyasint"`

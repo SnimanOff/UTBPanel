@@ -1,6 +1,6 @@
 // Package edge is the gatekeeper: the only process exposed to the internet.
 // It accepts webhooks, checks them and hands them to the core; when the
-// core is down it answers users by the maintenance rules (plan 1.1, 5.1).
+// core is down it answers users by the maintenance rules.
 package edge
 
 import (

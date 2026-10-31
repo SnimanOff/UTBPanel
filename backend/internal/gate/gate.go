@@ -1,4 +1,4 @@
-// Package gate is the logic of gate.exe (plan 2): a local HTTP proxy on
+// Package gate is the logic of gate.exe: a local HTTP proxy on
 // 127.0.0.1 that lets only the browser session it opened (or an MCP client
 // with its token) through, and forwards requests to the panel over mTLS with
 // the device key.

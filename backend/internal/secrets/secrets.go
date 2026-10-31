@@ -1,4 +1,4 @@
-// Package secrets keeps bot tokens and other secrets (plan 3.2).
+// Package secrets keeps bot tokens and other secrets.
 //
 // Secrets lie in core.db encrypted with AES-256-GCM. The master key lives
 // in its own volume /keys, outside /data, and only the core has it, so a

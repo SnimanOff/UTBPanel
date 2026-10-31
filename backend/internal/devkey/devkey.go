@@ -1,4 +1,4 @@
-// Package devkey keeps the device key of gate.exe (plan 2.2): an ECDSA
+// Package devkey keeps the device key of gate.exe: an ECDSA
 // P-256 key created on this computer that never leaves it. On Windows it
 // lives in the TPM (Microsoft Platform Crypto Provider); without a TPM it
 // is a software key encrypted with DPAPI for the current Windows user.

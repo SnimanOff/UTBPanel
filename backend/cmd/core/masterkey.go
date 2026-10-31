@@ -28,7 +28,7 @@ func loadCfg(fs *flag.FlagSet, args []string) (config.Core, error) {
 }
 
 // The master key never passes through the panel: export and import exist
-// only here, over SSH (plan 12.2).
+// only here, over SSH.
 func masterkeyExport(ctx context.Context, args []string) error {
 	cfg, err := loadCfg(flag.NewFlagSet("masterkey export", flag.ContinueOnError), args)
 	if err != nil {

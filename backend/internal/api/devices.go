@@ -9,7 +9,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
 )
 
-// Devices serves enrollment of new gates and their approval (plan 2.2).
+// Devices serves enrollment of new gates and their approval.
 type Devices struct {
 	CA *pki.CA
 	// OnNew is called for every new request (event "new device").

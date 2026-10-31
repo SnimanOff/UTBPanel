@@ -56,7 +56,7 @@ type Core struct {
 	Limits       Limits `yaml:"limits"`
 }
 
-// Limits are default per-bot resource limits (plan 3.3).
+// Limits are default per-bot resource limits.
 type Limits struct {
 	Memory     ByteSize `yaml:"memory" env:"LIMIT_MEMORY"`
 	File       ByteSize `yaml:"file" env:"LIMIT_FILE"`

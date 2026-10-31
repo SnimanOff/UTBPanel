@@ -1,5 +1,5 @@
-// Package gatefile reads and writes the data block at the end of gate.exe
-// (plan 2.1). One gate.exe is built with the panel; the panel makes each
+// Package gatefile reads and writes the data block at the end of gate.exe.
+// One gate.exe is built with the panel; the panel makes each
 // copy unique by appending:
 //
 //	data (CBOR) | length uint32 | "TGPANEL1"
@@ -112,7 +112,7 @@ func ReadFile(path string) (*Block, error) {
 }
 
 // ReadSelf reads the block of the running gate: from gate.dat next to the
-// executable if present (for a signed gate.exe, plan 2.5), otherwise from
+// executable if present (for a signed gate.exe), otherwise from
 // the end of the executable itself.
 func ReadSelf() (*Block, error) {
 	exe, err := os.Executable()

@@ -39,7 +39,7 @@ var nameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,39}$`)
 // ErrBadName is returned for key names that cannot be used in file names.
 var ErrBadName = errors.New("pki: key name must be 1-40 letters, digits, '.', '_' or '-'")
 
-// ErrOwnerKey refuses to revoke the owner key from the panel (plan 2.3).
+// ErrOwnerKey refuses to revoke the owner key from the panel.
 var ErrOwnerKey = errors.New("pki: the owner key can only be revoked over SSH: panel keys revoke")
 
 // NewGate issues an enrollment certificate for a future device key of kind

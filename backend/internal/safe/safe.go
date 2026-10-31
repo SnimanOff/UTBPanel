@@ -1,6 +1,5 @@
 // Package safe runs goroutines that cannot crash the process: a panic in
-// one goroutine is logged with its stack and only that goroutine ends
-// (plan 1.1).
+// one goroutine is logged with its stack and only that goroutine ends.
 package safe
 
 import (

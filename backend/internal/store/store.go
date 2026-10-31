@@ -2,7 +2,7 @@
 //
 // Every database gets one write connection and a separate read-only pool:
 // SQLite allows a single writer, so funnelling writes through one
-// connection avoids "database is locked" (plan 19.11).
+// connection avoids "database is locked".
 package store
 
 import (

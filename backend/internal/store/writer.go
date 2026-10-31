@@ -23,7 +23,7 @@ type request struct {
 	done chan error // nil for batched writes
 }
 
-// Writer is the single write goroutine of a database (plan 19.11).
+// Writer is the single write goroutine of a database.
 //
 // Important records (audit, bans, payments, settings, keys) go through Now
 // and are written at once. Frequent ones (last_seen, broadcast progress,

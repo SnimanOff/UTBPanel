@@ -1,6 +1,6 @@
 // Package api is the panel's HTTP API for the frontend and MCP. It is
 // served only on the mTLS listener: without a client certificate signed by
-// the panel's CA no HTTP response is ever sent (plan 2).
+// the panel's CA no HTTP response is ever sent.
 package api
 
 import (
@@ -145,7 +145,7 @@ func (s *Server) Handler() http.Handler {
 	})
 }
 
-// touch records last_seen and last_ip in the next batch (plan 19.11).
+// touch records last_seen and last_ip in the next batch.
 func (s *Server) touch(c Caller) {
 	if s.W == nil || c.Kind == pki.Enrollment {
 		return

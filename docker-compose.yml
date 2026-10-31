@@ -1,4 +1,4 @@
-# Three containers from one image (plan 1.1, 15). Each service has its own
+# Three containers from one image. Each service has its own
 # version tag, so `docker compose up -d` does not touch the core (and the
 # bots) until CORE_VERSION changes.
 

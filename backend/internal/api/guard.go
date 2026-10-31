@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Guard protects the API behind the gate's local port (plan 2.4): any site
+// Guard protects the API behind the gate's local port: any site
 // open in the browser and any program on the computer can send requests to
 // 127.0.0.1.
 //
