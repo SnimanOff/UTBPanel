@@ -1,0 +1,22 @@
+version: "2"
+run:
+  timeout: 5m
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - errorlint
+    - gosec
+    - misspell
+  settings:
+    gosec:
+      excludes:
+        - G104
+formatters:
+  enable:
+    - gofmt
+    - goimports
