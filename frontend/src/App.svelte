@@ -2,6 +2,7 @@
   import { router } from './lib/router.svelte'
   import Header from './routes/Header.svelte'
   import Placeholder from './routes/Placeholder.svelte'
+  import Home from './routes/Home.svelte'
 
   const titles: Record<string, string> = {
     home: 'Главная',
@@ -20,7 +21,11 @@
 {:else}
   <Header />
   <main>
-    <Placeholder title={titles[r.name]} />
+    {#if r.name === 'home'}
+      <Home />
+    {:else}
+      <Placeholder title={titles[r.name]} />
+    {/if}
   </main>
 {/if}
 

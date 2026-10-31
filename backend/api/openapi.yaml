@@ -480,6 +480,7 @@ components:
         created_at: { type: string, format: date-time }
     Status:
       type: object
+      required: [restarts, last_exit, running]
       properties:
         restarts: { type: integer }
         last_exit: { type: integer }
@@ -491,6 +492,7 @@ components:
       allOf:
         - { $ref: "#/components/schemas/Bot" }
         - type: object
+          required: [position, status]
           properties:
             group_id: { type: integer }
             position: { type: integer }
@@ -511,12 +513,14 @@ components:
         limits: { $ref: "#/components/schemas/Limits" }
     SecretInfo:
       type: object
+      required: [name, kind, updated_at]
       properties:
         name: { type: string }
         kind: { type: string, enum: [value, file] }
         updated_at: { type: string, format: date-time }
     LogLine:
       type: object
+      required: [seq, t, s, l, m]
       properties:
         seq: { type: integer }
         t: { type: string, format: date-time }
@@ -525,6 +529,7 @@ components:
         m: { type: string, x-untrusted: true }
     Release:
       type: object
+      required: [version, sha256, size, uploaded, source, current, previous, build]
       properties:
         version: { type: string }
         sha256: { type: string }
@@ -542,6 +547,7 @@ components:
             revision: { type: string }
     Group:
       type: object
+      required: [id, name, position, mcp_mode]
       properties:
         id: { type: integer }
         name: { type: string }
@@ -549,6 +555,7 @@ components:
         mcp_mode: { type: string, enum: ["off", read, full] }
     AuditEntry:
       type: object
+      required: [id, ts, key, source, action, result]
       properties:
         id: { type: integer }
         ts: { type: string, format: date-time }
