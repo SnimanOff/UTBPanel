@@ -32,5 +32,5 @@ RUN apk add --no-cache ca-certificates tzdata tini && \
 COPY --from=go /out/edge /out/core /out/panel /usr/local/bin/
 COPY --from=go /out/gate.exe /srv/gate/gate.exe
 COPY --from=web /web/dist /srv/web
-ENV TGPANEL_SOCKET_GID=1000
+ENV TGPANEL_SOCKET_GID=1000 TGPANEL_IN_IMAGE=1
 ENTRYPOINT ["/sbin/tini", "--"]

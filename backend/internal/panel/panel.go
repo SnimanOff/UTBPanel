@@ -81,6 +81,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	p.Audit = &audit.Log{DB: db, W: p.W, Log: log}
 	p.API.Use(p.Audit.Middleware)
 	p.Audit.Register(p.API.Mux)
+	p.API.Mux.ServeMux.Handle("/", api.Static(cfg.WebDir))
 	annotate := func(r *http.Request, action, object string, details map[string]any) {
 		audit.Annotate(r, action, object, details)
 	}
@@ -187,6 +188,13 @@ func (p *Panel) Run(ctx context.Context) error {
 			p.Log.Error("mtls listener stopped", "err", err)
 		}
 	})
+	if p.Cfg.Dev {
+		safe.Go(p.Log, "dev listener", func() {
+			if err := p.API.ListenDev(ctx, p.Cfg.DevAddr); err != nil {
+				p.Log.Error("dev listener stopped", "err", err)
+			}
+		})
+	}
 	for _, fn := range p.runners {
 		safe.Go(p.Log, "panel task", func() { fn(ctx) })
 	}

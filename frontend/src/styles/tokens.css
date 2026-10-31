@@ -1,0 +1,33 @@
+/* Design tokens: square corners, 1 px borders, no shadows or gradients,
+   a dense grid. Dark theme only. */
+:root {
+  --bg: #0c0a0f;
+  --surface: #15111b;
+  --surface-2: #1c1724;
+  --border: #2b2236;
+  --text: #e9e4ee;
+  --muted: #8b8195;
+  --accent: #6b2fa3;
+  --accent-hi: #8a45c8;
+  --danger: #c8102e;
+  --warn: #b8862b;
+
+  --font-text: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+
+  --fs-xs: 11px;
+  --fs-s: 12px;
+  --fs-m: 14px;
+  --fs-l: 18px;
+
+  --radius: 0;
+  --line: 1px solid var(--border);
+  --hold-ms: 800ms;
+}
