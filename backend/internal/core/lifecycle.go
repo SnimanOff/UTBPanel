@@ -30,6 +30,8 @@ func (c *Core) WebhookURL(id int64) string {
 }
 
 func (c *Core) newRunner() *runner.Runner {
+	self, _ := os.Executable()
+	l := c.Cfg.Limits
 	return runner.New(runner.Config{
 		DataDir:        c.Cfg.DataDir,
 		WebhookURL:     c.WebhookURL,
@@ -37,6 +39,11 @@ func (c *Core) newRunner() *runner.Runner {
 		DB:             c.DB,
 		Log:            c.Log,
 		DropPrivileges: runtime.GOOS == "linux" && os.Geteuid() == 0,
+		ExecSelf:       self,
+		DefaultLimits: runner.Limits{
+			Memory: int64(l.Memory), File: int64(l.File), FilesTotal: int64(l.FilesTotal),
+			OpenFiles: int64(l.OpenFiles), Threads: int64(l.Threads),
+		},
 		Hooks: runner.Hooks{
 			Output: func(l runner.Line) {
 				c.Log.Debug("bot output", "bot", l.BotID, "stream", l.Stream, "line", l.Text)

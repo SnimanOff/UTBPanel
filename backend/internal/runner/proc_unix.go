@@ -8,6 +8,12 @@ import (
 )
 
 func (r *Runner) command(b Bot, bin string) *exec.Cmd {
+	if r.cfg.DropPrivileges && r.cfg.ExecSelf != "" {
+		a := ExecArgs{UID: UID(b.ID), Limits: b.Settings.Limits.Or(r.cfg.DefaultLimits), Binary: bin}
+		cmd := exec.Command(r.cfg.ExecSelf, a.Args()...)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		return cmd
+	}
 	cmd := exec.Command(bin)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if r.cfg.DropPrivileges {

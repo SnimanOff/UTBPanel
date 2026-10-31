@@ -44,6 +44,7 @@ type Settings struct {
 	// Rename maps standard variable names to the ones the bot's code reads,
 	// e.g. BOT_TOKEN → TELEGRAM_TOKEN.
 	Rename map[string]string `json:"rename,omitempty"`
+	Limits Limits            `json:"limits,omitzero"`
 }
 
 // Bot is what the runner needs to know to start a bot.
@@ -87,6 +88,10 @@ type Config struct {
 	Hooks      Hooks
 	// DropPrivileges runs bots under their uid; set when the core is root.
 	DropPrivileges bool
+	// ExecSelf is the core binary: with DropPrivileges a bot is started as
+	// `core exec-bot`, which sets limits and the uid and then becomes the bot.
+	ExecSelf      string
+	DefaultLimits Limits
 }
 
 // Runner manages bot processes.
@@ -208,6 +213,7 @@ func (r *Runner) Env(ctx context.Context, b Bot) ([]string, error) {
 			env[s.Name] = string(s.Value)
 		}
 	}
+	env["GOMEMLIMIT"] = b.Settings.Limits.Or(r.cfg.DefaultLimits).GoMemLimit()
 	if r.cfg.Hooks.Env != nil {
 		r.cfg.Hooks.Env(b, env)
 	}

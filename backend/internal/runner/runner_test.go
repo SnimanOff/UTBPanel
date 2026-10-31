@@ -21,7 +21,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/store/migrations"
 )
 
-var testBot string
+var testBot, execBot string
 
 func TestMain(m *testing.M) {
 	if runtime.GOOS == "windows" {
@@ -34,6 +34,12 @@ func TestMain(m *testing.M) {
 	}
 	testBot = filepath.Join(dir, "bot")
 	build := exec.Command("go", "build", "-o", testBot, "./testdata/testbot")
+	build.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if out, err := build.CombinedOutput(); err != nil {
+		panic(string(out))
+	}
+	execBot = filepath.Join(dir, "execbot")
+	build = exec.Command("go", "build", "-o", execBot, "./testdata/execbot")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if out, err := build.CombinedOutput(); err != nil {
 		panic(string(out))
@@ -95,6 +101,8 @@ func newEnv(t *testing.T) *env {
 		DataDir: filepath.Join(dir, "data"), DB: db, Secrets: e.sec,
 		WebhookURL:     func(id int64) string { return "https://203.0.113.10:8443/hook/" + strconv.FormatInt(id, 10) },
 		DropPrivileges: os.Getenv("RUNNER_AS_ROOT") == "1",
+		ExecSelf:       execBot,
+		DefaultLimits:  Limits{Memory: 256 << 20, File: 1 << 30, FilesTotal: 2 << 30, OpenFiles: 4096, Threads: 1024},
 		Hooks: Hooks{
 			Output: func(l Line) { e.mu.Lock(); e.lines = append(e.lines, l); e.mu.Unlock() },
 			Event: func(id int64, typ, sev string, _ map[string]any) {
@@ -290,5 +298,33 @@ func TestRestoreStates(t *testing.T) {
 	e.r.Shutdown()
 	if state(t, e.db, 1) != Running {
 		t.Fatal("shutdown changed the saved state")
+	}
+}
+
+func TestLimitsApplied(t *testing.T) {
+	if os.Getenv("RUNNER_AS_ROOT") != "1" {
+		t.Skip("needs root in a Linux container")
+	}
+	e := newEnv(t)
+	b := e.addBot(t, 7, Settings{Limits: Limits{OpenFiles: 777}})
+	if err := e.r.Start(context.Background(), b); err != nil {
+		t.Fatal(err)
+	}
+	limits := get(t, b.Port, "/limits")
+	for _, want := range []string{"Max open files            777", "Max core file size        0", "Max processes             1024", "Max file size             1073741824"} {
+		if !strings.Contains(strings.Join(strings.Fields(limits), " "), strings.Join(strings.Fields(want), " ")) {
+			t.Errorf("limit missing: %s\n%s", want, limits)
+		}
+	}
+	if who := get(t, b.Port, "/whoami"); who != "10007 10007" {
+		t.Errorf("uid = %s", who)
+	}
+	pid, _ := e.r.Info(7)
+	adj, _ := os.ReadFile("/proc/" + strconv.Itoa(pid.PID) + "/oom_score_adj")
+	if strings.TrimSpace(string(adj)) != "1000" {
+		t.Errorf("oom_score_adj = %s", adj)
+	}
+	if env := get(t, b.Port, "/env"); !strings.Contains(env, "GOMEMLIMIT=241591910") {
+		t.Errorf("GOMEMLIMIT missing")
 	}
 }
