@@ -53,10 +53,14 @@ type Core struct {
 	Releases *deploy.Store
 	Pipe     *ingress.Pipeline
 
-	mu      sync.Mutex
-	procs   map[string]procstat.Stats
-	edge    edgeSync
-	targets targets
+	mu           sync.Mutex
+	procs        map[string]procstat.Stats
+	edge         edgeSync
+	targets      targets
+	delivery     delivery
+	onStarted    []func(context.Context, runner.Bot)
+	onStopping   []func(context.Context, runner.Bot)
+	pausedChecks []func(context.Context, int64) bool
 
 	// closers run in reverse order on shutdown.
 	closers []func(context.Context) error
@@ -122,6 +126,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerEdgeSync()
 	c.Pipe = c.newPipeline()
 	c.registerIngress()
+	c.registerDeferred()
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
 	})

@@ -53,6 +53,17 @@ func (c *Core) newRunner() *runner.Runner {
 			Event: func(id int64, typ, sev string, data map[string]any) {
 				c.Ev.Emit(typ, id, sev, data)
 			},
+			Started: func(ctx context.Context, b runner.Bot) {
+				for _, fn := range c.onStarted {
+					fn(ctx, b)
+				}
+				go c.FlushDeferred(context.Background(), b.ID)
+			},
+			Stopping: func(ctx context.Context, b runner.Bot) {
+				for _, fn := range c.onStopping {
+					fn(ctx, b)
+				}
+			},
 		},
 	})
 }

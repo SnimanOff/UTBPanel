@@ -97,6 +97,9 @@ type Pipeline struct {
 	Observe []func(Outcome)
 	// BotTimeout bounds the bot's answer.
 	BotTimeout time.Duration
+	// Gate holds new updates while deferred ones are being delivered; it
+	// returns the release function.
+	Gate func(botID int64) func()
 
 	Replies  *updrules.Limiter
 	client   http.Client
@@ -268,6 +271,10 @@ func (p *Pipeline) Handle(ctx context.Context, botID int64, body []byte, receive
 		}
 	}
 
+	if p.Gate != nil {
+		release := p.Gate(botID)
+		defer release()
+	}
 	rep, res, lat := p.forward(ctx, u)
 	if res == "unavailable" && p.Unavailable != nil {
 		if r, ok := p.Unavailable(ctx, u); ok {
@@ -302,6 +309,16 @@ func (p *Pipeline) safe(what string, fn func()) {
 		}
 	}()
 	fn()
+}
+
+// Deliver forwards a stored update straight to the bot, without the checks.
+func (p *Pipeline) Deliver(ctx context.Context, botID int64, body []byte) edge.Reply {
+	u := Parse(botID, body, time.Now())
+	rep, res, _ := p.forward(ctx, u)
+	if res == "unavailable" || res == "timeout" || res == "error" {
+		rep.Status = http.StatusServiceUnavailable
+	}
+	return rep
 }
 
 // ErrNotRunning is returned by Target for a bot without a process.
