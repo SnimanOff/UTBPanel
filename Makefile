@@ -4,7 +4,7 @@ DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 PKG     := github.com/SnimanOff/UTBPanel/backend/internal/buildinfo
 LDFLAGS := -s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PKG).Date=$(DATE)
 
-.PHONY: build test lint gen
+.PHONY: build test test-linux lint gen
 
 build:
 	cd backend && CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o ../bin/ ./cmd/edge ./cmd/core ./cmd/panel
@@ -12,6 +12,10 @@ build:
 
 test:
 	cd backend && go test ./...
+
+# Runner tests need Linux and root (uids, rlimits): run them in a container.
+test-linux:
+	docker run --rm -v "$(CURDIR)/backend:/src" -v tgpanel-gomod:/go/pkg/mod -w /src -e RUNNER_AS_ROOT=1 golang:1.27 go test -race ./...
 
 lint:
 	cd backend && golangci-lint run ./...

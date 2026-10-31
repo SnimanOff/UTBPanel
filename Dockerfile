@@ -27,7 +27,7 @@ RUN apk add --no-cache ca-certificates tzdata tini && \
     adduser -D -H -u 1002 -G tgpanel panel && \
     mkdir -p /data/edge /data/core /data/panel /keys /run/tgpanel /srv/gate && \
     chown edge:tgpanel /data/edge && chown panel:tgpanel /data/panel && \
-    chmod 0700 /data/edge /data/panel /data/core /keys && \
+    chmod 0700 /data/edge /data/panel /keys && chmod 0711 /data/core && \
     chown root:tgpanel /run/tgpanel && chmod 2775 /run/tgpanel
 COPY --from=go /out/edge /out/core /out/panel /usr/local/bin/
 COPY --from=go /out/gate.exe /srv/gate/gate.exe
