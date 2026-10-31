@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
@@ -123,3 +124,5 @@ func (c *Core) registerLifecycle() {
 		})
 	}))
 }
+
+func nowUTC() time.Time { return time.Now().UTC() }

@@ -1,0 +1,1 @@
+ALTER TABLE bots ADD COLUMN previous_version TEXT NOT NULL DEFAULT '';

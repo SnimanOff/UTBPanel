@@ -21,6 +21,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
+	"github.com/SnimanOff/UTBPanel/backend/internal/sources"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store/migrations"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
@@ -85,6 +86,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	}
 	p.Bots = &bots.Service{Core: p.Core}
 	p.Bots.Register(p.API.Mux)
+	(&sources.Uploads{Core: p.Core}).Register(p.API.Mux)
 	(&api.Keys{CA: ca, GateExe: cfg.GateExe, Servers: p.GateServers, Audit: annotate}).Register(p.API.Mux)
 	(&api.Devices{CA: ca, Audit: annotate, OnNew: func(d pki.DeviceRequest) {
 		log.Info("new device waiting for approval", "name", d.Name, "kind", d.Kind, "ip", d.IP, "code", d.Code)

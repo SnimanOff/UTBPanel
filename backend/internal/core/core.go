@@ -15,6 +15,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
+	"github.com/SnimanOff/UTBPanel/backend/internal/deploy"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/logs"
@@ -36,18 +37,19 @@ const (
 
 // Core is the running core process.
 type Core struct {
-	Cfg     config.Core
-	Log     *slog.Logger
-	DB      *store.DB
-	W       *store.Writer
-	Mux     *wire.Mux
-	Srv     *wire.Server
-	Ev      *events.Bus
-	Sec     *secrets.Store
-	TG      *telegram.Client
-	Runner  *runner.Runner
-	Logs    *logs.Store
-	Journal *journal.Journal
+	Cfg      config.Core
+	Log      *slog.Logger
+	DB       *store.DB
+	W        *store.Writer
+	Mux      *wire.Mux
+	Srv      *wire.Server
+	Ev       *events.Bus
+	Sec      *secrets.Store
+	TG       *telegram.Client
+	Runner   *runner.Runner
+	Logs     *logs.Store
+	Journal  *journal.Journal
+	Releases *deploy.Store
 
 	mu    sync.Mutex
 	procs map[string]procstat.Stats
@@ -110,6 +112,8 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerLogs()
 	c.Runner = c.newRunner()
 	c.registerLifecycle()
+	c.Releases = c.newReleases()
+	c.registerReleases()
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
 	})
