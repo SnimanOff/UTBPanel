@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/secrets"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	"github.com/SnimanOff/UTBPanel/backend/internal/telegram"
@@ -39,14 +40,16 @@ type Bot struct {
 
 // CreateBot is the request to add a bot.
 type CreateBot struct {
-	Name  string `cbor:"1,keyasint"`
-	Token string `cbor:"2,keyasint"`
+	Name  string        `cbor:"1,keyasint"`
+	Token string        `cbor:"2,keyasint"`
+	Actor journal.Actor `cbor:"9,keyasint"`
 }
 
 // SetToken replaces a bot token.
 type SetToken struct {
-	BotID int64  `cbor:"1,keyasint"`
-	Token string `cbor:"2,keyasint"`
+	BotID int64         `cbor:"1,keyasint"`
+	Token string        `cbor:"2,keyasint"`
+	Actor journal.Actor `cbor:"9,keyasint"`
 }
 
 // CodeTelegram marks errors answered by Telegram; Data holds its answer.
@@ -235,11 +238,19 @@ func (c *Core) Token(ctx context.Context, botID int64) (string, error) {
 }
 
 func (c *Core) registerBots() {
-	c.Mux.Handle("bots.create", wire.Func(func(ctx context.Context, _ *wire.Conn, in CreateBot) (Bot, error) {
-		return c.CreateBot(ctx, in)
+	c.Mux.Handle("bots.create", wire.Func(func(ctx context.Context, _ *wire.Conn, in CreateBot) (b Bot, err error) {
+		err = c.Journal.Do(ctx, in.Actor, "bots.create", 0, map[string]string{"name": in.Name}, func() error {
+			b, err = c.CreateBot(ctx, in)
+			return err
+		})
+		return b, err
 	}))
-	c.Mux.Handle("bots.set_token", wire.Func(func(ctx context.Context, _ *wire.Conn, in SetToken) (Bot, error) {
-		return c.SetToken(ctx, in)
+	c.Mux.Handle("bots.set_token", wire.Func(func(ctx context.Context, _ *wire.Conn, in SetToken) (b Bot, err error) {
+		err = c.Journal.Do(ctx, in.Actor, "bots.set_token", in.BotID, map[string]string{"token": "изменено"}, func() error {
+			b, err = c.SetToken(ctx, in)
+			return err
+		})
+		return b, err
 	}))
 	c.Mux.Handle("bots.list", wire.Func(func(ctx context.Context, _ *wire.Conn, _ struct{}) ([]Bot, error) {
 		return c.Bots(ctx)

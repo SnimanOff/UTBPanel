@@ -8,19 +8,22 @@ import (
 	"runtime"
 	"strconv"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
 
 // BotRef names a bot in life cycle requests.
 type BotRef struct {
-	BotID int64 `cbor:"1,keyasint"`
+	BotID int64         `cbor:"1,keyasint"`
+	Actor journal.Actor `cbor:"9,keyasint"`
 }
 
 // Rename changes the panel name of a bot.
 type Rename struct {
-	BotID int64  `cbor:"1,keyasint"`
-	Name  string `cbor:"2,keyasint"`
+	BotID int64         `cbor:"1,keyasint"`
+	Name  string        `cbor:"2,keyasint"`
+	Actor journal.Actor `cbor:"9,keyasint"`
 }
 
 // WebhookURL is the public webhook address of a bot.
@@ -108,13 +111,15 @@ func (c *Core) RenameBot(ctx context.Context, in Rename) error {
 func (c *Core) registerLifecycle() {
 	op := func(name string, fn func(context.Context, int64) error) {
 		c.Mux.Handle(name, wire.Func(func(ctx context.Context, _ *wire.Conn, in BotRef) (struct{}, error) {
-			return struct{}{}, fn(ctx, in.BotID)
+			return struct{}{}, c.Journal.Do(ctx, in.Actor, name, in.BotID, nil, func() error { return fn(ctx, in.BotID) })
 		}))
 	}
 	op("bots.start", c.StartBot)
 	op("bots.stop", c.StopBot)
 	op("bots.restart", c.RestartBot)
 	c.Mux.Handle("bots.rename", wire.Func(func(ctx context.Context, _ *wire.Conn, in Rename) (struct{}, error) {
-		return struct{}{}, c.RenameBot(ctx, in)
+		return struct{}{}, c.Journal.Do(ctx, in.Actor, "bots.rename", in.BotID, map[string]string{"name": in.Name}, func() error {
+			return c.RenameBot(ctx, in)
+		})
 	}))
 }

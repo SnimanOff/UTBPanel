@@ -16,6 +16,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
+	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/logs"
 	"github.com/SnimanOff/UTBPanel/backend/internal/procstat"
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
@@ -35,17 +36,18 @@ const (
 
 // Core is the running core process.
 type Core struct {
-	Cfg    config.Core
-	Log    *slog.Logger
-	DB     *store.DB
-	W      *store.Writer
-	Mux    *wire.Mux
-	Srv    *wire.Server
-	Ev     *events.Bus
-	Sec    *secrets.Store
-	TG     *telegram.Client
-	Runner *runner.Runner
-	Logs   *logs.Store
+	Cfg     config.Core
+	Log     *slog.Logger
+	DB      *store.DB
+	W       *store.Writer
+	Mux     *wire.Mux
+	Srv     *wire.Server
+	Ev      *events.Bus
+	Sec     *secrets.Store
+	TG      *telegram.Client
+	Runner  *runner.Runner
+	Logs    *logs.Store
+	Journal *journal.Journal
 
 	mu    sync.Mutex
 	procs map[string]procstat.Stats
@@ -101,6 +103,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		},
 	}
 	c.Ev = events.NewBus(db, c.Srv, c.Mux, log)
+	c.Journal = journal.New(db, c.Mux, log)
 	c.registerSecrets()
 	c.registerBots()
 	c.Logs = c.newLogs()

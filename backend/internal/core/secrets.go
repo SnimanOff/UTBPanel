@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/secrets"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
@@ -12,16 +13,18 @@ import (
 // SecretSet is the request to store a secret. There is no request to read
 // one: secrets are write-only.
 type SecretSet struct {
-	BotID int64  `cbor:"1,keyasint"`
-	Name  string `cbor:"2,keyasint"`
-	Kind  string `cbor:"3,keyasint"`
-	Value []byte `cbor:"4,keyasint"`
+	BotID int64         `cbor:"1,keyasint"`
+	Name  string        `cbor:"2,keyasint"`
+	Kind  string        `cbor:"3,keyasint"`
+	Value []byte        `cbor:"4,keyasint"`
+	Actor journal.Actor `cbor:"9,keyasint"`
 }
 
 // SecretRef names one secret.
 type SecretRef struct {
-	BotID int64  `cbor:"1,keyasint"`
-	Name  string `cbor:"2,keyasint"`
+	BotID int64         `cbor:"1,keyasint"`
+	Name  string        `cbor:"2,keyasint"`
+	Actor journal.Actor `cbor:"9,keyasint"`
 }
 
 var errNoBot = wire.Errorf(wire.CodeNotFound, "no such bot")
@@ -53,20 +56,24 @@ func (c *Core) registerSecrets() {
 		if in.Kind == "" {
 			in.Kind = secrets.KindValue
 		}
-		if err := c.Sec.Set(ctx, in.BotID, in.Name, in.Kind, in.Value); err != nil {
-			return struct{}{}, wire.Errorf(wire.CodeBadRequest, "%v", err)
-		}
-		return struct{}{}, nil
+		return struct{}{}, c.Journal.Do(ctx, in.Actor, "secrets.set", in.BotID, map[string]string{"name": in.Name, "value": "изменено"}, func() error {
+			if err := c.Sec.Set(ctx, in.BotID, in.Name, in.Kind, in.Value); err != nil {
+				return wire.Errorf(wire.CodeBadRequest, "%v", err)
+			}
+			return nil
+		})
 	}))
 	c.Mux.Handle("secrets.delete", wire.Func(func(ctx context.Context, _ *wire.Conn, in SecretRef) (struct{}, error) {
 		if reserved(in.Name) {
 			return struct{}{}, wire.Errorf(wire.CodeBadRequest, "%s cannot be deleted", in.Name)
 		}
-		err := c.Sec.Delete(ctx, in.BotID, in.Name)
-		if errors.Is(err, secrets.ErrNotFound) {
-			return struct{}{}, wire.Errorf(wire.CodeNotFound, "no secret %s", in.Name)
-		}
-		return struct{}{}, err
+		return struct{}{}, c.Journal.Do(ctx, in.Actor, "secrets.delete", in.BotID, map[string]string{"name": in.Name}, func() error {
+			err := c.Sec.Delete(ctx, in.BotID, in.Name)
+			if errors.Is(err, secrets.ErrNotFound) {
+				return wire.Errorf(wire.CodeNotFound, "no secret %s", in.Name)
+			}
+			return err
+		})
 	}))
 	c.Mux.Handle("secrets.list", wire.Func(func(ctx context.Context, _ *wire.Conn, botID int64) ([]secrets.Info, error) {
 		return c.Sec.List(ctx, botID)
@@ -76,7 +83,9 @@ func (c *Core) registerSecrets() {
 		if conn.Proto() != wire.ProtoCoreCLI {
 			return struct{}{}, wire.Errorf("forbidden", "master key import is available only from the core CLI")
 		}
-		return struct{}{}, c.importMasterKey(ctx, key)
+		return struct{}{}, c.Journal.Do(ctx, journal.Actor{Source: journal.SourceCLI, Name: "ssh"}, "masterkey.import", 0, nil, func() error {
+			return c.importMasterKey(ctx, key)
+		})
 	}))
 }
 
