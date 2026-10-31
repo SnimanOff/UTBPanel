@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"time"
@@ -71,6 +72,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		CA:      ca,
 	}
 	p.API = api.New(ca, p.W, log)
+	(&api.Keys{CA: ca, GateExe: cfg.GateExe, Servers: p.GateServers}).Register(p.API.Mux)
 	p.Events = events.NewSink(db, p.CoreMux, log)
 	p.Core = &wire.Client{
 		Path: wire.CoreSock(cfg.RunDir), Mux: p.CoreMux, Log: log,
@@ -86,7 +88,11 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	p.EdgeSrv = &wire.Server{
 		Mux: p.EdgeMux, Log: log,
 		Hello: app.Hello(wire.ProtoEdgePanel, "panel", EdgeVersion, 1),
+		Also:  []wire.Hello{app.Hello(wire.ProtoPanelCLI, "panel", 1, 1)},
 	}
+	p.EdgeMux.Handle("keys.reload", func(ctx context.Context, _ *wire.Conn, _ wire.Raw) (any, error) {
+		return nil, p.CA.Reload(ctx)
+	})
 	p.OnCoreConnect(func(c *wire.Conn) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
@@ -95,6 +101,18 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		}
 	})
 	return p, nil
+}
+
+// GateServers returns the addresses written into gate.exe.
+func (p *Panel) GateServers() []string { return GateServers(p.Cfg) }
+
+// GateServers returns the panel addresses for gate.exe from the config.
+func GateServers(cfg config.Panel) []string {
+	_, port, _ := net.SplitHostPort(cfg.Listen)
+	if port == "" {
+		port = "443"
+	}
+	return []string{net.JoinHostPort(cfg.PublicAddr, port)}
 }
 
 // OnCoreConnect runs fn (in its own goroutine) after every connect to the core.

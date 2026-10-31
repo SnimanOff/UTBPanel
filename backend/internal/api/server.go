@@ -52,6 +52,11 @@ func WithCaller(ctx context.Context, c Caller) context.Context {
 	return context.WithValue(ctx, callerKey{}, c)
 }
 
+// CallerLog returns a logger tagged with the caller and path.
+func CallerLog(r *http.Request) *slog.Logger {
+	return slog.Default().With("key", CallerFrom(r.Context()).Name, "path", r.URL.Path)
+}
+
 // Server is the panel HTTP server.
 type Server struct {
 	CA  *pki.CA

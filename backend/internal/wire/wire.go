@@ -45,6 +45,9 @@ const (
 	ProtoEdgeCore  = "edge-core"
 	ProtoCorePanel = "core-panel"
 	ProtoEdgePanel = "edge-panel"
+	// ProtoPanelCLI lets `panel keys …` run next to a live panel tell it
+	// about changes.
+	ProtoPanelCLI = "panel-cli"
 )
 
 // Socket file names inside the shared run directory.

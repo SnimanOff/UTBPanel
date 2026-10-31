@@ -12,6 +12,9 @@ import (
 func main() {
 	app.Main("panel", []app.Command{
 		{Name: "serve", Usage: "run the panel", Run: serve},
+		{Name: "keys issue", Usage: "--owner|--child --name <name> > gate-<name>.exe", Run: keysIssue},
+		{Name: "keys revoke", Usage: "<name|serial>", Run: keysRevoke},
+		{Name: "keys list", Usage: "list access keys", Run: keysList},
 	})
 }
 
