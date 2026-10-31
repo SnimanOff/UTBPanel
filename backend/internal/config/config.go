@@ -28,6 +28,9 @@ type Common struct {
 	// PublicAddr is the domain or IP Telegram and gate use to reach the server.
 	PublicAddr string `yaml:"public_addr" env:"PUBLIC_ADDR"`
 	Dev        bool   `yaml:"dev" env:"DEV"`
+	// SocketGID is the group given to sockets so that the edge and panel
+	// containers (other users, same group) can connect; -1 keeps the default.
+	SocketGID int `yaml:"socket_gid" env:"SOCKET_GID"`
 }
 
 // Edge is the gatekeeper: the only process exposed to the internet.
@@ -73,7 +76,7 @@ type Panel struct {
 }
 
 func defaultCommon() Common {
-	return Common{LogLevel: "info", LogFormat: "json", RunDir: "/run/tgpanel"}
+	return Common{LogLevel: "info", LogFormat: "json", RunDir: "/run/tgpanel", SocketGID: -1}
 }
 
 // DefaultEdge returns edge defaults.

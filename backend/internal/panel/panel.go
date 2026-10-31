@@ -97,7 +97,7 @@ func (p *Panel) Go(fn func(context.Context)) { p.runners = append(p.runners, fn)
 
 // Run works until ctx is done.
 func (p *Panel) Run(ctx context.Context) error {
-	ln, err := wire.Listen(wire.PanelSock(p.Cfg.RunDir), 0o660, -1)
+	ln, err := wire.Listen(wire.PanelSock(p.Cfg.RunDir), 0o660, p.Cfg.SocketGID)
 	if err != nil {
 		return fmt.Errorf("panel socket: %w", err)
 	}

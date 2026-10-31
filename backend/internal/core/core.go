@@ -114,7 +114,7 @@ func (c *Core) OnClose(fn func(context.Context) error) { c.closers = append(c.cl
 
 // Run serves the core socket until ctx is done, then stops gracefully.
 func (c *Core) Run(ctx context.Context) error {
-	ln, err := wire.Listen(wire.CoreSock(c.Cfg.RunDir), 0o660, -1)
+	ln, err := wire.Listen(wire.CoreSock(c.Cfg.RunDir), 0o660, c.Cfg.SocketGID)
 	if err != nil {
 		return fmt.Errorf("core socket: %w", err)
 	}
