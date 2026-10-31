@@ -71,6 +71,7 @@ type Server struct {
 // New returns a server with an empty route table.
 func New(ca *pki.CA, w *store.Writer, log *slog.Logger) *Server {
 	s := &Server{CA: ca, W: w, Log: log, Mux: http.NewServeMux()}
+	s.Use(Guard)
 	s.Mux.HandleFunc("GET /api/ping", func(w http.ResponseWriter, r *http.Request) {
 		WriteJSON(w, http.StatusOK, map[string]string{"pong": CallerFrom(r.Context()).Name})
 	})
