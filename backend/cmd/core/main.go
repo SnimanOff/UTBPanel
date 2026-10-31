@@ -17,6 +17,10 @@ func main() {
 		{Name: "exec-bot", Usage: "(internal) set limits and uid, then become the bot", Run: func(_ context.Context, args []string) error {
 			return runner.ExecBot(args)
 		}},
+		{Name: "bots list", Usage: "bots with states", Run: botsList},
+		{Name: "bots start", Usage: "<name>", Run: botsOp("bots start")},
+		{Name: "bots stop", Usage: "<name>", Run: botsOp("bots stop")},
+		{Name: "bots restart", Usage: "<name>", Run: botsOp("bots restart")},
 		{Name: "masterkey export", Usage: "> master.key", Run: masterkeyExport},
 		{Name: "masterkey import", Usage: "< master.key (only while there are no bots)", Run: masterkeyImport},
 	})
