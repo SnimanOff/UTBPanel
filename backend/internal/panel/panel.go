@@ -73,6 +73,23 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	}
 	p.API = api.New(ca, p.W, log)
 	(&api.Keys{CA: ca, GateExe: cfg.GateExe, Servers: p.GateServers}).Register(p.API.Mux)
+	(&api.Devices{CA: ca, OnNew: func(d pki.DeviceRequest) {
+		log.Info("new device waiting for approval", "name", d.Name, "kind", d.Kind, "ip", d.IP, "code", d.Code)
+	}}).Register(p.API.Mux)
+	p.Go(func(ctx context.Context) {
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			if err := ca.PruneDevices(ctx); err != nil && ctx.Err() == nil {
+				log.Warn("pruning device requests failed", "err", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	})
 	p.Events = events.NewSink(db, p.CoreMux, log)
 	p.Core = &wire.Client{
 		Path: wire.CoreSock(cfg.RunDir), Mux: p.CoreMux, Log: log,

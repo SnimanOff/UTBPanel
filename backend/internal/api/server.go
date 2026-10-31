@@ -89,8 +89,9 @@ func (s *Server) TLSConfig(publicAddr string) (*tls.Config, error) {
 		return nil, err
 	}
 	return &tls.Config{
-		MinVersion:   tls.VersionTLS13,
-		Certificates: []tls.Certificate{{Certificate: [][]byte{cert.Raw}, PrivateKey: key, Leaf: cert}},
+		MinVersion: tls.VersionTLS13,
+		// The CA goes in the chain: gate pins its public key.
+		Certificates: []tls.Certificate{{Certificate: [][]byte{cert.Raw, s.CA.Cert().Raw}, PrivateKey: key, Leaf: cert}},
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		ClientCAs:    s.CA.Pool(),
 		NextProtos:   []string{"h2", "http/1.1"},
@@ -122,9 +123,16 @@ func (s *Server) Handler() http.Handler {
 		}
 		// An enrollment certificate is good only for asking for a device
 		// certificate.
-		if id.Kind == pki.Enrollment && r.URL.Path != "/enroll" && !strings.HasPrefix(r.URL.Path, "/enroll/") {
-			WriteError(w, http.StatusForbidden, "forbidden", "enrollment certificate is valid only for /enroll")
-			return
+		if id.Kind == pki.Enrollment {
+			ok := r.URL.Path == "/enroll" || strings.HasPrefix(r.URL.Path, "/enroll/")
+			if id.Used {
+				// Spent: it may only collect the approved certificate.
+				ok = r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/enroll/")
+			}
+			if !ok {
+				WriteError(w, http.StatusForbidden, "forbidden", "enrollment certificate is valid only for /enroll")
+				return
+			}
 		}
 		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 		c := Caller{Identity: id, IP: ip, Source: SourceUI}
