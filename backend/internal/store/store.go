@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/url"
+	"os"
 	"path"
 	"runtime"
 	"sort"
@@ -56,6 +57,11 @@ func Open(ctx context.Context, file string, migrations fs.FS) (*DB, error) {
 	if err := w.PingContext(ctx); err != nil {
 		w.Close()
 		return nil, fmt.Errorf("open %s: %w", file, err)
+	}
+	// Only the owning process may read the database (bots run on the same
+	// machine under other uids).
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		os.Chmod(file+suffix, 0o600)
 	}
 	if migrations != nil {
 		if err := Migrate(ctx, w, migrations); err != nil {

@@ -255,6 +255,7 @@ func (r *Runner) prepareDirs(id int64) error {
 			return err
 		}
 		if r.cfg.DropPrivileges {
+			os.Chmod(d, 0o750)
 			if err := os.Chown(d, UID(id), UID(id)); err != nil {
 				return err
 			}

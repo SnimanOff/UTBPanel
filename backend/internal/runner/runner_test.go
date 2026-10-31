@@ -328,3 +328,36 @@ func TestLimitsApplied(t *testing.T) {
 		t.Errorf("GOMEMLIMIT missing")
 	}
 }
+
+// A bot sees only its own directory: not core.db, not another bot.
+func TestIsolation(t *testing.T) {
+	if os.Getenv("RUNNER_AS_ROOT") != "1" {
+		t.Skip("needs root in a Linux container")
+	}
+	ctx := context.Background()
+	e := newEnv(t)
+	b1 := e.addBot(t, 1, Settings{})
+	e.addBot(t, 2, Settings{})
+	os.MkdirAll(filepath.Join(e.r.BotDir(2), "files"), 0o750)
+	os.WriteFile(filepath.Join(e.r.BotDir(2), "files", "data.txt"), []byte("secret of bot 2"), 0o640)
+	e.r.prepareDirs(2)
+	if err := e.r.Start(ctx, b1); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		e.db.Path,
+		filepath.Join(e.r.BotDir(2), "files", "data.txt"),
+		e.r.BotDir(2),
+	} {
+		if got := get(t, b1.Port, "/read?path="+path); !strings.Contains(got, "permission denied") {
+			t.Errorf("%s readable by another uid: %s", path, got)
+		}
+	}
+	// Its own data dir is fine.
+	own := filepath.Join(e.r.BotDir(1), "files", "mine.txt")
+	os.WriteFile(own, []byte("x"), 0o600)
+	os.Chown(own, UID(1), UID(1))
+	if got := get(t, b1.Port, "/read?path="+own); got != "<nil>" {
+		t.Errorf("own file: %s", got)
+	}
+}
