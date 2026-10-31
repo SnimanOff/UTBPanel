@@ -2,6 +2,8 @@
 // the backend, the source of MCP tools and of the docs for neural networks.
 package spec
 
+//go:generate go run ./gen
+
 import (
 	_ "embed"
 	"fmt"
