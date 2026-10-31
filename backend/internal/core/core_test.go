@@ -26,7 +26,7 @@ func newCore(t *testing.T) *Core {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { c.W.Close(); c.DB.Close() })
+	t.Cleanup(func() { c.Logs.Close(); c.W.Close(); c.DB.Close() })
 	return c
 }
 

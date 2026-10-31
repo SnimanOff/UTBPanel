@@ -16,9 +16,10 @@ import (
 
 // fakeTelegram knows a set of valid tokens and records calls.
 type fakeTelegram struct {
-	mu     sync.Mutex
-	tokens map[string]string // token → "id:username"
-	calls  []string
+	mu      sync.Mutex
+	tokens  map[string]string // token → "id:username"
+	calls   []string
+	hookURL string
 }
 
 func (f *fakeTelegram) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +35,18 @@ func (f *fakeTelegram) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, user, _ := strings.Cut(who, ":")
+	if method == "getWebhookInfo" {
+		f.mu.Lock()
+		u := f.hookURL
+		f.mu.Unlock()
+		io.WriteString(w, `{"ok":true,"result":{"url":"`+u+`","pending_update_count":0}}`)
+		return
+	}
+	if method == "setWebhook" {
+		f.mu.Lock()
+		f.hookURL = "ours"
+		f.mu.Unlock()
+	}
 	if method == "getMe" {
 		io.WriteString(w, `{"ok":true,"result":{"id":`+id+`,"is_bot":true,"first_name":"B","username":"`+user+`"}}`)
 		return

@@ -127,6 +127,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.Pipe = c.newPipeline()
 	c.registerIngress()
 	c.registerDeferred()
+	c.registerWebhooks()
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
 	})
@@ -173,6 +174,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "events", func() { c.Ev.Run(ctx) })
 	safe.Go(c.Log, "restore bots", func() { c.Runner.Restore(ctx) })
 	safe.Go(c.Log, "limits watcher", func() { c.Runner.Watch(ctx) })
+	safe.Go(c.Log, "webhook checks", func() { c.watchWebhooks(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)
