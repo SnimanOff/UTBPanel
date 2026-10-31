@@ -18,6 +18,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/procstat"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
+	"github.com/SnimanOff/UTBPanel/backend/internal/secrets"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store/migrations"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
@@ -38,6 +39,7 @@ type Core struct {
 	Mux *wire.Mux
 	Srv *wire.Server
 	Ev  *events.Bus
+	Sec *secrets.Store
 
 	mu    sync.Mutex
 	procs map[string]procstat.Stats
@@ -53,6 +55,18 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 			return nil, err
 		}
 	}
+	key, err := secrets.LoadMasterKey(cfg.KeysDir)
+	if err != nil {
+		return nil, err
+	}
+	box, err := secrets.NewBox(key)
+	if err != nil {
+		return nil, err
+	}
+	// Decrypted secrets never reach the logs.
+	redact := secrets.NewRedactor()
+	log = slog.New(redact.Handler(log.Handler()))
+	slog.SetDefault(log)
 	db, err := store.Open(ctx, filepath.Join(cfg.DataDir, "core.db"), migrations.Core())
 	if err != nil {
 		return nil, err
@@ -62,12 +76,16 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		W:     store.NewWriter(db, 10*time.Second, log),
 		Mux:   wire.NewMux(),
 		procs: map[string]procstat.Stats{},
+		Sec:   &secrets.Store{DB: db, Box: box, Redact: redact},
 	}
 	c.Srv = &wire.Server{
 		Mux:   c.Mux,
 		Hello: app.Hello(wire.ProtoCorePanel, "core", PanelVersion, 1),
-		Also:  []wire.Hello{app.Hello(wire.ProtoEdgeCore, "core", EdgeVersion, 1)},
-		Log:   log,
+		Also: []wire.Hello{
+			app.Hello(wire.ProtoEdgeCore, "core", EdgeVersion, 1),
+			app.Hello(wire.ProtoCoreCLI, "core", 1, 1),
+		},
+		Log: log,
 		OnConnect: func(conn *wire.Conn) {
 			log.Info("peer connected", "proto", conn.Proto(), "peer", conn.Peer().Hello.Name, "version", conn.Version())
 		},
@@ -76,6 +94,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		},
 	}
 	c.Ev = events.NewBus(db, c.Srv, c.Mux, log)
+	c.registerSecrets()
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
 	})

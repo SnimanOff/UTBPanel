@@ -35,6 +35,16 @@ var (
 	ErrNotConnected = sw.ErrNotConnected
 )
 
+// Error codes.
+const (
+	CodeNotFound    = sw.CodeNotFound
+	CodeNoMethod    = sw.CodeNoMethod
+	CodeBadRequest  = sw.CodeBadRequest
+	CodeInternal    = sw.CodeInternal
+	CodeCanceled    = sw.CodeCanceled
+	CodeUnavailable = sw.CodeUnavailable
+)
+
 // Func adapts a typed function to a handler.
 func Func[In, Out any](f func(ctx Context, c *Conn, in In) (Out, error)) sw.Handler {
 	return sw.Func(f)
@@ -48,6 +58,9 @@ const (
 	// ProtoPanelCLI lets `panel keys …` run next to a live panel tell it
 	// about changes.
 	ProtoPanelCLI = "panel-cli"
+	// ProtoCoreCLI is spoken by `core bots …` and `core masterkey …` run
+	// over SSH next to a live core.
+	ProtoCoreCLI = "core-cli"
 )
 
 // Socket file names inside the shared run directory.

@@ -12,6 +12,8 @@ import (
 func main() {
 	app.Main("core", []app.Command{
 		{Name: "serve", Usage: "run the core", Run: serve},
+		{Name: "masterkey export", Usage: "> master.key", Run: masterkeyExport},
+		{Name: "masterkey import", Usage: "< master.key (only while there are no bots)", Run: masterkeyImport},
 	})
 }
 

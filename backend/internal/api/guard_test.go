@@ -12,7 +12,7 @@ func TestGuard(t *testing.T) {
 	h := Guard(ok)
 	type tc struct {
 		name, method, path, host, origin, ctype, xpanel, body string
-		want                                                 int
+		want                                                  int
 	}
 	cases := []tc{
 		{"get through gate", "GET", "/api/bots", "127.0.0.1:47100", "", "", "", "", 204},
