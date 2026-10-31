@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"log/slog"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
@@ -32,5 +33,6 @@ func serve(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	slog.SetDefault(p.Log) // redacted
 	return p.Run(ctx)
 }

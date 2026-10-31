@@ -53,7 +53,9 @@ type Core struct {
 	WebhookPort  int    `yaml:"webhook_port" env:"WEBHOOK_PORT"` // public edge port in WEBHOOK_URL
 	BotPortFirst int    `yaml:"bot_port_first" env:"BOT_PORT_FIRST"`
 	BotPortLast  int    `yaml:"bot_port_last" env:"BOT_PORT_LAST"`
-	Limits       Limits `yaml:"limits"`
+	// TelegramAPI is the Bot API address; tests point it to a fake.
+	TelegramAPI string `yaml:"telegram_api" env:"TELEGRAM_API"`
+	Limits      Limits `yaml:"limits"`
 }
 
 // Limits are default per-bot resource limits.
@@ -101,6 +103,7 @@ func DefaultCore() Core {
 		WebhookPort:  8443,
 		BotPortFirst: 20000,
 		BotPortLast:  29999,
+		TelegramAPI:  "https://api.telegram.org",
 		Limits: Limits{
 			Memory:     256 << 20,
 			File:       1 << 30,

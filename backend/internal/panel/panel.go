@@ -13,6 +13,7 @@ import (
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
+	"github.com/SnimanOff/UTBPanel/backend/internal/bots"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
@@ -42,6 +43,7 @@ type Panel struct {
 	Events  *events.Sink
 	CA      *pki.CA
 	API     *api.Server
+	Bots    *bots.Service
 
 	closers []func(context.Context) error
 	runners []func(context.Context)
@@ -72,6 +74,8 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		CA:      ca,
 	}
 	p.API = api.New(ca, p.W, log)
+	p.Bots = &bots.Service{Core: p.Core}
+	p.Bots.Register(p.API.Mux)
 	(&api.Keys{CA: ca, GateExe: cfg.GateExe, Servers: p.GateServers}).Register(p.API.Mux)
 	(&api.Devices{CA: ca, OnNew: func(d pki.DeviceRequest) {
 		log.Info("new device waiting for approval", "name", d.Name, "kind", d.Kind, "ip", d.IP, "code", d.Code)
