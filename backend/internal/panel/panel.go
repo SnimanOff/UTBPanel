@@ -13,6 +13,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
+	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store/migrations"
@@ -35,9 +36,11 @@ type Panel struct {
 	Core    *wire.Client
 	EdgeMux *wire.Mux
 	EdgeSrv *wire.Server
+	Events  *events.Sink
 
 	closers []func(context.Context) error
 	runners []func(context.Context)
+	onCore  []func(*wire.Conn)
 }
 
 // New opens panel.db and prepares connections.
@@ -57,18 +60,34 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		CoreMux: wire.NewMux(),
 		EdgeMux: wire.NewMux(),
 	}
+	p.Events = events.NewSink(db, p.CoreMux, log)
 	p.Core = &wire.Client{
 		Path: wire.CoreSock(cfg.RunDir), Mux: p.CoreMux, Log: log,
-		Hello:        app.Hello(wire.ProtoCorePanel, "panel", CoreVersion, 1),
-		OnConnect:    func(c *wire.Conn) { log.Info("connected to core", "peer", c.Peer().Hello.Name) },
+		Hello: app.Hello(wire.ProtoCorePanel, "panel", CoreVersion, 1),
+		OnConnect: func(c *wire.Conn) {
+			log.Info("connected to core", "peer", c.Peer().Hello.Name)
+			for _, fn := range p.onCore {
+				safe.Go(log, "on core connect", func() { fn(c) })
+			}
+		},
 		OnDisconnect: func(_ *wire.Conn, err error) { log.Warn("core connection lost", "err", err) },
 	}
 	p.EdgeSrv = &wire.Server{
 		Mux: p.EdgeMux, Log: log,
 		Hello: app.Hello(wire.ProtoEdgePanel, "panel", EdgeVersion, 1),
 	}
+	p.OnCoreConnect(func(c *wire.Conn) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := p.Events.CatchUp(ctx, c); err != nil {
+			log.Warn("fetching missed core events failed", "err", err)
+		}
+	})
 	return p, nil
 }
+
+// OnCoreConnect runs fn (in its own goroutine) after every connect to the core.
+func (p *Panel) OnCoreConnect(fn func(*wire.Conn)) { p.onCore = append(p.onCore, fn) }
 
 // OnClose registers a shutdown step.
 func (p *Panel) OnClose(fn func(context.Context) error) { p.closers = append(p.closers, fn) }

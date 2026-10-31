@@ -15,6 +15,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
+	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/procstat"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
@@ -36,6 +37,7 @@ type Core struct {
 	W   *store.Writer
 	Mux *wire.Mux
 	Srv *wire.Server
+	Ev  *events.Bus
 
 	mu    sync.Mutex
 	procs map[string]procstat.Stats
@@ -73,6 +75,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 			log.Info("peer disconnected", "proto", conn.Proto(), "err", err)
 		},
 	}
+	c.Ev = events.NewBus(db, c.Srv, c.Mux, log)
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
 	})
@@ -116,6 +119,7 @@ func (c *Core) Run(ctx context.Context) error {
 		return fmt.Errorf("core socket: %w", err)
 	}
 	safe.Go(c.Log, "core socket", func() { c.Srv.Serve(ln) })
+	safe.Go(c.Log, "events", func() { c.Ev.Run(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)
