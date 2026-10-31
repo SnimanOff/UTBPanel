@@ -68,6 +68,9 @@ type Identity struct {
 	Serial string
 	Name   string
 	Kind   Kind
+	// Used is set for a spent enrollment certificate: it may still fetch
+	// the result of its request, nothing else.
+	Used bool
 }
 
 // CA holds the authority's key and the serial registry.
@@ -79,8 +82,16 @@ type CA struct {
 	pool *x509.CertPool
 
 	mu      sync.RWMutex
-	revoked map[string]bool
+	revoked map[string]serialState
 }
+
+type serialState uint8
+
+const (
+	serialActive serialState = iota
+	serialRevoked
+	serialUsed
+)
 
 // Open loads the CA from dir (creating it on first start) and the revoked
 // serials from db.
@@ -249,7 +260,7 @@ func (ca *CA) Issue(ctx context.Context, kind Kind, name, device string, pub cry
 		return nil, err
 	}
 	ca.mu.Lock()
-	ca.revoked[SerialString(cert.SerialNumber)] = false
+	ca.revoked[SerialString(cert.SerialNumber)] = serialActive
 	ca.mu.Unlock()
 	return cert, nil
 }
@@ -282,32 +293,41 @@ func (ca *CA) Verify(c *x509.Certificate) (Identity, error) {
 		return Identity{}, ErrUnknown
 	}
 	ca.mu.RLock()
-	revoked, known := ca.revoked[id.Serial]
+	st, known := ca.revoked[id.Serial]
 	ca.mu.RUnlock()
-	if !known {
+	switch {
+	case !known:
 		return Identity{}, ErrUnknown
-	}
-	if revoked {
+	case st == serialRevoked:
 		return Identity{}, ErrRevoked
+	case st == serialUsed:
+		id.Used = true
 	}
 	return id, nil
 }
 
 // loadRevoked reads the registry into memory: serial → revoked.
 func (ca *CA) loadRevoked(ctx context.Context) error {
-	rows, err := ca.db.R.QueryContext(ctx, `SELECT serial, revoked_at IS NOT NULL OR used_at IS NOT NULL FROM keys`)
+	rows, err := ca.db.R.QueryContext(ctx, `SELECT serial, revoked_at IS NOT NULL, used_at IS NOT NULL FROM keys`)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
-	m := map[string]bool{}
+	m := map[string]serialState{}
 	for rows.Next() {
 		var s string
-		var r bool
-		if err := rows.Scan(&s, &r); err != nil {
+		var revoked, used bool
+		if err := rows.Scan(&s, &revoked, &used); err != nil {
 			return err
 		}
-		m[s] = r
+		switch {
+		case revoked:
+			m[s] = serialRevoked
+		case used:
+			m[s] = serialUsed
+		default:
+			m[s] = serialActive
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return err

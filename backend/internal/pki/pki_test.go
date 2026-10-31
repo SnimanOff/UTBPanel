@@ -135,8 +135,8 @@ func TestExpiredEnrollment(t *testing.T) {
 		t.Fatalf("second use: %v", err)
 	}
 	ca.Reload(ctx)
-	if _, err := ca.Verify(cert); !errors.Is(err, ErrRevoked) {
-		t.Fatalf("used enrollment still valid: %v", err)
+	if id, err := ca.Verify(cert); err != nil || !id.Used {
+		t.Fatalf("used enrollment: %+v, %v", id, err)
 	}
 }
 
