@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
+	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store/migrations"
@@ -37,6 +39,8 @@ type Panel struct {
 	EdgeMux *wire.Mux
 	EdgeSrv *wire.Server
 	Events  *events.Sink
+	CA      *pki.CA
+	API     *api.Server
 
 	closers []func(context.Context) error
 	runners []func(context.Context)
@@ -54,12 +58,19 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	if err != nil {
 		return nil, err
 	}
+	ca, err := pki.Open(ctx, filepath.Join(cfg.DataDir, "pki"), db)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
 	p := &Panel{
 		Cfg: cfg, Log: log, DB: db,
 		W:       store.NewWriter(db, 10*time.Second, log),
 		CoreMux: wire.NewMux(),
 		EdgeMux: wire.NewMux(),
+		CA:      ca,
 	}
+	p.API = api.New(ca, p.W, log)
 	p.Events = events.NewSink(db, p.CoreMux, log)
 	p.Core = &wire.Client{
 		Path: wire.CoreSock(cfg.RunDir), Mux: p.CoreMux, Log: log,
@@ -104,6 +115,11 @@ func (p *Panel) Run(ctx context.Context) error {
 	safe.Go(p.Log, "panel socket", func() { p.EdgeSrv.Serve(ln) })
 	safe.Go(p.Log, "core client", func() { p.Core.Run(ctx) })
 	safe.Go(p.Log, "stats", func() { app.ReportStats(ctx, p.Core, "panel", 10*time.Second) })
+	safe.Go(p.Log, "mtls listener", func() {
+		if err := p.API.ListenAndServe(ctx, p.Cfg.Listen, p.Cfg.PublicAddr); err != nil {
+			p.Log.Error("mtls listener stopped", "err", err)
+		}
+	})
 	for _, fn := range p.runners {
 		safe.Go(p.Log, "panel task", func() { fn(ctx) })
 	}
