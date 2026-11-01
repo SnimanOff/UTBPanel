@@ -10,6 +10,7 @@
   import HoldButton from '../../lib/ui/HoldButton.svelte'
   import SecretField from '../../lib/ui/SecretField.svelte'
   import Behavior from './Behavior.svelte'
+	import Tasks from './Tasks.svelte'
 
   let { bot }: { bot: BotView } = $props()
   let secrets = $state<SecretInfo[]>([])
@@ -155,6 +156,10 @@
 {#if error}<p class="danger pre">{error}</p>{/if}
 
 <Behavior botId={bot.id} />
+
+{#if bot.sdk?.modules.includes('tasks')}
+  <Tasks botId={bot.id} runnable={bot.state === 'running' && !!bot.status?.running} />
+{/if}
 
 <div class="grid">
   <Box title="Токен">

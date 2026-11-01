@@ -85,6 +85,7 @@ type View struct {
 // Register adds the routes.
 func (s *Service) Register(mux *api.Mux) {
 	s.registerSDKMetrics(mux)
+	s.registerSDKTasks(mux)
 	mux.HandleFunc("GET /api/bots", s.list)
 	mux.HandleFunc("POST /api/bots", s.create)
 	mux.HandleFunc("GET /api/bots/{id}", s.get)

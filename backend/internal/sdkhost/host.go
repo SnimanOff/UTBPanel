@@ -177,6 +177,22 @@ func (h *Host) Info(id int64, instance string) *Info {
 	return &i
 }
 
+// Call addresses one registered process instance. It never switches a
+// running request to a replacement transport session.
+func (h *Host) Call(ctx context.Context, id int64, instance, method string, in, out any) error {
+	h.mu.Lock()
+	e := h.endpoints[key{id, instance}]
+	var c *wire.Conn
+	if e != nil {
+		c = e.conn
+	}
+	h.mu.Unlock()
+	if c == nil {
+		return wire.ErrNotConnected
+	}
+	return c.Call(ctx, method, in, out)
+}
+
 func closeEndpoint(e *endpoint) {
 	e.ln.Close()
 	for _, c := range e.srv.Conns() {

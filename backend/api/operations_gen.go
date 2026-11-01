@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "e0f454e7aad11fc0d3dd892e6b3489eff95bd93a74d6de5a805667d6ee00f2a2"
+const GeneratedHash = "96293276bef745ea7d99fd75c34337bb47b15b73aef79b839557aa42c2e0bc64"
 
 // Op is one operation of the API.
 type Op struct {
@@ -48,6 +48,7 @@ var Ops = []Op{
 	{"get_profile", "GET", "/api/bots/{id}/profile", "read", "Telegram profile for a language (empty = default) and the menu button"},
 	{"list_versions", "GET", "/api/bots/{id}/releases", "read", "Stored versions with build data"},
 	{"list_sdk_metrics", "GET", "/api/bots/{id}/sdk/metrics", "read", "Custom SDK metrics, current values and dashboard selection"},
+	{"list_sdk_tasks", "GET", "/api/bots/{id}/sdk/tasks", "read", "SDK schedules in UTC and recent task runs"},
 	{"list_secrets", "GET", "/api/bots/{id}/secrets", "read", "Names of the bot's secrets; values are never returned"},
 	{"get_services", "GET", "/api/bots/{id}/services", "read", "External services the bot connects to (through the proxy) with error rates and traffic"},
 	{"get_settings", "GET", "/api/bots/{id}/settings", "read", "Settings of the bot (env, renames, limits)"},
@@ -94,6 +95,7 @@ var Ops = []Op{
 	{"deploy_release", "POST", "/api/bots/{id}/releases/{version}/switch", "confirm", "Switch the bot to a stored version"},
 	{"restart", "POST", "/api/bots/{id}/restart", "write", "Restart the bot"},
 	{"resume", "POST", "/api/bots/{id}/resume", "write", "End pause or maintenance; deferred updates go to the bot first"},
+	{"run_sdk_task", "POST", "/api/bots/{id}/sdk/tasks/{name}/run", "write", "Run a registered task on the main instance now"},
 	{"mark_service_known", "POST", "/api/bots/{id}/services/known", "write", "Mark an address as known (no more \"new address\" notifications)"},
 	{"start", "POST", "/api/bots/{id}/start", "write", "Start the bot"},
 	{"stop", "POST", "/api/bots/{id}/stop", "confirm", "Stop the bot; updates wait at Telegram"},

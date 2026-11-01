@@ -61,3 +61,20 @@ underscore); there are at most 200 per bot. Counters accept nonnegative
 increments, values accept finite numbers. Retried batches are deduplicated.
 Without a connection these calls do nothing. Select visible metrics on the
 bot dashboard; values, including zero and negative values, go into history.
+
+Scheduled tasks:
+
+```go
+if err := kit.Task("digest", "0 9 * * *", func(ctx context.Context) error {
+    return sendDigest(ctx)
+}); err != nil {
+    log.Fatal(err)
+}
+```
+
+Schedules use UTC. With the core connected, only the main instance runs tasks;
+the core records duration and outcome and offers Run now under Settings → Tasks.
+Pausing or stopping a bot cancels its tasks. Without a connection, the SDK's
+local scheduler runs them; canary instances do not run schedules. Functions
+must honor context cancellation. At most 100 names are registered per bot,
+and a task never overlaps itself. The core bounds one run to 15 minutes.

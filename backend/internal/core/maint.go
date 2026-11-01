@@ -51,6 +51,9 @@ func (c *Core) maintChanged(botID int64, m *maintenance.M, ended bool) {
 	}
 	if m.State == maintenance.Active {
 		c.DB.W.ExecContext(ctx, `UPDATE bots SET state = 'paused' WHERE id = ? AND state = 'running'`, botID)
+		if c.SDKTasks != nil {
+			c.SDKTasks.CancelBot(botID)
+		}
 		c.Logs.Add(botID, "core", "maintenance started ("+m.Kind+")", nowUTC())
 		c.Ev.Emit("maintenance_started", botID, events.Info, map[string]any{"kind": m.Kind, "ends_at": m.EndsAt})
 	}

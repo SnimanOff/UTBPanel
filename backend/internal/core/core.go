@@ -62,6 +62,7 @@ type Core struct {
 	Runner     *runner.Runner
 	SDK        *sdkhost.Host
 	SDKMetrics *sdkhost.Metrics
+	SDKTasks   *sdkhost.Tasks
 	Logs       *logs.Store
 	Journal    *journal.Journal
 	Releases   *deploy.Store
@@ -241,6 +242,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.SDK.Setup = func(id int64, instance string, mux *wire.Mux) func(*wire.Conn) {
 		c.SQL.Register(mux, id)
 		c.SDKMetrics.Register(mux, id, instance)
+		c.SDKTasks.Register(mux, id, instance)
 		return c.SQL.Disconnect
 	}
 	c.Mux.Handle("db.metrics", wire.Func(func(ctx context.Context, _ *wire.Conn, id int64) (dbgate.QueryStats, error) {
@@ -250,6 +252,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		return c.SQL.Snapshot(id), nil
 	}))
 	c.registerSDKMetrics()
+	c.registerSDKTasks()
 	c.DBBackups = c.newBackups()
 	c.DBChecks = c.newChecks()
 	c.registerDBBackups()
@@ -325,6 +328,11 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "core socket", func() { c.Srv.Serve(ln) })
 	safe.Go(c.Log, "events", func() { c.Ev.Run(ctx) })
 	safe.Go(c.Log, "restore bots", func() { c.Runner.Restore(ctx) })
+	safe.Go(c.Log, "SDK tasks", func() {
+		if err := c.SDKTasks.Run(ctx); err != nil {
+			c.Log.Error("SDK tasks stopped", "err", err)
+		}
+	})
 	safe.Go(c.Log, "limits watcher", func() { c.Runner.Watch(ctx) })
 	safe.Go(c.Log, "webhook checks", func() { c.watchWebhooks(ctx) })
 	safe.Go(c.Log, "users", func() { c.Users.Run(ctx) })

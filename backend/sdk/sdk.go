@@ -15,6 +15,7 @@ import (
 
 	"github.com/SnimanOff/UTBPanel/backend/sdk/metrics"
 	"github.com/SnimanOff/UTBPanel/backend/sdk/ready"
+	"github.com/SnimanOff/UTBPanel/backend/sdk/tasks"
 	"github.com/SnimanOff/UTBPanel/backend/sdk/wire"
 )
 
@@ -80,6 +81,7 @@ type Kit struct {
 	ready          ready.State
 	connectTimeout time.Duration
 	metrics        *metrics.Registry
+	tasks          *tasks.Registry
 }
 
 // New is immediate without TGPANEL_SDK. With ready enabled it registers before
@@ -94,6 +96,10 @@ func New(options ...Option) *Kit {
 	if os.Getenv("TGPANEL_CANARY") == "1" {
 		k.instance = "canary"
 	}
+	k.tasks = tasks.New(k, k.log, k.instance == "canary")
+	k.mux.Handle("sdk.tasks.run", wire.Func(func(ctx context.Context, _ *wire.Conn, in tasks.RunRequest) (any, error) {
+		return nil, k.tasks.Run(ctx, in.Name)
+	}))
 	address := os.Getenv("TGPANEL_SDK")
 	if address == "" {
 		close(k.done)
@@ -115,6 +121,11 @@ func New(options ...Option) *Kit {
 			return
 		}
 		readyCtx, readyCancel := context.WithTimeout(ctx, 5*time.Second)
+		if err := k.tasks.Connected(readyCtx, c); err != nil {
+			readyCancel()
+			c.Close()
+			return
+		}
 		err := k.ready.Resend(readyCtx, c)
 		readyCancel()
 		if err != nil {
@@ -128,6 +139,7 @@ func New(options ...Option) *Kit {
 		k.mu.Unlock()
 	}
 	k.client.OnDisconnect = func(c *wire.Conn, err error) {
+		k.tasks.Disconnected()
 		k.mu.Lock()
 		if k.conn == c {
 			k.conn = nil
@@ -273,6 +285,7 @@ func (k *Kit) Connection(ctx context.Context) (*wire.Conn, error) {
 func (k *Kit) Handle(method string, handler wire.Handler) { k.mux.Handle(method, handler) }
 
 func (k *Kit) Close() error {
+	k.tasks.Close()
 	ctx, stop := context.WithTimeout(context.Background(), 2*time.Second)
 	if err := k.metrics.Flush(ctx); err == nil {
 		k.metrics.Flush(ctx)
@@ -288,6 +301,10 @@ func (k *Kit) Close() error {
 func (k *Kit) Counter(name string) *metrics.Counter   { return k.metrics.Counter(name) }
 func (k *Kit) Value(name string) *metrics.Value       { return k.metrics.Value(name) }
 func (k *Kit) FlushMetrics(ctx context.Context) error { return k.metrics.Flush(ctx) }
+
+func (k *Kit) Task(name, schedule string, fn func(context.Context) error) error {
+	return k.tasks.Add(name, schedule, fn)
+}
 
 var ErrNotConnected = wire.ErrNotConnected
 

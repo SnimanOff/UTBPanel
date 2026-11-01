@@ -856,6 +856,26 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Audience" } } } }
 
+  /api/bots/{id}/sdk/tasks:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: list_sdk_tasks
+      tags: [bots]
+      summary: SDK schedules in UTC and recent task runs
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SDKTasksView" } } } }
+  /api/bots/{id}/sdk/tasks/{name}/run:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: run_sdk_task
+      tags: [bots]
+      summary: Run a registered task on the main instance now
+      x-mcp: write
+      responses:
+        "202": { description: Started, content: { application/json: { schema: { type: object, required: [id], properties: { id: { type: integer } } } } } }
   /api/bots/{id}/sdk/metrics:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -1682,6 +1702,32 @@ components:
         size: { type: integer }
         wal_size: { type: integer }
         tables: { type: array, items: { $ref: "#/components/schemas/DBTable" } }
+    SDKTasksView:
+      type: object
+      required: [tasks, runs]
+      properties:
+        tasks:
+          type: array
+          items:
+            type: object
+            required: [name, cron]
+            properties:
+              name: { type: string }
+              cron: { type: string }
+        runs:
+          type: array
+          items:
+            type: object
+            required: [id, name, source, started, duration_ms, success, error]
+            properties:
+              id: { type: integer }
+              name: { type: string }
+              source: { type: string, enum: [cron, manual] }
+              started: { type: string, format: date-time }
+              finished: { type: string, format: date-time }
+              duration_ms: { type: number }
+              success: { type: boolean }
+              error: { type: string, x-untrusted: true }
     SDKMetric:
       type: object
       required: [name, kind, counter, value, selected]
