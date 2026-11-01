@@ -35,7 +35,7 @@ const MethodUpdate = "ingress.update"
 var coreTimeout = 2 * time.Second
 
 // handler routes the public port: POST /hook/<bot_id> → core,
-// POST /gh/<bot_id> → panel, everything else 404 without a body. There is
+// POST /gh/<bot_id> → core (GitHub releases), everything else 404 without a body. There is
 // no UI or API on this port.
 func (e *Edge) handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +44,7 @@ func (e *Edge) handler() http.Handler {
 		case strings.HasPrefix(r.URL.Path, "/hook/") && r.Method == http.MethodPost:
 			e.hook(w, r, ip)
 		case strings.HasPrefix(r.URL.Path, "/gh/") && r.Method == http.MethodPost:
-			e.github(w, r, ip)
+			e.githubHook(w, r, ip)
 		default:
 			if !e.limiter.allow(ip) {
 				w.WriteHeader(http.StatusTooManyRequests)
@@ -176,11 +176,6 @@ func (e *Edge) coreAlive(c interface {
 }
 
 func (e *Edge) botTimeout() time.Duration { return 60 * time.Second }
-
-// github hands GitHub webhooks to the panel (enabled with GitHub releases).
-func (e *Edge) github(w http.ResponseWriter, r *http.Request, ip netip.Addr) {
-	w.WriteHeader(http.StatusNotFound)
-}
 
 // limiter bounds requests to unknown paths per IP (scanners).
 type limiter struct {

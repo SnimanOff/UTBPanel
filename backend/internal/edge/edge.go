@@ -17,6 +17,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
+	"github.com/SnimanOff/UTBPanel/backend/internal/github"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
 	"github.com/SnimanOff/UTBPanel/backend/internal/updrules"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
@@ -37,6 +38,9 @@ type Edge struct {
 	Panel *wire.Client
 
 	telegram []netip.Prefix
+	github   ghNets
+	// GH fetches GitHub's hook addresses; nil disables the refresh (tests).
+	GH       *github.Client
 	settings settings
 	limiter  limiter
 	certPEM  []byte
@@ -71,6 +75,8 @@ func New(cfg config.Edge, log *slog.Logger) (*Edge, error) {
 		log.Warn("saved settings unreadable", "err", err)
 	}
 	e.registerSettings()
+	e.initGitHub()
+	e.GH = github.New()
 	e.Core = &wire.Client{
 		Path: wire.CoreSock(cfg.RunDir), Mux: e.Mux, Log: log,
 		Hello: app.Hello(wire.ProtoEdgeCore, "edge", CoreVersion, 1),
@@ -97,6 +103,9 @@ func (e *Edge) Run(ctx context.Context) error {
 	safe.Go(e.Log, "core client", func() { e.Core.Run(ctx) })
 	safe.Go(e.Log, "panel client", func() { e.Panel.Run(ctx) })
 	safe.Go(e.Log, "stats", func() { app.ReportStats(ctx, e.Core, "edge", 10*time.Second) })
+	if e.GH != nil {
+		safe.Go(e.Log, "github addresses", func() { e.refreshGitHub(ctx, e.GH) })
+	}
 	tlsCfg, pemBytes, acm, err := e.tlsSetup()
 	if err != nil {
 		return err

@@ -42,7 +42,11 @@ func (c *Core) botExists(ctx context.Context, id int64) error {
 
 // reserved secrets have their own operations.
 func reserved(name string) bool {
-	return name == secrets.TokenName || name == secrets.WebhookSecretName
+	switch name {
+	case secrets.TokenName, secrets.WebhookSecretName, secrets.GitHubTokenName, secrets.GitHubHookName:
+		return true
+	}
+	return false
 }
 
 func (c *Core) registerSecrets() {

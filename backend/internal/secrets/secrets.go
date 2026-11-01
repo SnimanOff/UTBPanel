@@ -33,6 +33,9 @@ const KeySize = 32
 const (
 	KindValue = "value"
 	KindFile  = "file"
+	// KindPanel is used by the panel itself (GitHub token, webhook secret):
+	// it is never listed with the bot's secrets or given to the bot.
+	KindPanel = "panel"
 )
 
 // TokenName is the name under which the bot token is stored.
@@ -40,6 +43,12 @@ const TokenName = "BOT_TOKEN"
 
 // WebhookSecretName is the secret the core sends with every update.
 const WebhookSecretName = "WEBHOOK_SECRET"
+
+// Names of the panel's own secrets for GitHub Releases.
+const (
+	GitHubTokenName = "TGPANEL_GITHUB_TOKEN"
+	GitHubHookName  = "TGPANEL_GITHUB_HOOK_SECRET"
+)
 
 var (
 	ErrNoKeysDir = errors.New("secrets: the keys volume is missing; mount /keys (it holds the master key and must not be inside /data)")
@@ -190,7 +199,7 @@ func (s *Store) Set(ctx context.Context, botID int64, name, kind string, value [
 	if !ValidName(name) {
 		return fmt.Errorf("secrets: bad name %q: use letters, digits and _", name)
 	}
-	if kind != KindValue && kind != KindFile {
+	if kind != KindValue && kind != KindFile && kind != KindPanel {
 		return fmt.Errorf("secrets: bad kind %q", kind)
 	}
 	ct, nonce, err := s.Box.Seal(botID, name, value)
@@ -229,7 +238,7 @@ func (s *Store) Delete(ctx context.Context, botID int64, name string) error {
 
 // List returns names, kinds and dates of a bot's secrets.
 func (s *Store) List(ctx context.Context, botID int64) ([]Info, error) {
-	rows, err := s.DB.R.QueryContext(ctx, `SELECT name, kind, updated_at FROM secrets WHERE bot_id = ? ORDER BY name`, botID)
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT name, kind, updated_at FROM secrets WHERE bot_id = ? AND kind != 'panel' ORDER BY name`, botID)
 	if err != nil {
 		return nil, err
 	}
@@ -271,9 +280,10 @@ func (s *Store) Decrypt(ctx context.Context, botID int64, name string) ([]byte, 
 	return v, err
 }
 
-// DecryptAll returns all secrets of a bot, for starting it.
+// DecryptAll returns the secrets a bot gets when it starts (not the
+// panel's own).
 func (s *Store) DecryptAll(ctx context.Context, botID int64) ([]Secret, error) {
-	rows, err := s.DB.R.QueryContext(ctx, `SELECT name, kind, ciphertext, nonce FROM secrets WHERE bot_id = ? ORDER BY name`, botID)
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT name, kind, ciphertext, nonce FROM secrets WHERE bot_id = ? AND kind != 'panel' ORDER BY name`, botID)
 	if err != nil {
 		return nil, err
 	}

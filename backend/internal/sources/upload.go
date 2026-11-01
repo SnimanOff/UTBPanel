@@ -1,6 +1,6 @@
-// Package sources brings bot binaries into the panel: uploads and, later,
-// GitHub Releases. The binary goes to the core as a stream of chunks and
-// is never held in memory whole.
+// Package sources brings bot binaries into the panel: uploads and GitHub
+// Releases (fetched by the core). An upload goes to the core as a stream of
+// chunks and is never held in memory whole.
 package sources
 
 import (
@@ -32,6 +32,7 @@ func (u *Uploads) Register(mux *api.Mux) {
 	mux.HandleFunc("POST /api/bots/{id}/releases", u.upload)
 	mux.HandleFunc("GET /api/bots/{id}/releases", u.list)
 	mux.HandleFunc("POST /api/bots/{id}/releases/{version}/switch", u.switchVersion)
+	u.registerGitHub(mux)
 }
 
 func botID(r *http.Request) int64 {

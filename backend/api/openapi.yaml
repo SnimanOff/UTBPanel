@@ -401,6 +401,43 @@ paths:
       responses:
         "204": { description: Done }
 
+  /api/bots/{id}/github:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_github
+      tags: [releases]
+      summary: GitHub Releases setup of the bot, or null
+      x-mcp: read
+      responses:
+        "200": { description: OK }
+    put:
+      operationId: set_github
+      tags: [releases]
+      summary: Set repository (owner/repo, empty turns it off), asset mask, auto deploy and token; the webhook secret is returned once
+      x-mcp: confirm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                repo: { type: string }
+                asset_mask: { type: string }
+                auto_deploy: { type: boolean }
+                token: { type: string, description: "omit to keep, empty to remove" }
+      responses:
+        "200": { description: OK }
+  /api/bots/{id}/github/check:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: check_github
+      tags: [releases]
+      summary: Look for a new release now
+      x-mcp: write
+      responses:
+        "200": { description: OK }
+
   /api/bots/{id}/settings:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:

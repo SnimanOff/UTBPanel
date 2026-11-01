@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "1effa2621181847115365484b219ff9097f4f3a622eab33ac6d64386eb8ea3ac"
+const GeneratedHash = "19c98b7ffb9043423bf31b34ae8c592143943891b84591bb4fcc214e3cf4da5c"
 
 // Op is one operation of the API.
 type Op struct {
@@ -29,6 +29,7 @@ var Ops = []Op{
 	{"download_db_backup", "GET", "/api/bots/{id}/db/backups/{name}", "never", "Download a backup file"},
 	{"export_db", "GET", "/api/bots/{id}/db/export", "never", "A table or a read-only query as CSV"},
 	{"get_db_rows", "GET", "/api/bots/{id}/db/tables/{table}", "read", "A page of a table"},
+	{"get_github", "GET", "/api/bots/{id}/github", "read", "GitHub Releases setup of the bot, or null"},
 	{"get_logs", "GET", "/api/bots/{id}/logs", "read", "Last lines, or a search with from/to/search=1"},
 	{"download_logs", "GET", "/api/bots/{id}/logs/download", "never", "All log files as zip"},
 	{"stream_logs", "GET", "/api/bots/{id}/logs/stream", "never", "Live log lines (Server-Sent Events)"},
@@ -66,6 +67,7 @@ var Ops = []Op{
 	{"restore_db", "POST", "/api/bots/{id}/db/backups/{name}/restore", "never", "Stop the bot, restore the database from a backup, start it again"},
 	{"exec_db", "POST", "/api/bots/{id}/db/exec", "never", "SQL that writes to the bot database (held button in the panel; the text goes to the audit)"},
 	{"query_db", "POST", "/api/bots/{id}/db/query", "read", "Read-only SQL (the connection is query_only; the text is not inspected)"},
+	{"check_github", "POST", "/api/bots/{id}/github/check", "write", "Look for a new release now"},
 	{"schedule_maintenance", "POST", "/api/bots/{id}/maintenance", "confirm", "Plan maintenance (times in UTC; text with {start} and {end}; optionally switch to a version)"},
 	{"extend_maintenance", "POST", "/api/bots/{id}/maintenance/extend", "write", "Move the planned end (+15, +30, +60 minutes)"},
 	{"pause", "POST", "/api/bots/{id}/pause", "write", "Pause the bot: the process runs, users get the maintenance text, payments wait"},
@@ -87,6 +89,7 @@ var Ops = []Op{
 	{"enroll", "POST", "/enroll", "never", "Request a device certificate (gate.exe with its enrollment certificate)"},
 	{"order_bots", "PUT", "/api/bots/order", "never", "Put bots into a group in this order (0 = no group)"},
 	{"set_closed", "PUT", "/api/bots/{id}/closed", "confirm", "Turn closed mode on or off and set its text"},
+	{"set_github", "PUT", "/api/bots/{id}/github", "confirm", "Set repository (owner/repo, empty turns it off), asset mask, auto deploy and token; the webhook secret is returned once"},
 	{"set_bot_group", "PUT", "/api/bots/{id}/group", "never", "Move the bot to another group"},
 	{"set_secret", "PUT", "/api/bots/{id}/secrets/{name}", "never", "Set a secret (write-only). Neural networks use request_secret instead"},
 	{"put_settings_section", "PUT", "/api/bots/{id}/settings/{section}", "confirm", "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates)"},

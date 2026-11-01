@@ -2,8 +2,10 @@ package edge
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -139,4 +141,27 @@ func ctxTimeout(t *testing.T) context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	t.Cleanup(cancel)
 	return ctx
+}
+
+func TestGitHubHookAddresses(t *testing.T) {
+	e, _ := newEdge(t)
+	e.github.set([]string{"192.30.252.0/22"})
+	if w := post(e, "/gh/7", telegramIP, "", "{}"); w.Code != http.StatusForbidden {
+		t.Fatalf("not GitHub: %d", w.Code)
+	}
+	// From GitHub but no core connected: GitHub shows the failure, the
+	// poller catches up later.
+	if w := post(e, "/gh/7", "192.30.252.10", "", "{}"); w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("no core: %d", w.Code)
+	}
+	e2, err := New(e.Cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal([]string{"192.30.252.0/22"})
+	os.WriteFile(e2.github.path, b, 0o600)
+	e2.github.load()
+	if !e2.github.contains(netip.MustParseAddr("192.30.253.1")) {
+		t.Fatal("saved addresses not loaded")
+	}
 }
