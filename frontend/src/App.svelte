@@ -1,5 +1,6 @@
 <script lang="ts">
   import { router } from './lib/router.svelte'
+  import { live } from './lib/live.svelte'
   import Header from './routes/Header.svelte'
   import Placeholder from './routes/Placeholder.svelte'
   import Home from './routes/Home.svelte'
@@ -17,6 +18,7 @@
     notfound: 'Нет такой страницы',
   }
   const r = $derived(router.route)
+  $effect(() => live.use())
 </script>
 
 {#if r.name === 'mini'}

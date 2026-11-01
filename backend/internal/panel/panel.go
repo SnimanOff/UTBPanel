@@ -20,6 +20,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
 	"github.com/SnimanOff/UTBPanel/backend/internal/counters"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
+	"github.com/SnimanOff/UTBPanel/backend/internal/livehub"
 	"github.com/SnimanOff/UTBPanel/backend/internal/metrics"
 	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
@@ -139,6 +140,9 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	// Minutes of metrics: fetched from the core, written, then confirmed.
 	p.Metrics = &metrics.Storage{DB: db, W: p.W, Log: log}
 	(&metrics.API{S: p.Metrics, Core: p.Core}).Register(p.API.Mux)
+	hub := &livehub.LiveHub{Core: p.Core, Log: log}
+	hub.Register(p.API.Mux)
+	p.Go(hub.Run)
 	p.Go(func(ctx context.Context) {
 		p.Metrics.Run(ctx,
 			func(ctx context.Context, after int64) ([]metrics.Minute, error) {

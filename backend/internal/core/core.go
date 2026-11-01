@@ -57,6 +57,7 @@ type Core struct {
 	Users    *users.Tracker
 	Count    *counters.Counters
 	Host     *counters.HostSampler
+	Live     *counters.Live
 	hostMu   sync.Mutex
 	hostLast counters.Server
 
@@ -67,6 +68,7 @@ type Core struct {
 	delivery     delivery
 	cpuMu        sync.Mutex
 	cpuPrev      map[int64]cpuSample
+	cpuLast      map[int64]float64
 	onStarted    []func(context.Context, runner.Bot)
 	onStopping   []func(context.Context, runner.Bot)
 	pausedChecks []func(context.Context, int64) bool
@@ -103,6 +105,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		Mux:     wire.NewMux(),
 		procs:   map[string]procstat.Stats{},
 		cpuPrev: map[int64]cpuSample{},
+		cpuLast: map[int64]float64{},
 		Sec:     &secrets.Store{DB: db, Box: box, Redact: redact},
 		TG:      telegram.New(),
 	}
@@ -144,6 +147,20 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.Users = &users.Tracker{DB: db, W: c.W, Log: log, OnNew: c.Count.NewUser, OnBlock: c.Count.Block, OnPayment: c.Count.Payment}
 	c.Pipe.Observe = append(c.Pipe.Observe, c.Count.Observe)
 	c.Users.Register(c.Mux)
+	c.Live = &counters.Live{
+		InFlight: c.Pipe.InFlight,
+		Usage: func(id int64) (float64, int64) {
+			u, _ := c.Runner.Usage(id)
+			c.cpuMu.Lock()
+			cpu := c.cpuLast[id]
+			c.cpuMu.Unlock()
+			return cpu, u.RSS
+		},
+		Host: c.HostNow,
+		Bots: c.runningBots,
+	}
+	c.Live.Register(c.Mux)
+	c.Pipe.Observe = append(c.Pipe.Observe, c.Live.Observe)
 	c.Pipe.Account = append(c.Pipe.Account, c.Users.Account, c.Users.Payments)
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
@@ -194,6 +211,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "webhook checks", func() { c.watchWebhooks(ctx) })
 	safe.Go(c.Log, "users", func() { c.Users.Run(ctx) })
 	safe.Go(c.Log, "server metrics", func() { c.sampleHost(ctx) })
+	safe.Go(c.Log, "live metrics", func() { c.Live.Run(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)

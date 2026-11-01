@@ -151,6 +151,9 @@ func (c *Core) usage(id int64, u runner.Usage) {
 	if ok && now.After(prev.at) && u.CPUTicks >= prev.ticks {
 		pct := float64(u.CPUTicks-prev.ticks) / 100 / now.Sub(prev.at).Seconds() * 100
 		c.Count.Gauge(id, metrics.CPU, pct)
+		c.cpuMu.Lock()
+		c.cpuLast[id] = pct
+		c.cpuMu.Unlock()
 	}
 	c.Count.Gauge(id, metrics.RSS, float64(u.RSS))
 	c.Count.Gauge(id, metrics.OpenFiles, float64(u.OpenFiles))
