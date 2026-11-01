@@ -2,6 +2,7 @@ package users
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -53,5 +54,43 @@ func TestAccountAndSource(t *testing.T) {
 	tr.DB.R.QueryRow(`SELECT language_code FROM tg_users WHERE user_id = 5`).Scan(&lang)
 	if lang != "ru" {
 		t.Fatalf("lang = %q", lang)
+	}
+}
+
+func TestBlocksAndPayments(t *testing.T) {
+	ctx := context.Background()
+	tr := newTracker(t)
+	now := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+	member := func(status string, at time.Time) *ingress.Update {
+		return ingress.Parse(1, []byte(`{"update_id":2,"my_chat_member":{"chat":{"id":5,"type":"private"},"from":{"id":5},"new_chat_member":{"status":"`+status+`"}}}`), at)
+	}
+	var blocks []bool
+	tr.OnBlock = func(_, _ int64, b bool) { blocks = append(blocks, b) }
+	tr.Account(ctx, upd(5, "hi", now))
+	tr.Account(ctx, member("kicked", now.Add(time.Second)))
+	tr.Flush(ctx)
+	var blocked sql.NullString
+	tr.DB.R.QueryRow(`SELECT blocked_at FROM bot_users WHERE user_id = 5`).Scan(&blocked)
+	if !blocked.Valid {
+		t.Fatal("block not stored")
+	}
+	tr.Account(ctx, member("member", now.Add(time.Minute)))
+	tr.Flush(ctx)
+	tr.DB.R.QueryRow(`SELECT blocked_at FROM bot_users WHERE user_id = 5`).Scan(&blocked)
+	if blocked.Valid || len(blocks) != 2 || !blocks[0] || blocks[1] {
+		t.Fatalf("unblock: %v %v", blocked, blocks)
+	}
+
+	pay := func(kind string) *ingress.Update {
+		return ingress.Parse(1, []byte(`{"update_id":3,"message":{"chat":{"id":5,"type":"private"},"from":{"id":5},"`+kind+`":{"currency":"XTR","total_amount":50,"invoice_payload":"p1","telegram_payment_charge_id":"ch1"}}}`), now)
+	}
+	tr.Payments(ctx, pay("successful_payment"))
+	tr.Payments(ctx, pay("successful_payment")) // Telegram retried: no duplicate
+	tr.Payments(ctx, pay("refunded_payment"))
+	var n int
+	var refunded sql.NullString
+	tr.DB.R.QueryRow(`SELECT COUNT(*), MAX(refunded_at) FROM payments`).Scan(&n, &refunded)
+	if n != 1 || !refunded.Valid {
+		t.Fatalf("payments = %d refunded=%v", n, refunded)
 	}
 }

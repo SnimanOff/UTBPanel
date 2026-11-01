@@ -27,6 +27,8 @@ type pending struct {
 	language    string
 	premium     bool
 	hasProfile  bool
+	// Block state from my_chat_member in a private chat; the last one wins.
+	blockedAt, unblockedAt time.Time
 }
 
 // Tracker records users.
@@ -38,6 +40,10 @@ type Tracker struct {
 	Every time.Duration
 	// OnNew is called once for every user new to a bot (counters).
 	OnNew func(botID, userID int64, source string)
+	// OnBlock is called for every block (true) and unblock (false).
+	OnBlock func(botID, userID int64, blocked bool)
+	// OnPayment is called for every stored payment or refund.
+	OnPayment func(botID int64, p ingress.Payment)
 
 	mu   sync.Mutex
 	pend map[key]*pending
@@ -66,6 +72,12 @@ func (t *Tracker) Account(_ context.Context, u *ingress.Update) {
 	p.last = now
 	p.updates++
 	p.days[DayOf(now)] = true
+	switch u.MemberStatus {
+	case "kicked":
+		p.blockedAt = now
+	case "member":
+		p.unblockedAt = now
+	}
 	if u.Start {
 		if !p.started {
 			p.started, p.source = true, u.StartParam
@@ -139,11 +151,17 @@ func (t *Tracker) Flush(ctx context.Context) error {
 					p.source, p.started, p.updates, bits, anchor); err != nil {
 					return err
 				}
+				if err := writeBlock(tx, k, p); err != nil {
+					return err
+				}
 				fresh = append(fresh, struct {
 					k      key
 					source string
 				}{k, p.source})
 				continue
+			}
+			if err := writeBlock(tx, k, p); err != nil {
+				return err
 			}
 			// The source is remembered only from the first /start.
 			setSource := p.started && !started
@@ -171,6 +189,13 @@ func (t *Tracker) Flush(ctx context.Context) error {
 		}
 		t.mu.Unlock()
 		return err
+	}
+	if t.OnBlock != nil {
+		for k, p := range batch {
+			if !p.blockedAt.IsZero() || !p.unblockedAt.IsZero() {
+				t.OnBlock(k.bot, k.user, p.blockedAt.After(p.unblockedAt))
+			}
+		}
 	}
 	if t.OnNew != nil {
 		for _, f := range fresh {
@@ -214,4 +239,56 @@ func (t *Tracker) Retention(ctx context.Context, botID int64, n int, now time.Ti
 		return 0, 0, rows.Err()
 	}
 	return float64(kept) / float64(cohort), cohort, rows.Err()
+}
+
+// writeBlock stores the block state: blocked users leave broadcasts.
+func writeBlock(tx *sql.Tx, k key, p *pending) error {
+	if !p.blockedAt.IsZero() && p.blockedAt.After(p.unblockedAt) {
+		_, err := tx.Exec(`UPDATE bot_users SET blocked_at = ? WHERE bot_id = ? AND user_id = ?`, store.FormatTime(p.blockedAt), k.bot, k.user)
+		return err
+	}
+	if !p.unblockedAt.IsZero() {
+		_, err := tx.Exec(`UPDATE bot_users SET blocked_at = NULL, unblocked_at = ? WHERE bot_id = ? AND user_id = ?`, store.FormatTime(p.unblockedAt), k.bot, k.user)
+		return err
+	}
+	return nil
+}
+
+// Payments is the pipeline step for successful_payment and
+// refunded_payment. Payments are written at once: money is never batched.
+func (t *Tracker) Payments(ctx context.Context, u *ingress.Update) {
+	if u.Payment == nil {
+		return
+	}
+	p := *u.Payment
+	at := store.FormatTime(u.Received)
+	err := t.W.Now(ctx, func(tx *sql.Tx) error {
+		if p.Refund {
+			res, err := tx.Exec(`UPDATE payments SET refunded_at = ? WHERE bot_id = ? AND charge_id = ? AND charge_id != ''`, at, u.BotID, p.ChargeID)
+			if err != nil {
+				return err
+			}
+			if n, _ := res.RowsAffected(); n > 0 {
+				return nil
+			}
+		}
+		_, err := tx.Exec(`INSERT INTO payments (bot_id, ts, user_id, currency, amount, payload, charge_id, refunded_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+			u.BotID, at, u.UserID, p.Currency, p.Amount, p.Payload, p.ChargeID, refundAt(p, at))
+		return err
+	})
+	if err != nil {
+		t.Log.Error("payment not stored", "bot", u.BotID, "user", u.UserID, "err", err)
+		return
+	}
+	if t.OnPayment != nil {
+		t.OnPayment(u.BotID, p)
+	}
+}
+
+func refundAt(p ingress.Payment, at string) any {
+	if p.Refund {
+		return at
+	}
+	return nil
 }
