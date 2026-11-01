@@ -551,6 +551,29 @@ paths:
                     rss_max: { type: number }
                     revenue_24h: { type: object, additionalProperties: { type: integer } }
 
+  /api/server/checks:
+    get:
+      operationId: get_db_checks
+      tags: [db]
+      summary: Results of the weekly quick_check of core.db, panel.db and every bot.db
+      x-mcp: read
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [name, at, ok]
+                  properties:
+                    name: { type: string }
+                    bot_id: { type: integer }
+                    at: { type: string, format: date-time }
+                    ok: { type: boolean }
+                    error: { type: string }
+
   /api/live:
     get:
       operationId: stream_live

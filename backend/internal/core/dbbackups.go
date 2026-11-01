@@ -107,6 +107,9 @@ func (f fileChunks) Write(p []byte) (int, error) {
 }
 
 func (c *Core) registerDBBackups() {
+	c.Mux.Handle("db.checks", wire.Func(func(ctx context.Context, _ *wire.Conn, _ struct{}) ([]dbgate.Check, error) {
+		return c.DBChecks.Last(ctx), nil
+	}))
 	c.Mux.Handle("db.backups", wire.Func(func(_ context.Context, _ *wire.Conn, id int64) ([]dbgate.Backup, error) {
 		return c.DBBackups.List(id)
 	}))
@@ -142,4 +145,24 @@ func (c *Core) registerDBBackups() {
 		_, err = io.CopyBuffer(fileChunks{s}, f, make([]byte, 256<<10))
 		return err
 	})
+}
+
+// newChecks checks core.db and every bot.db with quick_check weekly.
+func (c *Core) newChecks() *dbgate.Checks {
+	return &dbgate.Checks{DB: c.DB, Table: "kv",
+		Run: func(ctx context.Context) []dbgate.Check {
+			out := []dbgate.Check{dbgate.CheckFile(ctx, "core.db", c.DB.Path, 0)}
+			bots, _ := c.Bots(ctx)
+			for _, b := range bots {
+				p := c.DBG.Path(b.ID)
+				if _, err := os.Stat(p); err == nil {
+					out = append(out, dbgate.CheckFile(ctx, "bot.db "+b.Name, p, b.ID))
+				}
+			}
+			return out
+		},
+		OnBad: func(ch dbgate.Check) {
+			c.Ev.Emit("db_check_failed", ch.BotID, events.Error, map[string]any{"db": ch.Name, "error": ch.Error})
+		},
+	}
 }

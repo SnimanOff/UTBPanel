@@ -62,6 +62,7 @@ type Core struct {
 	Live      *counters.Live
 	DBG       *dbgate.Browser
 	DBBackups *dbgate.Backups
+	DBChecks  *dbgate.Checks
 	hostMu    sync.Mutex
 	hostLast  counters.Server
 
@@ -156,6 +157,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	}}
 	c.DBG.Register(c.Mux, c.Journal)
 	c.DBBackups = c.newBackups()
+	c.DBChecks = c.newChecks()
 	c.registerDBBackups()
 	c.Live = &counters.Live{
 		InFlight: c.Pipe.InFlight,
@@ -223,6 +225,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "server metrics", func() { c.sampleHost(ctx) })
 	safe.Go(c.Log, "live metrics", func() { c.Live.Run(ctx) })
 	safe.Go(c.Log, "db backups", func() { c.dailyBackups(ctx) })
+	safe.Go(c.Log, "db checks", func() { c.DBChecks.Loop(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)

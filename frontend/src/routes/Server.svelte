@@ -17,6 +17,11 @@
   let loads = $state<Load[]>([])
   let sortKey = $state<keyof Load>('updates_24h')
   let error = $state('')
+  type Check = { name: string; at: string; ok: boolean; error?: string }
+  let checks = $state<Check[]>([])
+  $effect(() => {
+    api.get<Check[]>('/api/server/checks').then((c) => (checks = c), () => {})
+  })
 
   async function load() {
     error = ''
@@ -113,11 +118,20 @@
       </tbody>
     </table>
   </Box>
+  <div class="side">
+  <Box title="Проверка баз (quick_check)">
+    {#each checks as c}
+      <div class="row"><span>{c.name}</span><span class:danger={!c.ok} class="num">{c.ok ? 'ок' : c.error} · {c.at.slice(5, 10)}</span></div>
+    {:else}
+      <p class="muted">Ещё не проверялись</p>
+    {/each}
+  </Box>
   <Box title="Процессы">
     {#each data?.procs ?? [] as p}
       <div class="row"><span>{p.Name}</span><span class="num">{Math.round(p.CPUPercent ?? 0)}% · {bytes(p.RSS)}</span></div>
     {/each}
   </Box>
+  </div>
 </div>
 
 <style>
@@ -183,6 +197,11 @@
   }
   tr.clickable:hover td {
     background: var(--surface-2);
+  }
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
   }
   .row {
     display: flex;

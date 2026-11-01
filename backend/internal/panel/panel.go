@@ -147,6 +147,18 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	dbAPI := &dbgate.API{Core: p.Core, WriteErr: bots.WriteCoreError}
 	dbAPI.RegisterAPI(p.API.Mux)
 	dbAPI.RegisterBackups(p.API.Mux)
+	checks := &dbgate.Checks{DB: db, Table: "settings", Run: func(ctx context.Context) []dbgate.Check {
+		return []dbgate.Check{dbgate.CheckFile(ctx, "panel.db", db.Path, 0)}
+	}, OnBad: func(ch dbgate.Check) { log.Error("panel.db failed quick_check", "error", ch.Error) }}
+	p.Go(checks.Loop)
+	p.API.Mux.HandleFunc("GET /api/server/checks", func(w http.ResponseWriter, r *http.Request) {
+		out := checks.Last(r.Context())
+		var core []dbgate.Check
+		if p.Core.Call(r.Context(), "db.checks", struct{}{}, &core) == nil {
+			out = append(out, core...)
+		}
+		api.WriteJSON(w, http.StatusOK, out)
+	})
 	(&metrics.ServerAPI{S: p.Metrics, Procs: func(ctx context.Context) ([]procstat.Stats, error) {
 		var ps []procstat.Stats
 		err := p.Core.Call(ctx, "procs", struct{}{}, &ps)
