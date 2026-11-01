@@ -27,6 +27,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store/migrations"
 	"github.com/SnimanOff/UTBPanel/backend/internal/telegram"
+	"github.com/SnimanOff/UTBPanel/backend/internal/users"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
 
@@ -52,6 +53,7 @@ type Core struct {
 	Journal  *journal.Journal
 	Releases *deploy.Store
 	Pipe     *ingress.Pipeline
+	Users    *users.Tracker
 
 	mu           sync.Mutex
 	procs        map[string]procstat.Stats
@@ -128,6 +130,8 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerIngress()
 	c.registerDeferred()
 	c.registerWebhooks()
+	c.Users = &users.Tracker{DB: db, W: c.W, Log: log}
+	c.Pipe.Account = append(c.Pipe.Account, c.Users.Account)
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
 	})
@@ -175,6 +179,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "restore bots", func() { c.Runner.Restore(ctx) })
 	safe.Go(c.Log, "limits watcher", func() { c.Runner.Watch(ctx) })
 	safe.Go(c.Log, "webhook checks", func() { c.watchWebhooks(ctx) })
+	safe.Go(c.Log, "users", func() { c.Users.Run(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)

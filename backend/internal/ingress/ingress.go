@@ -37,7 +37,8 @@ type Update struct {
 	Username   string
 	Language   string
 	Premium    bool
-	StartParam string // payload of the first /start
+	StartParam string // payload of /start <param>
+	Start      bool   // the message is /start
 	Payment    *Payment
 	// MyChatMember status of the bot in a private chat: kicked / member.
 	MemberStatus string
@@ -187,9 +188,7 @@ func Parse(botID int64, body []byte, received time.Time) *Update {
 		u.ChatType = "private"
 	}
 	if u.Type == "message" && u.ChatType == "private" {
-		if p, ok := startParam(obj.Text); ok {
-			u.StartParam = p
-		}
+		u.StartParam, u.Start = startParam(obj.Text)
 	}
 	if obj.SuccessfulPayment != nil {
 		u.Payment = obj.SuccessfulPayment
