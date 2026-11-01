@@ -13,6 +13,8 @@ func (g *Gate) local(w http.ResponseWriter, r *http.Request) {
 	case "/__gate/enroll":
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprintf(w, enrollPage, html.EscapeString(g.cfg.Block.KeyName))
+	case "/__gate/server":
+		g.serverPage(w, r)
 	case "/__gate/enroll.json":
 		st := g.EnrollState()
 		w.Header().Set("Content-Type", "application/json")

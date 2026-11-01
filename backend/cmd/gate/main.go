@@ -59,7 +59,14 @@ func run(listen string, noTPM bool) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	err = g.Run(ctx)
+	errc := make(chan error, 1)
+	go func() {
+		errc <- g.Run(ctx)
+		stop()
+	}()
+	// The tray lives on the main thread until "Выход" or the end of Run.
+	tray(ctx, stop, g)
+	err = <-errc
 	if errors.Is(err, gate.ErrPortBusy) {
 		// Most likely this gate is already running: just open the panel.
 		return fmt.Errorf("порт %s занят: gate уже запущен или порт занят другой программой.\n\n%v", listen, err)

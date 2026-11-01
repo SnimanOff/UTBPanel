@@ -412,7 +412,12 @@ func (g *Gate) login(w http.ResponseWriter, r *http.Request) {
 	// HttpOnly: cookies are not bound to a port, so without it a script of
 	// any other page on 127.0.0.1 could read it.
 	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: sid, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
-	http.Redirect(w, r, "/", http.StatusFound)
+	next := "/"
+	// Only gate pages and panel paths: never another host.
+	if n := r.URL.Query().Get("next"); strings.HasPrefix(n, "/") && !strings.HasPrefix(n, "//") {
+		next = n
+	}
+	http.Redirect(w, r, next, http.StatusFound)
 }
 
 // OpenPanel opens the browser with a fresh one-time link.

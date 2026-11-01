@@ -63,6 +63,11 @@ func newPanel(t *testing.T) *fakePanel {
 		}
 		fmt.Fprint(w, "data: last\n\n")
 	})
+	s.Mux.HandleFunc("GET /api/notifications/stream", func(w http.ResponseWriter, r *http.Request) {
+		sse := api.NewSSE(w)
+		sse.Send("7", "notification", map[string]any{"id": 7, "text": "Echo: упал (код 2)", "severity": "error", "href": "/bots/1/logs"})
+		<-r.Context().Done()
+	})
 	s.Mux.HandleFunc("POST /api/upload", func(w http.ResponseWriter, r *http.Request) {
 		mr, err := r.MultipartReader()
 		if err != nil {
@@ -348,5 +353,43 @@ func TestRevokedDeviceStopsWorking(t *testing.T) {
 func TestNoBlock(t *testing.T) {
 	if _, err := New(Config{}); err != gatefile.ErrNoBlock {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestWatchNotifications(t *testing.T) {
+	s := enrolled(t)
+	got := make(chan Note, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go s.gate.Watch(ctx, func(n Note) { got <- n }, nil)
+	select {
+	case n := <-got:
+		if n.ID != 7 || n.Severity != "error" || n.Href != "/bots/1/logs" {
+			t.Fatalf("%+v", n)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("no notification through the tunnel")
+	}
+
+	// The server page changes the address (browser with the session).
+	resp, err := s.browser.PostForm(s.base+"/__gate/server", map[string][]string{"addr": {"bad address"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(b), "host:port") || s.gate.Server() != s.panel.addr {
+		t.Fatalf("bad address accepted: %s", b)
+	}
+	// login ?next= stays on this host.
+	jar, _ := cookiejar.New(nil)
+	c := &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	r2, err := c.Get(s.gate.LoginURL() + "&next=//evil.example/x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2.Body.Close()
+	if loc := r2.Header.Get("Location"); loc != "/" {
+		t.Fatalf("redirect to %q", loc)
 	}
 }

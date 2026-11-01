@@ -3,6 +3,7 @@ module github.com/SnimanOff/UTBPanel/backend
 go 1.27
 
 require (
+	fyne.io/systray v1.12.0
 	github.com/SnimanOff/UTBPanel/backend/sdk v0.0.0
 	github.com/axiomhq/hyperloglog v0.3.0
 	go.yaml.in/yaml/v3 v3.0.5
@@ -15,6 +16,7 @@ require (
 	github.com/dgryski/go-metro v0.0.0-20250106013310-edb8663e5e33 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.10.0 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/kamstrup/intmap v0.5.2 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
