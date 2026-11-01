@@ -1,0 +1,39 @@
+# Override for end-to-end tests (backend/e2e/run.sh): a fake Telegram, the
+# edge reachable as "edge" inside the network, and a tester container that
+# talks to the core over its socket.
+services:
+  edge:
+    image: utbpanel:e2e
+    ports: !reset []
+    environment:
+      TGPANEL_PUBLIC_ADDR: edge
+      TGPANEL_TELEGRAM_IPS: 0.0.0.0/0
+  core:
+    image: utbpanel:e2e
+    environment:
+      TGPANEL_PUBLIC_ADDR: edge
+      TGPANEL_TELEGRAM_API: http://faketg:8081
+  panel:
+    image: utbpanel:e2e
+    ports: !reset []
+  faketg:
+    image: golang:1.27
+    working_dir: /src/backend
+    command: ["go", "run", "./e2e/faketg"]
+    volumes:
+      - .:/src
+      - gomod:/go/pkg/mod
+  tester:
+    image: golang:1.27
+    working_dir: /src/backend
+    profiles: [test]
+    environment:
+      TGPANEL_RUN_DIR: /run/tgpanel
+      FAKETG: http://faketg:8081
+    volumes:
+      - .:/src
+      - gomod:/go/pkg/mod
+      - run:/run/tgpanel
+
+volumes:
+  gomod:
