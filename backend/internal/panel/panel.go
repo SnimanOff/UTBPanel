@@ -16,6 +16,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
 	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
+	"github.com/SnimanOff/UTBPanel/backend/internal/backup"
 	"github.com/SnimanOff/UTBPanel/backend/internal/botconfig"
 	"github.com/SnimanOff/UTBPanel/backend/internal/bots"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
@@ -194,6 +195,9 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	}}
 	rules.Lock = documents.Guard.Lock
 	documents.Register(p.API.Mux)
+	exportFiles := &backup.Files{Dir: filepath.Join(cfg.DataDir, "export-temp")}
+	(&sources.Exports{Core: p.Core, Documents: documents, Metrics: p.Metrics, Extras: exportFiles}).Register(p.API.Mux, p.CoreMux)
+	p.Go(exportFiles.Run)
 	rules.Register(p.API.Mux)
 	p.Go(rules.Run)
 	p.Events.Subscribe(notes.OnCoreEvent)

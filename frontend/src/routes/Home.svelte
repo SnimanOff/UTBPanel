@@ -7,6 +7,7 @@
   import { pollBots, store } from '../lib/api/stores.svelte'
   import HoldButton from '../lib/ui/HoldButton.svelte'
   import BotCard from './BotCard.svelte'
+  import Export from './bot/Export.svelte'
 
   type Filter = 'all' | 'running' | 'paused' | 'stopped' | 'error'
   const filters: { id: Filter; label: string }[] = [
@@ -119,6 +120,7 @@
 </div>
 
 {#if error}<p class="danger">{error}</p>{/if}
+{#if store.bots.length}<Export all />{/if}
 {#if store.error}<p class="danger">{store.error}</p>{/if}
 
 {#each sections as s (s.group.id)}

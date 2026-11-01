@@ -78,6 +78,16 @@ func (s *Service) Get(ctx context.Context, id int64) (View, error) {
 	}
 	return view(snap.Document)
 }
+
+// ExportSnapshot retains the core revision alongside panel-owned settings.
+func (s *Service) ExportSnapshot(ctx context.Context, id int64) (Snapshot, error) {
+	ctx, unlock, err := s.Guard.Lock(ctx)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	defer unlock()
+	return s.snapshot(ctx, id)
+}
 func (s *Service) prepare(ctx context.Context, id int64, in Edit) (Snapshot, Document, error) {
 	var d Document
 	if (in.Document == nil) == (in.YAML == nil) {

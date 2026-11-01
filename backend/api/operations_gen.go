@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "14b7b20eda8efd8d2f8c10f215d0a0d5ee49fed8d40f7288ff7a0f707adf279a"
+const GeneratedHash = "d1681e4d4bb88ebdb8f0b2d257ee4aebaec35da0b10dee10bfda6f1a183cf68f"
 
 // Op is one operation of the API.
 type Op struct {
@@ -41,6 +41,7 @@ var Ops = []Op{
 	{"get_db_rows", "GET", "/api/bots/{id}/db/tables/{table}", "read", "A page of a table"},
 	{"list_deploy_reports", "GET", "/api/bots/{id}/deploy-reports", "read", "Hour before vs hour after each deploy (updates, errors, p95, crashes, CPU, RAM) and what got worse"},
 	{"list_deploys", "GET", "/api/bots/{id}/deploys", "read", "Deploy history (from, to, backup, who, result), newest first"},
+	{"download_bot_export", "GET", "/api/bots/{id}/exports/{export}", "never", "Download an encrypted .tgbot archive before it expires"},
 	{"get_github", "GET", "/api/bots/{id}/github", "read", "GitHub Releases setup of the bot, or null"},
 	{"get_logs", "GET", "/api/bots/{id}/logs", "read", "Last lines, or a search with from/to/search=1"},
 	{"download_logs", "GET", "/api/bots/{id}/logs/download", "never", "All log files as zip"},
@@ -109,6 +110,7 @@ var Ops = []Op{
 	{"unban_user", "POST", "/api/bots/{id}/users/{uid}/unban", "write", "Lift a ban"},
 	{"approve_device", "POST", "/api/devices/{id}/approve", "never", "Approve a device after comparing the code (owner only)"},
 	{"reject_device", "POST", "/api/devices/{id}/reject", "never", "Reject a device (owner only)"},
+	{"export_bots", "POST", "/api/exports/bots", "never", "Create encrypted portable archives; the same password is returned once for the batch"},
 	{"create_group", "POST", "/api/groups", "never", "Create a group"},
 	{"issue_key", "POST", "/api/keys", "never", "Issue a child key; returns gate-<name>.exe (owner only)"},
 	{"revoke_key", "POST", "/api/keys/{serial}/revoke", "never", "Revoke a key (owner only; the owner key only over SSH)"},

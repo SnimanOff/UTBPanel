@@ -3,11 +3,13 @@ module github.com/SnimanOff/UTBPanel/backend
 go 1.27
 
 require (
+	filippo.io/age v1.3.2
 	fyne.io/systray v1.12.0
 	github.com/SnimanOff/UTBPanel/backend/sdk v0.0.0
 	github.com/axiomhq/hyperloglog v0.3.0
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	github.com/robfig/cron/v3 v3.0.1
+	github.com/sethvargo/go-diceware v0.6.0
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/crypto v0.58.0
 	golang.org/x/sys v0.49.0
@@ -15,6 +17,7 @@ require (
 )
 
 require (
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/dgryski/go-metro v0.0.0-20250106013310-edb8663e5e33 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.10.0 // indirect

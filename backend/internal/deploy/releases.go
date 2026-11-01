@@ -58,6 +58,9 @@ type upload struct {
 
 var versionRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
 
+// ValidVersion reports whether a version can be used as a release directory.
+func ValidVersion(version string) bool { return versionRe.MatchString(version) }
+
 // ErrUnknownUpload is returned for chunks of an upload that does not exist.
 var ErrUnknownUpload = errors.New("deploy: unknown upload")
 

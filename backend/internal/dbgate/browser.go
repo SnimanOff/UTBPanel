@@ -43,7 +43,7 @@ func dsn(path string, write bool) string {
 		q.Set("mode", "ro")
 		q.Add("_pragma", "query_only(1)")
 	}
-	return "file:" + path + "?" + q.Encode()
+	return sqliteURI(path,q)
 }
 
 func (b *Browser) open(botID int64, write bool) (*sql.DB, error) {

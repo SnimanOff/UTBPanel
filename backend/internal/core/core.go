@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
+	"github.com/SnimanOff/UTBPanel/backend/internal/backup"
 	"github.com/SnimanOff/UTBPanel/backend/internal/botconfig"
 	"github.com/SnimanOff/UTBPanel/backend/internal/broadcast"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
@@ -51,6 +52,7 @@ const (
 // Core is the running core process.
 type Core struct {
 	ConfigGuard botconfig.Guard
+	Exports     *backup.Files
 	Cfg         config.Core
 	Log         *slog.Logger
 	DB          *store.DB
@@ -263,6 +265,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	}
 	c.DBBackups = c.newBackups()
 	c.registerConfig()
+	c.registerExports()
 	c.DBChecks = c.newChecks()
 	c.registerDBBackups()
 	c.Live = &counters.Live{
@@ -337,6 +340,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "core socket", func() { c.Srv.Serve(ln) })
 	safe.Go(c.Log, "events", func() { c.Ev.Run(ctx) })
 	safe.Go(c.Log, "restore bots", func() { c.Runner.Restore(ctx) })
+	safe.Go(c.Log, "prune exports", func() { c.Exports.Run(ctx) })
 	safe.Go(c.Log, "SDK tasks", func() {
 		if err := c.SDKTasks.Run(ctx); err != nil {
 			c.Log.Error("SDK tasks stopped", "err", err)

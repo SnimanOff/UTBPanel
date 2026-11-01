@@ -13,6 +13,7 @@
 	import Tasks from './Tasks.svelte'
 	import Flags from './Flags.svelte'
 	import ConfigDocument from './ConfigDocument.svelte'
+	import Export from './Export.svelte'
 
   let { bot }: { bot: BotView } = $props()
   let secrets = $state<SecretInfo[]>([])
@@ -159,6 +160,7 @@
 {#if error}<p class="danger pre">{error}</p>{/if}
 
 <ConfigDocument botId={bot.id} onapplied={(restart) => { if (restart) restartNeeded = true; configRevision++; load(); store.refresh(bot.id) }} />
+<Export botIds={[bot.id]} />
 
 {#key configRevision}<Behavior botId={bot.id} />{/key}
 

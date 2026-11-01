@@ -645,6 +645,41 @@ paths:
       responses:
         "200": { description: OK }
 
+  /api/exports/bots:
+    post:
+      operationId: export_bots
+      tags: [settings]
+      summary: Create encrypted portable archives; the same password is returned once for the batch
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                bot_ids: { type: array, uniqueItems: true, items: { type: integer }, description: Empty or omitted means all bots }
+                password: { type: string, writeOnly: true, anyOf: [{ const: "" }, { minLength: 10, maxLength: 1024 }], description: Omit or leave empty to generate six random words }
+                files: { type: boolean, default: false }
+                metrics: { type: boolean, default: false }
+                all_versions: { type: boolean, default: false }
+      responses:
+        "201": { description: Archives ready; save the password now, content: { application/json: { schema: { $ref: "#/components/schemas/BotExportResult" } } } }
+        "409": { description: Settings changed while preparing the export; retry }
+  /api/bots/{id}/exports/{export}:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: export, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: download_bot_export
+      tags: [settings]
+      summary: Download an encrypted .tgbot archive before it expires
+      x-mcp: never
+      responses:
+        "200": { description: Encrypted age file containing tar.gz, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+        "404": { description: No archive or expired }
+
   /api/bots/{id}/config:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -1400,6 +1435,21 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
   schemas:
+    ExportFile:
+      type: object
+      required: [id, bot_id, name, size, expires]
+      properties:
+        id: { type: string }
+        bot_id: { type: integer }
+        name: { type: string }
+        size: { type: integer }
+        expires: { type: string, format: date-time }
+    BotExportResult:
+      type: object
+      required: [password, files]
+      properties:
+        password: { type: string, description: Returned only with this response; never persisted }
+        files: { type: array, items: { $ref: "#/components/schemas/ExportFile" } }
     BotConfigDocument:
       type: object
       additionalProperties: false
