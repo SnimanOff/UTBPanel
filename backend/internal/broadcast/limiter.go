@@ -108,6 +108,9 @@ func (l *Limiter) reserve(botID int64) time.Duration {
 // Wait blocks until a broadcast message of the bot may go.
 func (l *Limiter) Wait(ctx context.Context, botID int64) error {
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		d := l.reserve(botID)
 		if d == 0 {
 			return nil

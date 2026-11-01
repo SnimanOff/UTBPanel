@@ -138,13 +138,13 @@ func (s *Service) send(ctx context.Context, id int64) error {
 					return err
 				}
 				err := s.deliver(ctx, token, &b, user)
-				if ctx.Err() != nil {
-					// Paused or cancelled mid-call: this user is not counted.
-					return ctx.Err()
-				}
 				if err == nil {
 					b.Sent++
 					break
+				}
+				if ctx.Err() != nil {
+					// Paused or cancelled mid-call: this user gets it on resume.
+					return ctx.Err()
 				}
 				te, isTG := telegram.AsError(err)
 				switch {
