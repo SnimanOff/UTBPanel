@@ -40,9 +40,9 @@ type Snapshot struct {
 }
 
 type second struct {
-	updates, dropped int64
-	latSum           time.Duration
-	latN             int64
+	updates, dropped, api int64
+	latSum                time.Duration
+	latN                  int64
 }
 
 // Live keeps per-second counters and the last 5 minutes of snapshots.
@@ -86,6 +86,21 @@ func (l *Live) Observe(o ingress.Outcome) {
 	}
 }
 
+// APICall counts a Bot API call in the current second.
+func (l *Live) APICall(botID int64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.cur == nil {
+		l.cur = map[int64]*second{}
+	}
+	s := l.cur[botID]
+	if s == nil {
+		s = &second{}
+		l.cur[botID] = s
+	}
+	s.api++
+}
+
 // tick closes the second and builds the snapshot.
 func (l *Live) tick(now time.Time) Snapshot {
 	l.mu.Lock()
@@ -115,7 +130,7 @@ func (l *Live) tick(now time.Time) Snapshot {
 		if s == nil {
 			s = &second{}
 		}
-		b := LiveBot{UPS: float64(s.updates), Dropped: float64(s.dropped)}
+		b := LiveBot{UPS: float64(s.updates), Dropped: float64(s.dropped), APIPS: float64(s.api)}
 		l.mu.Lock()
 		win := append(l.lat[id], *s)
 		if len(win) > 10 {

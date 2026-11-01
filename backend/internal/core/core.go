@@ -66,6 +66,7 @@ type Core struct {
 	DBChecks  *dbgate.Checks
 	Proxy     *tgproxy.Proxy
 	bundle    string
+	apiW      apiWatch
 	hostMu    sync.Mutex
 	hostLast  counters.Server
 
@@ -185,7 +186,9 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		Bots: c.runningBots,
 	}
 	c.Live.Register(c.Mux)
-	c.Pipe.Observe = append(c.Pipe.Observe, c.Live.Observe)
+	c.Pipe.Observe = append(c.Pipe.Observe, c.Live.Observe, c.observeDelivery)
+	c.apiW = apiWatch{api: map[int64]time.Time{}, delivered: map[int64]time.Time{}, warned: map[int64]time.Time{}}
+	c.Proxy.Hooks.OnCall = c.onCall
 	c.Pipe.Account = append(c.Pipe.Account, c.Users.Account, c.Users.Payments)
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
@@ -239,6 +242,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "live metrics", func() { c.Live.Run(ctx) })
 	safe.Go(c.Log, "db backups", func() { c.dailyBackups(ctx) })
 	safe.Go(c.Log, "db checks", func() { c.DBChecks.Loop(ctx) })
+	safe.Go(c.Log, "proxy bypass check", func() { c.checkBypass(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)

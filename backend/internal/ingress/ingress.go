@@ -79,6 +79,8 @@ type Outcome struct {
 	Result  string // delivered | dropped_<reason> | deferred | replied | error | timeout | unavailable
 	Latency time.Duration
 	Status  int
+	// ReplyMethod: the bot answered with a method in the webhook body.
+	ReplyMethod bool
 }
 
 // Pipeline processes updates.
@@ -284,6 +286,7 @@ func (p *Pipeline) Handle(ctx context.Context, botID int64, body []byte, receive
 		rep, res, lat = p.forward(ctx, u)
 	}
 	out.Result, out.Latency = res, lat
+	out.ReplyMethod = bytes.Contains(rep.Body, []byte(`"method"`))
 	return rep
 }
 
