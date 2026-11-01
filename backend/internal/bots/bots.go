@@ -21,6 +21,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/maintenance"
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
 	"github.com/SnimanOff/UTBPanel/backend/internal/secrets"
+	"github.com/SnimanOff/UTBPanel/backend/internal/telegram"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
 
@@ -94,6 +95,8 @@ func (s *Service) Register(mux *api.Mux) {
 	mux.HandleFunc("POST /api/bots/{id}/pause", s.maint("maintenance.pause", "bot.pause"))
 	mux.HandleFunc("POST /api/bots/{id}/resume", s.maint("maintenance.end", "bot.resume"))
 	mux.HandleFunc("GET /api/bots/{id}/maintenance", s.getMaint)
+	mux.HandleFunc("GET /api/bots/{id}/profile", s.getProfile)
+	mux.HandleFunc("PATCH /api/bots/{id}/profile", s.setProfile)
 	mux.HandleFunc("POST /api/bots/{id}/maintenance", s.schedule)
 	mux.HandleFunc("POST /api/bots/{id}/maintenance/extend", s.extend)
 	mux.HandleFunc("GET /api/bots/{id}/settings", s.settings)
@@ -676,4 +679,47 @@ func (s *Service) extend(w http.ResponseWriter, r *http.Request) {
 	}
 	audit.Annotate(r, "maintenance.extend", "", map[string]any{"minutes": in.Minutes})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// getProfile reads the Telegram profile for ?lang= (empty = default).
+func (s *Service) getProfile(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var v core.ProfileView
+	if err := s.Call(r.Context(), "profile.get", core.ProfileReq{BotID: id, Lang: r.URL.Query().Get("lang")}, &v); err != nil {
+		WriteCoreError(w, err)
+		return
+	}
+	api.WriteJSON(w, http.StatusOK, v)
+}
+
+// setProfile sends only the fields present in the body; errors come per
+// field and the other fields are still saved.
+func (s *Service) setProfile(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		Lang             string                 `json:"lang"`
+		Name             *string                `json:"name"`
+		Description      *string                `json:"description"`
+		ShortDescription *string                `json:"short_description"`
+		Commands         *[]telegram.BotCommand `json:"commands"`
+		Menu             *telegram.MenuButton   `json:"menu"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	req := core.ProfileReq{BotID: id, Lang: in.Lang, Name: in.Name, Description: in.Description,
+		ShortDescription: in.ShortDescription, Commands: in.Commands, Menu: in.Menu, Actor: api.Actor(r.Context())}
+	var out core.ProfileSaved
+	if err := s.Call(r.Context(), "profile.set", req, &out); err != nil {
+		WriteCoreError(w, err)
+		return
+	}
+	audit.Annotate(r, "profile.set", in.Lang, nil)
+	api.WriteJSON(w, http.StatusOK, out)
 }

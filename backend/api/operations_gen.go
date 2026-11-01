@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "d4df21a0a02968e957029c745481a8335db6db6cbd1806c8e2bc55ac2be9249a"
+const GeneratedHash = "6f339d96788d5dbc73d41d6941c1ecce020ca235ae22548e688ff6e77b58fad6"
 
 // Op is one operation of the API.
 type Op struct {
@@ -31,6 +31,7 @@ var Ops = []Op{
 	{"stream_logs", "GET", "/api/bots/{id}/logs/stream", "never", "Live log lines (Server-Sent Events)"},
 	{"get_maintenance", "GET", "/api/bots/{id}/maintenance", "read", "Pause or maintenance of the bot, if any"},
 	{"get_metrics", "GET", "/api/bots/{id}/metrics", "read", "Metrics of the bot for a period, with user numbers and deploy marks"},
+	{"get_profile", "GET", "/api/bots/{id}/profile", "read", "Telegram profile for a language (empty = default) and the menu button"},
 	{"list_versions", "GET", "/api/bots/{id}/releases", "read", "Stored versions with build data"},
 	{"list_secrets", "GET", "/api/bots/{id}/secrets", "read", "Names of the bot's secrets; values are never returned"},
 	{"get_services", "GET", "/api/bots/{id}/services", "read", "External services the bot connects to (through the proxy) with error rates and traffic"},
@@ -48,6 +49,7 @@ var Ops = []Op{
 	{"get_panel_settings", "GET", "/api/settings", "read", "Panel settings (Telegram ID of the owner)"},
 	{"enroll_status", "GET", "/enroll/{id}", "never", "State of an enrollment request (gate.exe polls it)"},
 	{"rename_bot", "PATCH", "/api/bots/{id}", "write", "Rename the bot in the panel (the Telegram name is in the profile)"},
+	{"update_profile", "PATCH", "/api/bots/{id}/profile", "confirm", "Send only changed fields (name, descriptions, commands, menu); errors come per field"},
 	{"update_settings", "PATCH", "/api/bots/{id}/settings", "confirm", "Change env, variable renames and limits; applies after a restart"},
 	{"rename_group", "PATCH", "/api/groups/{gid}", "never", "Rename a group"},
 	{"create_bot", "POST", "/api/bots", "write", "Add a bot; the token is checked with getMe and never returned"},

@@ -23,6 +23,7 @@ tags:
   - name: users
   - name: db
   - name: network
+  - name: profile
   - name: groups
   - name: audit
   - name: keys
@@ -262,6 +263,38 @@ paths:
             schema: { type: object, required: [minutes], properties: { minutes: { type: integer } } }
       responses:
         "204": { description: Done }
+
+  /api/bots/{id}/profile:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_profile
+      tags: [profile]
+      summary: Telegram profile for a language (empty = default) and the menu button
+      x-mcp: read
+      parameters:
+        - { name: lang, in: query, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProfileView" } } } }
+    patch:
+      operationId: update_profile
+      tags: [profile]
+      summary: Send only changed fields (name, descriptions, commands, menu); errors come per field
+      x-mcp: confirm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lang: { type: string }
+                name: { type: string }
+                description: { type: string }
+                short_description: { type: string }
+                commands: { type: array, items: { $ref: "#/components/schemas/BotCommand" } }
+                menu: { $ref: "#/components/schemas/MenuButton" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProfileSaved" } } } }
 
   /api/bots/{id}/settings:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
@@ -1046,6 +1079,40 @@ components:
             type: object
             required: [user_id]
             properties: { user_id: { type: integer }, username: { type: string }, note: { type: string } }
+    BotCommand:
+      type: object
+      required: [command, description]
+      properties: { command: { type: string }, description: { type: string } }
+    MenuButton:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, enum: [commands, web_app, default] }
+        text: { type: string }
+        web_app: { type: object, properties: { url: { type: string } } }
+    ProfileView:
+      type: object
+      required: [profile, menu]
+      properties:
+        profile:
+          type: object
+          required: [name, description, short_description, commands]
+          properties:
+            name: { type: string }
+            description: { type: string }
+            short_description: { type: string }
+            commands: { type: array, items: { $ref: "#/components/schemas/BotCommand" } }
+        menu: { $ref: "#/components/schemas/MenuButton" }
+    ProfileSaved:
+      type: object
+      required: [errors]
+      properties:
+        errors:
+          type: object
+          additionalProperties:
+            type: object
+            required: [message]
+            properties: { message: { type: string }, retry_at: { type: string, format: date-time } }
     BanRequest:
       type: object
       required: [reason]
