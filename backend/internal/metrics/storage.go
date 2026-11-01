@@ -39,6 +39,12 @@ func (s *Storage) Save(ctx context.Context, ms []Minute) error {
 	return s.W.Now(ctx, func(tx *sql.Tx) error {
 		for i := range ms {
 			m := &ms[i]
+			if m.BotID < 0 { // server metrics
+				if _, err := tx.Exec(`INSERT INTO m_server (ts, data) VALUES (?, ?) ON CONFLICT (ts) DO UPDATE SET data = excluded.data`, m.TS, Encode(m)); err != nil {
+					return err
+				}
+				continue
+			}
 			var old []byte
 			if err := tx.QueryRow(`SELECT data FROM m_minute WHERE bot_id = ? AND ts = ?`, m.BotID, m.TS).Scan(&old); err == nil {
 				var prev Minute

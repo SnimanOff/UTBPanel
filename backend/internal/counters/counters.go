@@ -73,7 +73,9 @@ func (c *Counters) rollLocked(next int64) {
 			m.ID = c.nextID
 			c.nextID++
 			c.ring = append(c.ring, m)
-			sum.Merge(&a.m)
+			if a.m.BotID > 0 {
+				sum.Merge(&a.m)
+			}
 		}
 		sum.Uniq = map[string][]byte{}
 		sum.Uniq[metrics.UniqUsers], _ = users.MarshalBinary()

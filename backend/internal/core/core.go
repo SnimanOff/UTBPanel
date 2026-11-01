@@ -56,6 +56,9 @@ type Core struct {
 	Pipe     *ingress.Pipeline
 	Users    *users.Tracker
 	Count    *counters.Counters
+	Host     *counters.HostSampler
+	hostMu   sync.Mutex
+	hostLast counters.Server
 
 	mu           sync.Mutex
 	procs        map[string]procstat.Stats
@@ -125,6 +128,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerBots()
 	c.Count = counters.New()
 	c.Count.Register(c.Mux)
+	c.Host = &counters.HostSampler{Proc: counters.Root(cfg.HostProc), DataDir: cfg.DataDir}
 	c.Logs = c.newLogs()
 	c.registerLogs()
 	c.Runner = c.newRunner()
@@ -189,6 +193,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "limits watcher", func() { c.Runner.Watch(ctx) })
 	safe.Go(c.Log, "webhook checks", func() { c.watchWebhooks(ctx) })
 	safe.Go(c.Log, "users", func() { c.Users.Run(ctx) })
+	safe.Go(c.Log, "server metrics", func() { c.sampleHost(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)
@@ -224,4 +229,34 @@ func (c *Core) Run(ctx context.Context) error {
 	)
 	app.Shutdown(c.Log, 30*time.Second, steps...)
 	return nil
+}
+
+// sampleHost reads the host every second: live metrics use the last sample,
+// history gets the maximum of each minute.
+func (c *Core) sampleHost(ctx context.Context) {
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		s := c.Host.Sample()
+		c.hostMu.Lock()
+		c.hostLast = s
+		c.hostMu.Unlock()
+		c.Count.RecordServer(s)
+		for _, p := range c.Procs() {
+			c.Count.Gauge(counters.ServerBotID, "proc_"+p.Name+"_cpu", p.CPUPercent)
+			c.Count.Gauge(counters.ServerBotID, "proc_"+p.Name+"_rss", float64(p.RSS))
+		}
+	}
+}
+
+// HostNow returns the last host sample.
+func (c *Core) HostNow() counters.Server {
+	c.hostMu.Lock()
+	defer c.hostMu.Unlock()
+	return c.hostLast
 }
