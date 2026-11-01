@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
+	"github.com/SnimanOff/UTBPanel/backend/internal/users"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
 
@@ -36,9 +37,9 @@ func (a *API) bot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := map[string]any{"series": s}
-	var users map[string]any
-	if a.Core.Call(r.Context(), "users.stats", id, &users) == nil {
-		resp["users"] = users
+	var us users.Stats
+	if a.Core.Call(r.Context(), "users.stats", id, &us) == nil {
+		resp["users"] = us
 	}
 	api.WriteJSON(w, http.StatusOK, resp)
 }

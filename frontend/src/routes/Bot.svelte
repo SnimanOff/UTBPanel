@@ -10,6 +10,7 @@
   import Tabs from '../lib/ui/Tabs.svelte'
   import Logs from './bot/Logs.svelte'
   import Settings from './bot/Settings.svelte'
+  import Metrics from './bot/Metrics.svelte'
 
   let { id, tab }: { id: number; tab: string } = $props()
   const tabs = [
@@ -70,6 +71,8 @@
     <button disabled title="Пауза">⏸</button>
   </div>
   {#if error}<p class="danger err">{error}</p>{/if}
+
+  <Metrics {bot} />
 
   <Tabs {tabs} active={tab} onselect={(t) => router.go(`/bots/${id}/${t}`, true)} />
   <div class="tab">
