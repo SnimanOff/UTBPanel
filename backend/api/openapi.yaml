@@ -645,6 +645,54 @@ paths:
       responses:
         "200": { description: OK }
 
+  /api/bots/{id}/config:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_bot_config
+      tags: [settings]
+      summary: Portable bot settings as JSON and YAML; secret names only
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/BotConfigView" } } } }
+  /api/bots/{id}/config/diff:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: diff_config
+      tags: [settings]
+      summary: Compare a settings document and classify each changed field
+      x-mcp: read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BotConfigEdit" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/BotConfigDiff" } } } }
+        "409": { description: Settings changed since this version was read }
+  /api/bots/{id}/config/apply:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: apply_config
+      tags: [settings]
+      summary: Apply settings against an expected version; field levels are returned by diff_config
+      x-mcp: confirm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BotConfigEdit" }
+      responses:
+        "200": { description: Applied or individual Telegram profile errors, content: { application/json: { schema: { $ref: "#/components/schemas/BotConfigResult" } } } }
+        "409": { description: Settings changed since this version was read }
+  /api/bot-config/schema:
+    get:
+      operationId: get_bot_config_schema
+      tags: [settings]
+      summary: JSON Schema of the portable settings document derived from OpenAPI
+      x-mcp: read
+      responses:
+        "200": { description: JSON Schema draft 2020-12, content: { application/json: { schema: { type: object } } } }
+
   /api/bots/{id}/settings/{section}:
     parameters:
       - { $ref: "#/components/parameters/BotID" }
@@ -1352,6 +1400,131 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
   schemas:
+    BotConfigDocument:
+      type: object
+      additionalProperties: false
+      required: [env, rename, secrets, antiflood, closed, texts, tz, flags, profile, limits, stop, github, alerts, log_patterns, crash_updates]
+      properties:
+        version: { type: string, description: Opaque revision required when applying; omit in portable release files }
+        group:
+          type: object
+          readOnly: true
+          properties: { id: { type: integer }, name: { type: string } }
+        env: { type: object, additionalProperties: { type: string }, x-mcp: confirm }
+        rename: { type: object, additionalProperties: { type: string }, x-mcp: confirm }
+        secrets:
+          type: array
+          uniqueItems: true
+          description: User secret names only. Reserved tokens and secret values are never part of this document. Removal requires confirmation.
+          items: { type: string, pattern: "^[A-Za-z_][A-Za-z0-9_]{0,127}$" }
+        antiflood:
+          type: object
+          additionalProperties: false
+          properties:
+            enabled: { type: boolean, x-mcp: confirm }
+            limit: { type: integer, minimum: 0, x-mcp: write }
+            window: { type: string, x-mcp: write }
+            warn: { type: boolean, x-mcp: write }
+            warn_text: { type: string, x-mcp: write }
+            autoban: { type: boolean, x-mcp: write }
+            strikes: { type: integer, minimum: 0, x-mcp: write }
+            ban_hours: { type: integer, minimum: 0, x-mcp: write }
+        closed:
+          type: object
+          additionalProperties: false
+          properties:
+            enabled: { type: boolean, x-mcp: confirm }
+            text: { type: string, x-mcp: write }
+        texts: { type: object, additionalProperties: { type: string }, x-mcp: write }
+        tz: { type: string, x-mcp: write }
+        flags: { type: object, additionalProperties: { $ref: "#/components/schemas/SDKFlagValue" }, description: Explicit overrides only; remove a key to reset its code default, x-mcp: write }
+        profile:
+          type: object
+          x-mcp: write
+          additionalProperties: false
+          properties:
+            name: { type: object, additionalProperties: { type: string } }
+            description: { type: object, additionalProperties: { type: string } }
+            short_description: { type: object, additionalProperties: { type: string } }
+            commands: { type: object, additionalProperties: { type: array, items: { $ref: "#/components/schemas/BotCommand" } } }
+            menu: { $ref: "#/components/schemas/MenuButton" }
+        limits: { $ref: "#/components/schemas/Limits", x-mcp: confirm }
+        stop:
+          type: object
+          additionalProperties: false
+          x-mcp: confirm
+          properties: { drop_pending: { type: boolean } }
+        github:
+          type: object
+          additionalProperties: false
+          x-mcp: confirm
+          properties: { repo: { type: string }, asset: { type: string }, autodeploy: { type: boolean } }
+        alerts:
+          type: array
+          x-mcp: write
+          items:
+            type: object
+            additionalProperties: false
+            required: [metric, op, value, minutes, enabled]
+            properties:
+              metric: { type: string, enum: [p95, err_rate, cpu, rss, updates, silence, revenue_drop] }
+              op: { type: string, enum: [">", "<"] }
+              value: { type: number }
+              minutes: { type: integer, minimum: 1, maximum: 1440 }
+              enabled: { type: boolean }
+        log_patterns:
+          type: array
+          maxItems: 20
+          x-mcp: write
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, pattern]
+            properties: { name: { type: string }, pattern: { type: string }, regexp: { type: boolean } }
+        crash_updates: { type: boolean, x-mcp: confirm }
+    BotConfigView:
+      type: object
+      required: [document, yaml]
+      properties:
+        document: { $ref: "#/components/schemas/BotConfigDocument" }
+        yaml: { type: string }
+    BotConfigEdit:
+      type: object
+      additionalProperties: false
+      required: [version]
+      oneOf:
+        - required: [document]
+        - required: [yaml]
+      properties:
+        version: { type: string }
+        document: { $ref: "#/components/schemas/BotConfigDocument" }
+        yaml: { type: string }
+    BotConfigDiff:
+      type: object
+      required: [changes, confirm, restart]
+      properties:
+        confirm: { type: boolean }
+        restart: { type: boolean }
+        changes:
+          type: array
+          items:
+            type: object
+            required: [path, before, after, level]
+            properties:
+              path: { type: string }
+              before: {}
+              after: {}
+              level: { type: string, enum: [write, confirm] }
+    BotConfigResult:
+      allOf:
+        - { $ref: "#/components/schemas/BotConfigView" }
+        - type: object
+          required: [applied, restart, missing_secrets, profile_errors]
+          properties:
+            applied: { type: boolean }
+            restart: { type: boolean }
+            missing_secrets: { type: array, items: { type: string } }
+            profile_errors: { type: object, additionalProperties: { type: string } }
     Error:
       type: object
       required: [code, message]

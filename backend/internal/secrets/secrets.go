@@ -172,8 +172,9 @@ type Info struct {
 
 // Store keeps secrets in core.db.
 type Store struct {
-	DB  *store.DB
-	Box *Box
+	Lock func(context.Context) (context.Context, func(), error)
+	DB   *store.DB
+	Box  *Box
 	// Redact receives every decrypted value so logs never show it.
 	Redact *Redactor
 }
@@ -196,6 +197,15 @@ func ValidName(name string) bool {
 
 // Set stores or replaces a secret.
 func (s *Store) Set(ctx context.Context, botID int64, name, kind string, value []byte) error {
+	if s.Lock != nil {
+		var unlock func()
+		var err error
+		ctx, unlock, err = s.Lock(ctx)
+		if err != nil {
+			return err
+		}
+		defer unlock()
+	}
 	if !ValidName(name) {
 		return fmt.Errorf("secrets: bad name %q: use letters, digits and _", name)
 	}
@@ -226,6 +236,15 @@ func (s *Store) SetTx(ctx context.Context, tx *sql.Tx, botID int64, name, kind s
 
 // Delete removes a secret.
 func (s *Store) Delete(ctx context.Context, botID int64, name string) error {
+	if s.Lock != nil {
+		var unlock func()
+		var err error
+		ctx, unlock, err = s.Lock(ctx)
+		if err != nil {
+			return err
+		}
+		defer unlock()
+	}
 	res, err := s.DB.W.ExecContext(ctx, `DELETE FROM secrets WHERE bot_id = ? AND name = ?`, botID, name)
 	if err != nil {
 		return err

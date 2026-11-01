@@ -25,6 +25,7 @@ type Flag struct {
 }
 type FlagMark = metrics.FlagMark
 type Flags struct {
+	Lock    func(context.Context) (context.Context, func(), error)
 	DB      *store.DB
 	Changed func(int64, string)
 	mu      sync.Mutex
@@ -52,6 +53,15 @@ func (f *Flags) Register(mux *wire.Mux, id int64, instance string) {
 }
 
 func (f *Flags) RegisterDefinitions(ctx context.Context, id int64, instance string, c *wire.Conn, defs []flags.Definition) (map[string]flags.State, error) {
+	if f.Lock != nil {
+		var unlock func()
+		var err error
+		ctx, unlock, err = f.Lock(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer unlock()
+	}
 	if len(defs) > flags.MaxFlags {
 		return nil, fmt.Errorf("sdk: flag limit reached")
 	}
@@ -207,6 +217,15 @@ func (f *Flags) List(ctx context.Context, id int64) ([]Flag, error) {
 }
 
 func (f *Flags) Set(ctx context.Context, id int64, name string, value flags.Value, reset bool) error {
+	if f.Lock != nil {
+		var unlock func()
+		var err error
+		ctx, unlock, err = f.Lock(ctx)
+		if err != nil {
+			return err
+		}
+		defer unlock()
+	}
 	f.mu.Lock()
 	var state flags.State
 	changed := false

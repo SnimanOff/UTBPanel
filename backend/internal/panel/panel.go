@@ -16,6 +16,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
 	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
+	"github.com/SnimanOff/UTBPanel/backend/internal/botconfig"
 	"github.com/SnimanOff/UTBPanel/backend/internal/bots"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
@@ -171,6 +172,28 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		}
 		return ids
 	}}
+	documents := &botconfig.Service{Core: p.Core, Rules: rules, WriteError: bots.WriteCoreError, Group: func(ctx context.Context, id int64) (*botconfig.Group, error) {
+		metas, err := p.Bots.Groups.Metas(ctx)
+		if err != nil {
+			return nil, err
+		}
+		groupID := metas[id].GroupID
+		if groupID == 0 {
+			return nil, nil
+		}
+		groups, err := p.Bots.Groups.List(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, g := range groups {
+			if g.ID == groupID {
+				return &botconfig.Group{ID: g.ID, Name: g.Name}, nil
+			}
+		}
+		return nil, nil
+	}}
+	rules.Lock = documents.Guard.Lock
+	documents.Register(p.API.Mux)
 	rules.Register(p.API.Mux)
 	p.Go(rules.Run)
 	p.Events.Subscribe(notes.OnCoreEvent)

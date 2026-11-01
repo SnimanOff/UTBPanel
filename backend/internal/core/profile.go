@@ -2,8 +2,10 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/botconfig"
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/telegram"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
@@ -43,6 +45,11 @@ type ProfileSaved struct {
 // Profile reads name, descriptions, commands and the menu button.
 func (c *Core) Profile(ctx context.Context, botID int64, lang string) (ProfileView, error) {
 	var v ProfileView
+	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return v, err
+	}
+	defer unlock()
 	tok, err := c.Token(ctx, botID)
 	if err != nil {
 		return v, err
@@ -56,12 +63,26 @@ func (c *Core) Profile(ctx context.Context, botID int64, lang string) (ProfileVi
 	if v.Menu, err = c.TG.GetChatMenuButton(ctx, tok); err != nil {
 		return v, telegramError(err)
 	}
-	return v, nil
+	in := ProfileReq{BotID: botID, Lang: lang, Name: &v.Profile.Name, Description: &v.Profile.Description, ShortDescription: &v.Profile.ShortDescription, Commands: &v.Profile.Commands, Menu: &v.Menu}
+	return v, c.cacheProfile(ctx, in, nil)
 }
 
 // SaveProfile sends the changed fields one by one.
 func (c *Core) SaveProfile(ctx context.Context, in ProfileReq) (ProfileSaved, error) {
 	out := ProfileSaved{Errors: map[string]FieldError{}}
+	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return out, err
+	}
+	defer unlock()
+	if in.Commands != nil {
+		for _, cmd := range *in.Commands {
+			if !validCommand(cmd.Command) {
+				out.Errors["commands"] = FieldError{Message: "команда " + cmd.Command + ": 1–32 символа a-z, 0-9, _"}
+				return out, nil
+			}
+		}
+	}
 	tok, err := c.Token(ctx, in.BotID)
 	if err != nil {
 		return out, err
@@ -90,18 +111,45 @@ func (c *Core) SaveProfile(ctx context.Context, in ProfileReq) (ProfileSaved, er
 		try("short_description", func() error { return c.TG.SetMyShortDescription(ctx, tok, in.Lang, *in.ShortDescription) })
 	}
 	if in.Commands != nil {
-		for _, cmd := range *in.Commands {
-			if !validCommand(cmd.Command) {
-				out.Errors["commands"] = FieldError{Message: "команда " + cmd.Command + ": 1–32 символа a-z, 0-9, _"}
-				return out, nil
-			}
-		}
 		try("commands", func() error { return c.TG.SetMyCommands(ctx, tok, in.Lang, *in.Commands) })
 	}
 	if in.Menu != nil {
 		try("menu", func() error { return c.TG.SetChatMenuButton(ctx, tok, *in.Menu) })
 	}
-	return out, nil
+	cacheCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return out, c.cacheProfile(cacheCtx, in, out.Errors)
+}
+
+// Keep successful profile values for exports and offline configuration reads.
+func (c *Core) cacheProfile(ctx context.Context, in ProfileReq, failed map[string]FieldError) error {
+	m, err := c.Settings(ctx, in.BotID)
+	if err != nil {
+		return err
+	}
+	var d botconfig.Document
+	json.Unmarshal(m["profile_cache"], &d.Profile)
+	botconfig.Normalize(&d)
+	lang := in.Lang
+	if lang == "" {
+		lang = "default"
+	}
+	if _, bad := failed["name"]; in.Name != nil && !bad {
+		d.Profile.Name[lang] = *in.Name
+	}
+	if _, bad := failed["description"]; in.Description != nil && !bad {
+		d.Profile.Description[lang] = *in.Description
+	}
+	if _, bad := failed["short_description"]; in.ShortDescription != nil && !bad {
+		d.Profile.ShortDescription[lang] = *in.ShortDescription
+	}
+	if _, bad := failed["commands"]; in.Commands != nil && !bad {
+		d.Profile.Commands[lang] = *in.Commands
+	}
+	if _, bad := failed["menu"]; in.Menu != nil && !bad {
+		d.Profile.Menu = in.Menu
+	}
+	return c.SetSetting(ctx, in.BotID, "profile_cache", d.Profile)
 }
 
 func validCommand(s string) bool {

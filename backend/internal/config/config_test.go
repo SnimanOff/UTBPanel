@@ -111,6 +111,12 @@ func TestBadFile(t *testing.T) {
 }
 
 func TestByteSize(t *testing.T) {
+	for _, raw := range []string{"9223372036854775807G", "-9223372036854775808G"} {
+		var size ByteSize
+		if err := size.Set(raw); err == nil {
+			t.Errorf("overflow accepted: %s", raw)
+		}
+	}
 	for in, want := range map[string]ByteSize{"512": 512, "4K": 4096, "256M": 256 << 20, "1G": 1 << 30, "2gb": 2 << 30} {
 		var b ByteSize
 		if err := b.Set(in); err != nil || b != want {

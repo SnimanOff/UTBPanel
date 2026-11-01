@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
+	"github.com/SnimanOff/UTBPanel/backend/internal/botconfig"
 	"github.com/SnimanOff/UTBPanel/backend/internal/broadcast"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
@@ -49,51 +50,52 @@ const (
 
 // Core is the running core process.
 type Core struct {
-	Cfg        config.Core
-	Log        *slog.Logger
-	DB         *store.DB
-	W          *store.Writer
-	Mux        *wire.Mux
-	Srv        *wire.Server
-	Ev         *events.Bus
-	Sec        *secrets.Store
-	TG         *telegram.Client
-	GH         *github.Client
-	Runner     *runner.Runner
-	SDK        *sdkhost.Host
-	SDKMetrics *sdkhost.Metrics
-	SDKTasks   *sdkhost.Tasks
-	SDKFlags   *sdkhost.Flags
-	Logs       *logs.Store
-	Journal    *journal.Journal
-	Releases   *deploy.Store
-	Pipe       *ingress.Pipeline
-	Users      *users.Tracker
-	Bans       *users.Bans
-	Closed     *users.Closed
-	Flood      *users.Antiflood
-	Maint      *maintenance.Service
-	Bcast      *broadcast.Service
-	watch      watches
-	canaries   canaryRoutes
-	parsers    panicParsers
-	crashSet   crashSetting
-	patterns   *logs.Matcher
-	rules      deploy.Rules // autorollback; zero means deploy.DefaultRules
-	warnHook   func(ctx context.Context, botID int64, text string) error
-	Count      *counters.Counters
-	Host       *counters.HostSampler
-	Live       *counters.Live
-	DBG        *dbgate.Browser
-	SQL        *dbgate.Gateway
-	DBBackups  *dbgate.Backups
-	DBChecks   *dbgate.Checks
-	Proxy      *tgproxy.Proxy
-	bundle     string
-	apiW       apiWatch
-	svc        services
-	hostMu     sync.Mutex
-	hostLast   counters.Server
+	ConfigGuard botconfig.Guard
+	Cfg         config.Core
+	Log         *slog.Logger
+	DB          *store.DB
+	W           *store.Writer
+	Mux         *wire.Mux
+	Srv         *wire.Server
+	Ev          *events.Bus
+	Sec         *secrets.Store
+	TG          *telegram.Client
+	GH          *github.Client
+	Runner      *runner.Runner
+	SDK         *sdkhost.Host
+	SDKMetrics  *sdkhost.Metrics
+	SDKTasks    *sdkhost.Tasks
+	SDKFlags    *sdkhost.Flags
+	Logs        *logs.Store
+	Journal     *journal.Journal
+	Releases    *deploy.Store
+	Pipe        *ingress.Pipeline
+	Users       *users.Tracker
+	Bans        *users.Bans
+	Closed      *users.Closed
+	Flood       *users.Antiflood
+	Maint       *maintenance.Service
+	Bcast       *broadcast.Service
+	watch       watches
+	canaries    canaryRoutes
+	parsers     panicParsers
+	crashSet    crashSetting
+	patterns    *logs.Matcher
+	rules       deploy.Rules // autorollback; zero means deploy.DefaultRules
+	warnHook    func(ctx context.Context, botID int64, text string) error
+	Count       *counters.Counters
+	Host        *counters.HostSampler
+	Live        *counters.Live
+	DBG         *dbgate.Browser
+	SQL         *dbgate.Gateway
+	DBBackups   *dbgate.Backups
+	DBChecks    *dbgate.Checks
+	Proxy       *tgproxy.Proxy
+	bundle      string
+	apiW        apiWatch
+	svc         services
+	hostMu      sync.Mutex
+	hostLast    counters.Server
 
 	mu           sync.Mutex
 	procs        map[string]procstat.Stats
@@ -145,6 +147,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		TG:      telegram.New(),
 	}
 	c.TG.Base = cfg.TelegramAPI
+	c.Sec.Lock = c.ConfigGuard.Lock
 	c.Srv = &wire.Server{
 		Mux:   c.Mux,
 		Hello: app.Hello(wire.ProtoCorePanel, "core", PanelVersion, 1),
@@ -259,6 +262,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		return nil, err
 	}
 	c.DBBackups = c.newBackups()
+	c.registerConfig()
 	c.DBChecks = c.newChecks()
 	c.registerDBBackups()
 	c.Live = &counters.Live{

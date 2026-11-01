@@ -85,6 +85,11 @@ func (c *Core) GitHub(ctx context.Context, botID int64) (*GitHubSource, error) {
 // SetGitHub stores the setup; the first time it creates the webhook secret.
 func (c *Core) SetGitHub(ctx context.Context, in GitHubSet) (GitHubSaved, error) {
 	var out GitHubSaved
+	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return out, err
+	}
+	defer unlock()
 	if err := c.botExists(ctx, in.BotID); err != nil {
 		return out, err
 	}

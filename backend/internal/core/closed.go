@@ -24,6 +24,11 @@ func (c *Core) registerClosed() {
 		return c.Closed.State(ctx, id)
 	}))
 	c.Mux.Handle("closed.set", wire.Func(func(ctx context.Context, _ *wire.Conn, in ClosedReq) (struct{}, error) {
+		ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+		if err != nil {
+			return struct{}{}, err
+		}
+		defer unlock()
 		return struct{}{}, c.Journal.Do(ctx, in.Actor, "closed.set", in.BotID, map[string]any{"enabled": in.Enabled, "text": in.Text}, func() error {
 			if err := c.botExists(ctx, in.BotID); err != nil {
 				return err

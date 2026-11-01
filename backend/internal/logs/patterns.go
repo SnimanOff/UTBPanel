@@ -11,9 +11,9 @@ import (
 // Pattern is a bot's own log pattern: every matching line adds one to the
 // counter log_<name> of that minute.
 type Pattern struct {
-	Name    string `json:"name"`
-	Pattern string `json:"pattern"`
-	Regexp  bool   `json:"regexp,omitempty"`
+	Name    string `json:"name" yaml:"name"`
+	Pattern string `json:"pattern" yaml:"pattern"`
+	Regexp  bool   `json:"regexp,omitempty" yaml:"regexp,omitempty"`
 }
 
 var nameRe = regexp.MustCompile(`^[a-z0-9_]{1,32}$`)

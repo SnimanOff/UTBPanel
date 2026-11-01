@@ -13,14 +13,14 @@ import (
 
 // FloodSettings is settings.antiflood of a bot.
 type FloodSettings struct {
-	Enabled  bool   `json:"enabled"`
-	Limit    int    `json:"limit"`  // updates per window
-	Window   string `json:"window"` // "10s"
-	Warn     bool   `json:"warn"`
-	WarnText string `json:"warn_text"`
-	Autoban  bool   `json:"autoban"`
-	Strikes  int    `json:"strikes"`   // violations within an hour
-	BanHours int    `json:"ban_hours"` // length of the automatic ban
+	Enabled  bool   `json:"enabled" yaml:"enabled"`
+	Limit    int    `json:"limit" yaml:"limit"`   // updates per window
+	Window   string `json:"window" yaml:"window"` // "10s"
+	Warn     bool   `json:"warn" yaml:"warn"`
+	WarnText string `json:"warn_text" yaml:"warn_text"`
+	Autoban  bool   `json:"autoban" yaml:"autoban"`
+	Strikes  int    `json:"strikes" yaml:"strikes"`     // violations within an hour
+	BanHours int    `json:"ban_hours" yaml:"ban_hours"` // length of the automatic ban
 	window   time.Duration
 }
 

@@ -2,8 +2,10 @@ package alerts
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -36,6 +38,9 @@ var Metrics = map[string]string{
 }
 
 func (r Rule) valid() error {
+	if math.IsNaN(r.Value) || math.IsInf(r.Value, 0) {
+		return fmt.Errorf("порог должен быть конечным числом")
+	}
 	if _, ok := Metrics[r.Metric]; !ok {
 		return fmt.Errorf("неизвестная метрика %q", r.Metric)
 	}
@@ -61,6 +66,7 @@ func (r Rule) Describe() string {
 
 // Rules keeps rules and checks them once a minute.
 type Rules struct {
+	Lock  func(context.Context) (context.Context, func(), error)
 	S     *metrics.Storage
 	Notes *Service
 	// Bots lists the bots to check rules with BotID 0.
@@ -100,6 +106,15 @@ func (rs *Rules) List(ctx context.Context, botID int64) ([]Rule, error) {
 
 // Save adds or replaces a rule.
 func (rs *Rules) Save(ctx context.Context, r Rule) (Rule, error) {
+	if rs.Lock != nil {
+		var unlock func()
+		var err error
+		ctx, unlock, err = rs.Lock(ctx)
+		if err != nil {
+			return r, err
+		}
+		defer unlock()
+	}
 	if r.Metric == "silence" {
 		r.Op, r.Value = ">", 0
 	}
@@ -125,9 +140,54 @@ func (rs *Rules) Save(ctx context.Context, r Rule) (Rule, error) {
 
 // Delete removes a rule; an open alert of it is closed.
 func (rs *Rules) Delete(ctx context.Context, id int64) error {
+	if rs.Lock != nil {
+		var unlock func()
+		var err error
+		ctx, unlock, err = rs.Lock(ctx)
+		if err != nil {
+			return err
+		}
+		defer unlock()
+	}
 	_, err := rs.S.DB.W.ExecContext(ctx, `DELETE FROM alert_rules WHERE id = ?`, id)
 	rs.S.DB.W.ExecContext(ctx, `UPDATE notifications SET resolved = 1 WHERE key LIKE ?`, "alert:"+strconv.FormatInt(id, 10)+":%")
 	return err
+}
+
+// Validate checks a portable rule with exactly the same restrictions as Save.
+func (r Rule) Validate() error { return r.valid() }
+
+// Replace changes only this bot's rules, preserving common rules and closing
+// notifications whose old rule no longer exists. Validation precedes writes.
+func (rs *Rules) Replace(ctx context.Context, botID int64, rules []Rule) error {
+	if rs.Lock != nil {
+		var unlock func()
+		var err error
+		ctx, unlock, err = rs.Lock(ctx)
+		if err != nil {
+			return err
+		}
+		defer unlock()
+	}
+	for _, r := range rules {
+		if err := r.valid(); err != nil {
+			return err
+		}
+	}
+	return rs.S.DB.Tx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `UPDATE notifications SET resolved=1 WHERE EXISTS (SELECT 1 FROM alert_rules WHERE bot_id=? AND notifications.key LIKE 'alert:' || alert_rules.id || ':%')`, botID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM alert_rules WHERE bot_id=?`, botID); err != nil {
+			return err
+		}
+		for _, r := range rules {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO alert_rules(bot_id,metric,op,value,minutes,enabled) VALUES(?,?,?,?,?,?)`, botID, r.Metric, r.Op, r.Value, r.Minutes, r.Enabled); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // Measure computes the rule's metric for a bot over its window.

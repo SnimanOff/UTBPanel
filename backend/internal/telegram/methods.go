@@ -65,17 +65,17 @@ func (c *Client) GetWebhookInfo(ctx context.Context, token string) (WebhookInfo,
 
 // BotCommand is one entry of the command menu.
 type BotCommand struct {
-	Command     string `json:"command"`
-	Description string `json:"description"`
+	Command     string `json:"command" yaml:"command"`
+	Description string `json:"description" yaml:"description"`
 }
 
 // MenuButton is the chat menu button.
 type MenuButton struct {
-	Type   string `json:"type"` // commands | web_app | default
-	Text   string `json:"text,omitempty"`
+	Type   string `json:"type" yaml:"type"` // commands | web_app | default
+	Text   string `json:"text,omitempty" yaml:"text,omitempty"`
 	WebApp *struct {
-		URL string `json:"url"`
-	} `json:"web_app,omitempty"`
+		URL string `json:"url" yaml:"url"`
+	} `json:"web_app,omitempty" yaml:"web_app,omitempty"`
 }
 
 // Profile is everything the "Profile" tab edits for one language.

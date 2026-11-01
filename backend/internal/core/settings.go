@@ -36,6 +36,11 @@ func (c *Core) Settings(ctx context.Context, id int64) (map[string]json.RawMessa
 
 // SetSetting stores one key of the settings document.
 func (c *Core) SetSetting(ctx context.Context, id int64, key string, v any) error {
+	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -65,6 +70,11 @@ func validEnv(m map[string]string) error {
 // UpdateSettings applies env, renames and limits. They take effect after a
 // restart of the bot.
 func (c *Core) UpdateSettings(ctx context.Context, in SettingsUpdate) error {
+	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	if err := c.botExists(ctx, in.BotID); err != nil {
 		return err
 	}
@@ -100,6 +110,11 @@ func (c *Core) UpdateSettings(ctx context.Context, in SettingsUpdate) error {
 
 // DeleteBot stops the bot, removes its webhook and deletes all its data.
 func (c *Core) DeleteBot(ctx context.Context, id int64) error {
+	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	if err := c.botExists(ctx, id); err != nil {
 		return err
 	}

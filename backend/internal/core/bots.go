@@ -172,6 +172,11 @@ func randomSecret() string {
 // CreateBot checks the token with getMe and stores the bot. Nothing is
 // saved if Telegram rejects the token.
 func (c *Core) CreateBot(ctx context.Context, in CreateBot) (Bot, error) {
+	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return Bot{}, err
+	}
+	defer unlock()
 	if err := validBotName(in.Name); err != nil {
 		return Bot{}, err
 	}
@@ -221,6 +226,11 @@ func (c *Core) CreateBot(ctx context.Context, in CreateBot) (Bot, error) {
 // SetToken checks a new token with getMe and replaces the old one. If the
 // bot runs, the old token's webhook is removed first.
 func (c *Core) SetToken(ctx context.Context, in SetToken) (Bot, error) {
+	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return Bot{}, err
+	}
+	defer unlock()
 	b, err := c.Bot(ctx, in.BotID)
 	if err != nil {
 		return b, err

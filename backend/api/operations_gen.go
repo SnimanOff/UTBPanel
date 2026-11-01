@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "d24787b57bc75cdd6d75eb985f3abc7bf990cf038c29c4622f69040cef2cfdd0"
+const GeneratedHash = "14b7b20eda8efd8d2f8c10f215d0a0d5ee49fed8d40f7288ff7a0f707adf279a"
 
 // Op is one operation of the API.
 type Op struct {
@@ -22,6 +22,7 @@ var Ops = []Op{
 	{"list_alert_rules", "GET", "/api/alert-rules", "read", "Threshold rules; ?bot=id for one bot (0 = rules for all bots)"},
 	{"alerts_log", "GET", "/api/alerts/log", "read", "Firings and recoveries of rules, newest first"},
 	{"get_audit", "GET", "/api/audit", "read", "Action log with filters"},
+	{"get_bot_config_schema", "GET", "/api/bot-config/schema", "read", "JSON Schema of the portable settings document derived from OpenAPI"},
 	{"list_bots", "GET", "/api/bots", "read", "Bots with statuses, groups and versions"},
 	{"get_bot", "GET", "/api/bots/{id}", "read", "One bot"},
 	{"get_audience", "GET", "/api/bots/{id}/audience", "read", "Languages, Premium share and sources of the bot's users"},
@@ -30,6 +31,7 @@ var Ops = []Op{
 	{"get_broadcast", "GET", "/api/bots/{id}/broadcasts/{bid}", "read", "One broadcast with its progress"},
 	{"get_canary", "GET", "/api/bots/{id}/canary", "read", "The canary of the bot (second instance with a new version), or null"},
 	{"get_closed", "GET", "/api/bots/{id}/closed", "read", "Closed mode of the bot and its list"},
+	{"get_bot_config", "GET", "/api/bots/{id}/config", "read", "Portable bot settings as JSON and YAML; secret names only"},
 	{"list_crash_updates", "GET", "/api/bots/{id}/crash-updates", "never", "Updates that were with the bot when it fell or answered 5xx (with the crash_updates setting; last 20, 7 days)"},
 	{"get_db_schema", "GET", "/api/bots/{id}/db", "read", "Tables of the bot database with schema, row counts and size"},
 	{"list_db_backups", "GET", "/api/bots/{id}/db/backups", "read", "Backups of the bot database (checked with integrity_check)"},
@@ -85,6 +87,8 @@ var Ops = []Op{
 	{"start_canary", "POST", "/api/bots/{id}/canary", "confirm", "Start a canary with a version for listed users and/or a share of users in private chats"},
 	{"promote_canary", "POST", "/api/bots/{id}/canary/promote", "confirm", "Move everyone to the canary's version (deploy with observation and autorollback)"},
 	{"closed_allow", "POST", "/api/bots/{id}/closed/allow", "write", "Add a user to the closed mode list by id, @username (known users only) or \"me\""},
+	{"apply_config", "POST", "/api/bots/{id}/config/apply", "confirm", "Apply settings against an expected version; field levels are returned by diff_config"},
+	{"diff_config", "POST", "/api/bots/{id}/config/diff", "read", "Compare a settings document and classify each changed field"},
 	{"backup_db", "POST", "/api/bots/{id}/db/backups", "write", "Make a backup now (VACUUM INTO, the bot keeps running)"},
 	{"restore_db", "POST", "/api/bots/{id}/db/backups/{name}/restore", "never", "Stop the bot, restore the database from a backup, start it again"},
 	{"exec_db", "POST", "/api/bots/{id}/db/exec", "never", "SQL that writes to the bot database (held button in the panel; the text goes to the audit)"},

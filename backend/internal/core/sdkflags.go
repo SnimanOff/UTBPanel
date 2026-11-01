@@ -24,7 +24,7 @@ func (c *Core) registerSDKFlags(ctx context.Context) error {
 	if _, err := c.DB.W.ExecContext(ctx, `UPDATE sdk_flags SET main_active=0,canary_active=0`); err != nil {
 		return err
 	}
-	c.SDKFlags = &sdkhost.Flags{DB: c.DB, Changed: func(id int64, name string) {
+	c.SDKFlags = &sdkhost.Flags{DB: c.DB, Lock: c.ConfigGuard.Lock, Changed: func(id int64, name string) {
 		c.Ev.Emit("sdk_flag_changed", id, events.Info, map[string]any{"name": name})
 	}}
 	c.Mux.Handle("sdk.flags.list", wire.Func(func(ctx context.Context, _ *wire.Conn, id int64) ([]sdkhost.Flag, error) {

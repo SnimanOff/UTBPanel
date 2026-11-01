@@ -12,6 +12,7 @@
   import Behavior from './Behavior.svelte'
 	import Tasks from './Tasks.svelte'
 	import Flags from './Flags.svelte'
+	import ConfigDocument from './ConfigDocument.svelte'
 
   let { bot }: { bot: BotView } = $props()
   let secrets = $state<SecretInfo[]>([])
@@ -21,6 +22,7 @@
   let error = $state('')
   let saved = $state('')
   let restartNeeded = $state(false)
+  let configRevision = $state(0)
   let newName = $state('')
   let newValue = $state('')
   let fileName = $state('')
@@ -156,7 +158,9 @@
 {#if saved}<p class="ok">{saved}</p>{/if}
 {#if error}<p class="danger pre">{error}</p>{/if}
 
-<Behavior botId={bot.id} />
+<ConfigDocument botId={bot.id} onapplied={(restart) => { if (restart) restartNeeded = true; configRevision++; load(); store.refresh(bot.id) }} />
+
+{#key configRevision}<Behavior botId={bot.id} />{/key}
 
 {#if bot.sdk?.modules.includes('tasks')}
   <Tasks botId={bot.id} runnable={bot.state === 'running' && !!bot.status?.running} />

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -30,6 +31,9 @@ func (b *ByteSize) Set(s string) error {
 	n, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
 		return fmt.Errorf("bad size %q", s)
+	}
+	if n > math.MaxInt64/mult || n < math.MinInt64/mult {
+		return fmt.Errorf("size is too large")
 	}
 	*b = ByteSize(n * mult)
 	return nil

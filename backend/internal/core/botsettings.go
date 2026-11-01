@@ -78,6 +78,11 @@ var sections = map[string]func(json.RawMessage) error{
 
 // PutSetting stores a section and tells every cache about it.
 func (c *Core) PutSetting(ctx context.Context, in SettingPut) error {
+	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	check, ok := sections[in.Key]
 	if !ok {
 		return wire.Errorf(wire.CodeBadRequest, "unknown settings section %q", in.Key)
