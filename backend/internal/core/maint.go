@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/edge"
@@ -114,9 +115,20 @@ var scheduleActor = journal.Actor{Source: journal.SourceSchedule, Name: "schedul
 func (c *Core) runSchedule(ctx context.Context) {
 	c.Maint.Run(ctx, maintenance.Hooks{
 		Deploy: func(ctx context.Context, botID int64, version string) error {
-			return c.Journal.Do(ctx, scheduleActor, "releases.switch", botID, map[string]string{"version": version}, func() error {
-				return c.SwitchVersion(ctx, SwitchVersion{BotID: botID, Version: version, Actor: scheduleActor})
+			var id int64
+			err := c.Journal.Do(ctx, scheduleActor, "releases.switch", botID, map[string]string{"version": version}, func() error {
+				var err error
+				id, err = c.Deploy(ctx, SwitchVersion{BotID: botID, Version: version, Actor: scheduleActor})
+				return err
 			})
+			if err != nil {
+				return err
+			}
+			// Maintenance ends only after the observation; on rollback it stays.
+			if c.waitDeploy(ctx, id) == "rolled_back" {
+				return fmt.Errorf("версия %s откачена автооткатом", version)
+			}
+			return nil
 		},
 		Event: func(botID int64, typ string, data map[string]any) {
 			c.Ev.Emit(typ, botID, events.Warn, data)

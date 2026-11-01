@@ -103,7 +103,9 @@
   const dropToken = () => run(() => api.put(`/api/bots/${botId}/github`, { repo, asset_mask: mask, auto_deploy: auto, token: '' }), 'Токен удалён')
   const check = () => run(() => api.post(`/api/bots/${botId}/github/check`), 'Проверено')
 
-  const results: Record<string, string> = { running: 'идёт', ok: 'готово', failed: 'ошибка', rolled_back: 'откачен' }
+  const results: Record<string, string> = {
+    running: 'идёт', observing: 'наблюдение', ok: 'готово', failed: 'ошибка', rolled_back: 'откачен',
+  }
 </script>
 
 {#if error}<p class="danger pre">{error}</p>{/if}
@@ -188,7 +190,7 @@
             <td class="num muted">{utc(d.started_at)}</td>
             <td class="num">{d.from || '—'} → {d.to}</td>
             <td class="muted">{d.actor}</td>
-            <td class:danger={d.result === 'failed'} title={d.error ?? ''}>{results[d.result] ?? d.result}</td>
+            <td class:danger={d.result === 'failed' || d.result === 'rolled_back'} title={d.error ?? ''}>{results[d.result] ?? d.result}</td>
           </tr>
         {:else}
           <tr><td colspan="4" class="muted">Деплоев ещё не было</td></tr>

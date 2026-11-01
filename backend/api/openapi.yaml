@@ -1312,7 +1312,7 @@ components:
         actor: { type: string }
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time }
-        result: { type: string, enum: [running, ok, failed, rolled_back] }
+        result: { type: string, enum: [running, observing, ok, failed, rolled_back] }
         error: { type: string }
     BanRequest:
       type: object

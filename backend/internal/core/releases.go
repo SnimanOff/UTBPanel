@@ -116,13 +116,25 @@ func (c *Core) Deploy(ctx context.Context, in SwitchVersion) (int64, error) {
 		return fail(err)
 	}
 	c.Logs.Add(in.BotID, "core", "version "+b.Version+" → "+in.Version, nowUTC())
-	if wasRunning || b.Version == "" {
+	started := wasRunning || b.Version == ""
+	if started {
 		if err := c.StartBot(ctx, in.BotID); err != nil {
+			if b.Version != "" && in.Actor.Source != journal.SourceAutorollback {
+				// The new version did not start: back to the old one at once.
+				c.rollbackNow(id, in.BotID, b.Version, in.Version, bk.Name, bk.SchemaVersion, "не запустилась: "+err.Error())
+				return id, wire.Errorf("rolled_back", "версия %s не запустилась, возвращена %s: %v", in.Version, b.Version, err)
+			}
 			return fail(err)
 		}
 	}
 	cur, prev, _ := c.versions(ctx, in.BotID)
 	c.Releases.Prune(in.BotID, cur, prev)
+	if started && b.Version != "" && in.Actor.Source != journal.SourceAutorollback {
+		// The record stays "observing" for a minute; autorollback decides.
+		c.Ev.Emit("deploy", in.BotID, events.Info, map[string]any{"id": id, "from": b.Version, "version": in.Version, "result": "observing"})
+		c.watchDeploy(id, in.BotID, b.Version, in.Version, bk.Name, bk.SchemaVersion)
+		return id, nil
+	}
 	c.finishDeploy(id, in.BotID, b.Version, in.Version, "ok", "")
 	return id, nil
 }

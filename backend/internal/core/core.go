@@ -67,6 +67,8 @@ type Core struct {
 	Flood     *users.Antiflood
 	Maint     *maintenance.Service
 	Bcast     *broadcast.Service
+	watch     watches
+	rules     deploy.Rules // autorollback; zero means deploy.DefaultRules
 	warnHook  func(ctx context.Context, botID int64, text string) error
 	Count     *counters.Counters
 	Host      *counters.HostSampler
@@ -176,7 +178,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerDeferred()
 	c.registerWebhooks()
 	c.Users = &users.Tracker{DB: db, W: c.W, Log: log, OnNew: c.Count.NewUser, OnBlock: c.Count.Block, OnPayment: c.Count.Payment}
-	c.Pipe.Observe = append(c.Pipe.Observe, c.Count.Observe)
+	c.Pipe.Observe = append(c.Pipe.Observe, c.Count.Observe, c.observeOutcome)
 	c.Users.Register(c.Mux)
 	c.Bans = &users.Bans{DB: db}
 	if err := c.Bans.Load(ctx); err != nil {
@@ -184,6 +186,8 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	}
 	c.Closed = &users.Closed{DB: db.R, W: db.W}
 	c.Flood = &users.Antiflood{DB: db.R, Bans: c.Bans}
+	// A deploy watched when the core stopped counts as passed.
+	db.W.ExecContext(ctx, `UPDATE deploys SET result = 'ok', error = 'наблюдение прервано рестартом ядра', finished_at = ? WHERE result IN ('observing', 'running')`, store.Now())
 	c.Maint = c.newMaintenance()
 	if err := c.Maint.Load(ctx); err != nil {
 		return nil, err
