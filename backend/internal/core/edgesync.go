@@ -10,6 +10,7 @@ import (
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/edge"
 	"github.com/SnimanOff/UTBPanel/backend/internal/secrets"
+	"github.com/SnimanOff/UTBPanel/backend/internal/tztext"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
 
@@ -17,7 +18,7 @@ import (
 const DefaultUnavailable = "Бот перезапускается, попробуйте через минуту"
 
 // DefaultTZ is the time zone of texts for bot users.
-const DefaultTZ = "Europe/Moscow"
+const DefaultTZ = tztext.Default
 
 // edgeSync keeps the edge's copy of settings current.
 type edgeSync struct {

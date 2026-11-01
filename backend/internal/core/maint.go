@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"time"
-	_ "time/tzdata" // zones are built in: the image has no system zone files guaranteed
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/edge"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/maintenance"
+	"github.com/SnimanOff/UTBPanel/backend/internal/tztext"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
 
@@ -23,18 +23,11 @@ type MaintReq struct {
 // BotTZ is the zone of texts for users of a bot: Europe/Moscow unless the
 // owner chose another.
 func (c *Core) BotTZ(ctx context.Context, botID int64) *time.Location {
-	name := DefaultTZ
+	var tz string
 	if st, err := c.Settings(ctx, botID); err == nil {
-		var tz string
-		if json.Unmarshal(st["tz"], &tz) == nil && tz != "" {
-			name = tz
-		}
+		json.Unmarshal(st["tz"], &tz)
 	}
-	loc, err := time.LoadLocation(name)
-	if err != nil {
-		loc, _ = time.LoadLocation(DefaultTZ)
-	}
-	return loc
+	return tztext.Load(tz)
 }
 
 func (c *Core) newMaintenance() *maintenance.Service {
@@ -77,6 +70,8 @@ func (c *Core) registerMaintenance() {
 	c.edge.extra = append(c.edge.extra, func(ctx context.Context, id int64, b *edge.BotSettings) {
 		if m, ok := c.Maint.Get(id); ok && m.State == maintenance.Active {
 			b.Maintenance, b.MaintenanceText = true, c.Maint.Text(ctx, m)
+			// The edge renders again when it answers: "сегодня" changes.
+			b.MaintenanceTemplate, b.StartsAt, b.EndsAt = maintenance.Template(m), m.StartsAt, m.EndsAt
 		}
 		b.TZ = c.BotTZ(ctx, id).String()
 	})

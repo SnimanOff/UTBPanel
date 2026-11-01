@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestQueueOrderAndConfirm(t *testing.T) {
@@ -89,5 +90,18 @@ func TestWithoutCore(t *testing.T) {
 	}
 	if s, ok := e2.settings.secret(7); !ok || s != "s3cret" {
 		t.Fatal("settings not loaded from disk")
+	}
+}
+
+func TestWithoutCoreRendersInZone(t *testing.T) {
+	e, _ := newEdge(t)
+	end := time.Now().Add(26 * time.Hour)
+	e.settings.apply(Settings{Bots: map[int64]BotSettings{7: {Secret: "s", Maintenance: true, MaintenanceText: "stale",
+		MaintenanceTemplate: "до {end}", EndsAt: end, TZ: "Asia/Vladivostok"}}})
+	msg := `{"update_id":1,"message":{"chat":{"id":5,"type":"private"},"from":{"id":5},"text":"hi"}}`
+	w := post(e, "/hook/7", telegramIP, "s", msg)
+	vl, _ := time.LoadLocation("Asia/Vladivostok")
+	if want := "до " + end.In(vl).Format("02.01 15:04"); !strings.Contains(w.Body.String(), want) {
+		t.Fatalf("want %q in %s", want, w.Body)
 	}
 }

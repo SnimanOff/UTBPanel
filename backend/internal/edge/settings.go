@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
@@ -22,6 +23,11 @@ type BotSettings struct {
 	// UnavailableText is sent while the core is down and nothing is planned.
 	UnavailableText string `cbor:"4,keyasint" json:"unavailable_text,omitempty"`
 	TZ              string `cbor:"5,keyasint" json:"tz,omitempty"`
+	// MaintenanceTemplate with StartsAt and EndsAt is rendered at answer
+	// time in TZ; MaintenanceText is the fallback.
+	MaintenanceTemplate string    `cbor:"6,keyasint" json:"maintenance_template,omitempty"`
+	StartsAt            time.Time `cbor:"7,keyasint" json:"starts_at,omitempty"`
+	EndsAt              time.Time `cbor:"8,keyasint" json:"ends_at,omitempty"`
 }
 
 // Settings is the whole document pushed by the core.

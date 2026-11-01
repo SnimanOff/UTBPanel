@@ -14,6 +14,7 @@ import (
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/ingress"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
+	"github.com/SnimanOff/UTBPanel/backend/internal/tztext"
 	"github.com/SnimanOff/UTBPanel/backend/internal/updrules"
 )
 
@@ -160,15 +161,20 @@ func (s *Service) End(ctx context.Context, botID int64) error {
 	return nil
 }
 
+// Template is the text before {start} and {end} are put in.
+func Template(m M) string {
+	if m.Text != "" {
+		return m.Text
+	}
+	if !m.EndsAt.IsZero() {
+		return DefaultScheduledText
+	}
+	return DefaultText
+}
+
 // Text renders the text for users: {start} and {end} in the bot's zone.
 func (s *Service) Text(ctx context.Context, m M) string {
-	t := m.Text
-	if t == "" {
-		t = DefaultText
-		if !m.EndsAt.IsZero() {
-			t = DefaultScheduledText
-		}
-	}
+	t := Template(m)
 	loc := time.UTC
 	if s.TZ != nil {
 		loc = s.TZ(ctx, m.BotID)
@@ -179,17 +185,7 @@ func (s *Service) Text(ctx context.Context, m M) string {
 // Render puts times into {start} and {end}: "21:00", with the date when
 // it is not today.
 func Render(text string, start, end time.Time, loc *time.Location, now time.Time) string {
-	f := func(t time.Time) string {
-		if t.IsZero() {
-			return "—"
-		}
-		lt, ln := t.In(loc), now.In(loc)
-		if lt.YearDay() == ln.YearDay() && lt.Year() == ln.Year() {
-			return lt.Format("15:04")
-		}
-		return lt.Format("02.01 15:04")
-	}
-	return strings.NewReplacer("{start}", f(start), "{end}", f(end)).Replace(text)
+	return tztext.Render(text, start, end, loc, now)
 }
 
 // Check is pipeline step 9.

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"github.com/SnimanOff/UTBPanel/backend/internal/tztext"
 )
 
 // Plan is a request for scheduled maintenance.
@@ -78,11 +80,11 @@ func (s *Service) Tick(ctx context.Context, h Hooks, now time.Time) {
 		switch {
 		case m.State == Planned && m.WarnHours > 0 && !m.Warned && h.Warn != nil &&
 			now.After(m.StartsAt.Add(-time.Duration(m.WarnHours)*time.Hour)):
-			text := "В {start} по Москве начнутся техработы, примерно до {end}."
 			loc := time.UTC
 			if s.TZ != nil {
 				loc = s.TZ(ctx, m.BotID)
 			}
+			text := "В {start} " + tztext.In(loc, m.StartsAt) + " начнутся техработы, примерно до {end}."
 			if h.Warn(ctx, m, Render(text, m.StartsAt, m.EndsAt, loc, now)) == nil {
 				m.Warned = true
 				s.save(ctx, &m)

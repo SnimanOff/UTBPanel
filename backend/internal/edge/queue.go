@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/tztext"
 	"github.com/SnimanOff/UTBPanel/backend/internal/updrules"
 )
 
@@ -187,6 +188,9 @@ func (q *queue) recover() {
 func (e *Edge) withoutCore(u Update) Reply {
 	bs, _ := e.settings.bot(u.BotID)
 	text := bs.MaintenanceText
+	if bs.MaintenanceTemplate != "" {
+		text = tztext.Render(bs.MaintenanceTemplate, bs.StartsAt, bs.EndsAt, tztext.Load(bs.TZ), time.Now())
+	}
 	if text == "" {
 		text = bs.UnavailableText
 	}
