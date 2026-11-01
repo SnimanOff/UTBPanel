@@ -856,6 +856,42 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Audience" } } } }
 
+  /api/bots/{id}/sdk/flags:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: list_flags
+      tags: [bots]
+      summary: Typed SDK flag definitions and current values
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/SDKFlag" } } } } }
+  /api/bots/{id}/sdk/flags/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: set_flag
+      tags: [bots]
+      summary: Change an SDK flag without restarting the bot
+      x-mcp: write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: { $ref: "#/components/schemas/SDKFlagValue" }
+      responses:
+        "204": { description: Done }
+    delete:
+      operationId: reset_flag
+      tags: [bots]
+      summary: Restore a flag default from the bot code
+      x-mcp: write
+      responses:
+        "204": { description: Done }
   /api/bots/{id}/sdk/tasks:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -1702,6 +1738,22 @@ components:
         size: { type: integer }
         wal_size: { type: integer }
         tables: { type: array, items: { $ref: "#/components/schemas/DBTable" } }
+    SDKFlagValue:
+      oneOf:
+        - { type: boolean }
+        - { type: integer }
+        - { type: string }
+    SDKFlag:
+      type: object
+      required: [name, kind, description, default, value, overridden, version]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [bool, int, string, duration] }
+        description: { type: string }
+        default: { $ref: "#/components/schemas/SDKFlagValue" }
+        value: { $ref: "#/components/schemas/SDKFlagValue" }
+        overridden: { type: boolean }
+        version: { type: integer }
     SDKTasksView:
       type: object
       required: [tasks, runs]
@@ -1776,6 +1828,14 @@ components:
       type: object
       required: [series]
       properties:
+        flags:
+          type: array
+          items:
+            type: object
+            required: [ts, label]
+            properties:
+              ts: { type: integer }
+              label: { type: string }
         series: { $ref: "#/components/schemas/MetricsSeries" }
         users: { $ref: "#/components/schemas/UserStats" }
     Release:

@@ -76,7 +76,7 @@
       .join(' · ') || '0'
   })
   const errors = $derived((s?.totals.errors ?? 0) + (s?.totals.timeouts ?? 0))
-  const marks = $derived((s?.deploys ?? []).map((d) => ({ ts: d.ts, label: d.version })))
+  const marks = $derived([...(s?.deploys ?? []).map((d) => ({ ts: d.ts, label: d.version })), ...(data?.flags ?? [])].sort((a, b) => a.ts - b.ts))
   const x = $derived((s?.points ?? []).map((p) => p.ts))
   const col = (name: string) => (s?.points ?? []).map((p) => p.c?.[name] ?? 0)
   const sources = $derived.by(() => {

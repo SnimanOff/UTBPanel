@@ -212,6 +212,13 @@ func (cl *Client) Run(ctx context.Context) {
 		if cl.OnDisconnect != nil {
 			cl.OnDisconnect(c, c.Err())
 		}
+		// A peer may accept the transport and then reject application
+		// registration. Keep that failure from turning into a tight loop.
+		select {
+		case <-time.After(minB):
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 

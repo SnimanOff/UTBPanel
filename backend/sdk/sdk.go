@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/sdk/flags"
 	"github.com/SnimanOff/UTBPanel/backend/sdk/metrics"
 	"github.com/SnimanOff/UTBPanel/backend/sdk/ready"
 	"github.com/SnimanOff/UTBPanel/backend/sdk/tasks"
@@ -82,6 +83,7 @@ type Kit struct {
 	connectTimeout time.Duration
 	metrics        *metrics.Registry
 	tasks          *tasks.Registry
+	flags          *flags.Registry
 }
 
 // New is immediate without TGPANEL_SDK. With ready enabled it registers before
@@ -97,6 +99,13 @@ func New(options ...Option) *Kit {
 		k.instance = "canary"
 	}
 	k.tasks = tasks.New(k, k.log, k.instance == "canary")
+	k.flags = flags.New(k, k.log)
+	k.mux.Handle("sdk.flags.update", wire.Func(func(_ context.Context, c *wire.Conn, values map[string]flags.State) (any, error) {
+		if k.client != nil && k.client.Conn() == c {
+			k.flags.Update(values)
+		}
+		return nil, nil
+	}))
 	k.mux.Handle("sdk.tasks.run", wire.Func(func(ctx context.Context, _ *wire.Conn, in tasks.RunRequest) (any, error) {
 		return nil, k.tasks.Run(ctx, in.Name)
 	}))
@@ -121,6 +130,11 @@ func New(options ...Option) *Kit {
 			return
 		}
 		readyCtx, readyCancel := context.WithTimeout(ctx, 5*time.Second)
+		if err := k.flags.Connected(readyCtx, c); err != nil {
+			readyCancel()
+			c.Close()
+			return
+		}
 		if err := k.tasks.Connected(readyCtx, c); err != nil {
 			readyCancel()
 			c.Close()
@@ -139,6 +153,7 @@ func New(options ...Option) *Kit {
 		k.mu.Unlock()
 	}
 	k.client.OnDisconnect = func(c *wire.Conn, err error) {
+		k.flags.Disconnected()
 		k.tasks.Disconnected()
 		k.mu.Lock()
 		if k.conn == c {
@@ -175,7 +190,14 @@ func (k *Kit) Ready() error {
 	return k.ReadyContext(ctx)
 }
 
-func (k *Kit) ReadyContext(ctx context.Context) error { return k.ready.Signal(ctx, k) }
+func (k *Kit) ReadyContext(ctx context.Context) error {
+	if k.Connected() {
+		if err := k.flags.Sync(ctx, k); err != nil {
+			return err
+		}
+	}
+	return k.ready.Signal(ctx, k)
+}
 
 func (k *Kit) signal() { close(k.changed); k.changed = make(chan struct{}) }
 
@@ -304,6 +326,19 @@ func (k *Kit) FlushMetrics(ctx context.Context) error { return k.metrics.Flush(c
 
 func (k *Kit) Task(name, schedule string, fn func(context.Context) error) error {
 	return k.tasks.Add(name, schedule, fn)
+}
+
+func (k *Kit) Flag(name string, value bool, description string) *flags.Bool {
+	return k.flags.Bool(name, value, description)
+}
+func (k *Kit) IntFlag(name string, value int64, description string) *flags.Int {
+	return k.flags.Int(name, value, description)
+}
+func (k *Kit) StringFlag(name, value, description string) *flags.String {
+	return k.flags.String(name, value, description)
+}
+func (k *Kit) DurationFlag(name string, value time.Duration, description string) *flags.Duration {
+	return k.flags.Duration(name, value, description)
 }
 
 var ErrNotConnected = wire.ErrNotConnected

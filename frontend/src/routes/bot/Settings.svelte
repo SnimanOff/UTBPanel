@@ -11,6 +11,7 @@
   import SecretField from '../../lib/ui/SecretField.svelte'
   import Behavior from './Behavior.svelte'
 	import Tasks from './Tasks.svelte'
+	import Flags from './Flags.svelte'
 
   let { bot }: { bot: BotView } = $props()
   let secrets = $state<SecretInfo[]>([])
@@ -160,6 +161,8 @@
 {#if bot.sdk?.modules.includes('tasks')}
   <Tasks botId={bot.id} runnable={bot.state === 'running' && !!bot.status?.running} />
 {/if}
+
+{#if bot.sdk?.modules.includes('flags')}<Flags botId={bot.id} />{/if}
 
 <div class="grid">
   <Box title="Токен">

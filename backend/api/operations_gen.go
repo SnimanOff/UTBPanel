@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "96293276bef745ea7d99fd75c34337bb47b15b73aef79b839557aa42c2e0bc64"
+const GeneratedHash = "d24787b57bc75cdd6d75eb985f3abc7bf990cf038c29c4622f69040cef2cfdd0"
 
 // Op is one operation of the API.
 type Op struct {
@@ -16,6 +16,7 @@ var Ops = []Op{
 	{"delete_bot", "DELETE", "/api/bots/{id}", "never", "Stop the bot, remove its webhook and delete all its data"},
 	{"stop_canary", "DELETE", "/api/bots/{id}/canary", "write", "Cancel the canary; everyone goes back to the main version, the database is not touched"},
 	{"closed_remove", "DELETE", "/api/bots/{id}/closed/allow/{uid}", "write", "Remove a user from the closed mode list"},
+	{"reset_flag", "DELETE", "/api/bots/{id}/sdk/flags/{name}", "write", "Restore a flag default from the bot code"},
 	{"delete_secret", "DELETE", "/api/bots/{id}/secrets/{name}", "confirm", "Delete a secret"},
 	{"delete_group", "DELETE", "/api/groups/{gid}", "never", "Delete a group; its bots move to \"No group\""},
 	{"list_alert_rules", "GET", "/api/alert-rules", "read", "Threshold rules; ?bot=id for one bot (0 = rules for all bots)"},
@@ -47,6 +48,7 @@ var Ops = []Op{
 	{"list_panics", "GET", "/api/bots/{id}/panics", "read", "Panic groups (kind + first frame of the bot's code), counts, versions, last stack, \"maybe fixed\""},
 	{"get_profile", "GET", "/api/bots/{id}/profile", "read", "Telegram profile for a language (empty = default) and the menu button"},
 	{"list_versions", "GET", "/api/bots/{id}/releases", "read", "Stored versions with build data"},
+	{"list_flags", "GET", "/api/bots/{id}/sdk/flags", "read", "Typed SDK flag definitions and current values"},
 	{"list_sdk_metrics", "GET", "/api/bots/{id}/sdk/metrics", "read", "Custom SDK metrics, current values and dashboard selection"},
 	{"list_sdk_tasks", "GET", "/api/bots/{id}/sdk/tasks", "read", "SDK schedules in UTC and recent task runs"},
 	{"list_secrets", "GET", "/api/bots/{id}/secrets", "read", "Names of the bot's secrets; values are never returned"},
@@ -113,6 +115,7 @@ var Ops = []Op{
 	{"set_closed", "PUT", "/api/bots/{id}/closed", "confirm", "Turn closed mode on or off and set its text"},
 	{"set_github", "PUT", "/api/bots/{id}/github", "confirm", "Set repository (owner/repo, empty turns it off), asset mask, auto deploy and token; the webhook secret is returned once"},
 	{"set_bot_group", "PUT", "/api/bots/{id}/group", "never", "Move the bot to another group"},
+	{"set_flag", "PUT", "/api/bots/{id}/sdk/flags/{name}", "write", "Change an SDK flag without restarting the bot"},
 	{"select_sdk_metrics", "PUT", "/api/bots/{id}/sdk/metrics/selected", "write", "Select SDK metrics to show on the bot dashboard"},
 	{"set_secret", "PUT", "/api/bots/{id}/secrets/{name}", "never", "Set a secret (write-only). Neural networks use request_secret instead"},
 	{"put_settings_section", "PUT", "/api/bots/{id}/settings/{section}", "confirm", "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates)"},

@@ -63,6 +63,7 @@ type Core struct {
 	SDK        *sdkhost.Host
 	SDKMetrics *sdkhost.Metrics
 	SDKTasks   *sdkhost.Tasks
+	SDKFlags   *sdkhost.Flags
 	Logs       *logs.Store
 	Journal    *journal.Journal
 	Releases   *deploy.Store
@@ -243,7 +244,8 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		c.SQL.Register(mux, id)
 		c.SDKMetrics.Register(mux, id, instance)
 		c.SDKTasks.Register(mux, id, instance)
-		return c.SQL.Disconnect
+		c.SDKFlags.Register(mux, id, instance)
+		return func(conn *wire.Conn) { c.SQL.Disconnect(conn); c.SDKFlags.Disconnect(id, instance, conn) }
 	}
 	c.Mux.Handle("db.metrics", wire.Func(func(ctx context.Context, _ *wire.Conn, id int64) (dbgate.QueryStats, error) {
 		if err := c.botExists(ctx, id); err != nil {
@@ -253,6 +255,9 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	}))
 	c.registerSDKMetrics()
 	c.registerSDKTasks()
+	if err := c.registerSDKFlags(ctx); err != nil {
+		return nil, err
+	}
 	c.DBBackups = c.newBackups()
 	c.DBChecks = c.newChecks()
 	c.registerDBBackups()

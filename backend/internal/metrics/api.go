@@ -37,6 +37,14 @@ func (a *API) bot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := map[string]any{"series": s}
+	var from int64
+	if p, ok := Periods[period]; ok && p.Span > 0 {
+		from = time.Now().Add(-p.Span).Unix()
+	}
+	var marks []FlagMark
+	if a.Core.Call(r.Context(), "sdk.flags.marks", FlagMarksRequest{BotID: id, From: from}, &marks) == nil {
+		resp["flags"] = marks
+	}
 	var us users.Stats
 	if a.Core.Call(r.Context(), "users.stats", id, &us) == nil {
 		resp["users"] = us

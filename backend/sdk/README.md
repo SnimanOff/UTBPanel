@@ -78,3 +78,24 @@ Pausing or stopping a bot cancels its tasks. Without a connection, the SDK's
 local scheduler runs them; canary instances do not run schedules. Functions
 must honor context cancellation. At most 100 names are registered per bot,
 and a task never overlaps itself. The core bounds one run to 15 minutes.
+
+Runtime flags:
+
+```go
+checkout := kit.Flag("new_checkout", false, "Use the new checkout")
+retries := kit.IntFlag("retries", 3, "Maximum retries")
+label := kit.StringFlag("label", "default", "Response label")
+timeout := kit.DurationFlag("timeout", 10*time.Second, "Request timeout")
+kit.Ready() // persisted flag values are applied before the ready signal
+
+if checkout.On() { /* ... */ }
+_ = retries.Value()
+_ = label.Value()
+_ = timeout.Value()
+```
+
+Declare up to 100 flags, using letters, digits and underscores in names.
+Settings → Flags changes values immediately and can restore code defaults.
+Changes are audited and marked on charts. Autonomous values come from
+`TGPANEL_FLAG_<UPPERCASE_NAME>` or the code default; durations use Go syntax
+such as `30s` or `2m`. Overrides are loaded again before Ready on reconnect.
