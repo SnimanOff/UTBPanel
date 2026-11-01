@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "48c579774adc924872abbc8b938b831137927aad7216f60db8093835947d8fb6"
+const GeneratedHash = "0107a511817ada51fe2e09ca2e4c61cfc1b45c7a0df514f5b206db5d467cef1d"
 
 // Op is one operation of the API.
 type Op struct {
@@ -30,6 +30,7 @@ var Ops = []Op{
 	{"get_metrics", "GET", "/api/bots/{id}/metrics", "read", "Metrics of the bot for a period, with user numbers and deploy marks"},
 	{"list_versions", "GET", "/api/bots/{id}/releases", "read", "Stored versions with build data"},
 	{"list_secrets", "GET", "/api/bots/{id}/secrets", "read", "Names of the bot's secrets; values are never returned"},
+	{"get_services", "GET", "/api/bots/{id}/services", "read", "External services the bot connects to (through the proxy) with error rates and traffic"},
 	{"get_settings", "GET", "/api/bots/{id}/settings", "read", "Settings of the bot (env, renames, limits)"},
 	{"list_users", "GET", "/api/bots/{id}/users", "read", "Users of the bot; search by id or username, filter all | banned | blocked"},
 	{"list_devices", "GET", "/api/devices", "never", "Devices waiting for approval"},
@@ -40,6 +41,7 @@ var Ops = []Op{
 	{"get_bots_load", "GET", "/api/server/bots", "read", "Load and revenue of every bot over 24 hours"},
 	{"get_db_checks", "GET", "/api/server/checks", "read", "Results of the weekly quick_check of core.db, panel.db and every bot.db"},
 	{"get_server_metrics", "GET", "/api/server/metrics", "read", "Server metrics (CPU, RAM, disk, network), processes and the sum over all bots"},
+	{"get_server_services", "GET", "/api/server/services", "read", "External addresses across all bots over the last 10 minutes"},
 	{"enroll_status", "GET", "/enroll/{id}", "never", "State of an enrollment request (gate.exe polls it)"},
 	{"rename_bot", "PATCH", "/api/bots/{id}", "write", "Rename the bot in the panel (the Telegram name is in the profile)"},
 	{"update_settings", "PATCH", "/api/bots/{id}/settings", "confirm", "Change env, variable renames and limits; applies after a restart"},
@@ -52,6 +54,7 @@ var Ops = []Op{
 	{"upload_release", "POST", "/api/bots/{id}/releases", "write", "Upload a static linux/amd64 binary as a new version (does not deploy it)"},
 	{"deploy_release", "POST", "/api/bots/{id}/releases/{version}/switch", "confirm", "Switch the bot to a stored version"},
 	{"restart", "POST", "/api/bots/{id}/restart", "write", "Restart the bot"},
+	{"mark_service_known", "POST", "/api/bots/{id}/services/known", "write", "Mark an address as known (no more \"new address\" notifications)"},
 	{"start", "POST", "/api/bots/{id}/start", "write", "Start the bot"},
 	{"stop", "POST", "/api/bots/{id}/stop", "confirm", "Stop the bot; updates wait at Telegram"},
 	{"approve_device", "POST", "/api/devices/{id}/approve", "never", "Approve a device after comparing the code (owner only)"},

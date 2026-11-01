@@ -17,6 +17,11 @@
   let loads = $state<Load[]>([])
   let sortKey = $state<keyof Load>('updates_24h')
   let error = $state('')
+  type Svc = Schemas['Service']
+  let svcs = $state<Svc[]>([])
+  $effect(() => {
+    api.get<Svc[]>('/api/server/services').then((x) => (svcs = x), () => {})
+  })
   type Check = { name: string; at: string; ok: boolean; error?: string }
   let checks = $state<Check[]>([])
   $effect(() => {
@@ -119,6 +124,13 @@
     </table>
   </Box>
   <div class="side">
+  <Box title="Внешние сервисы, 10 мин">
+    {#each svcs.slice(0, 10) as s}
+      <div class="row"><span class="mono">{s.host}</span><span class="num" class:danger={s.error_rate > 0.2}>{s.bots?.length ?? 0} бот. · {Math.round(s.error_rate * 100)}%</span></div>
+    {:else}
+      <p class="muted">Соединений не было</p>
+    {/each}
+  </Box>
   <Box title="Проверка баз (quick_check)">
     {#each checks as c}
       <div class="row"><span>{c.name}</span><span class:danger={!c.ok} class="num">{c.ok ? 'ок' : c.error} · {c.at.slice(5, 10)}</span></div>

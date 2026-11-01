@@ -138,3 +138,26 @@ func TestQuery(t *testing.T) {
 		t.Fatal("bad period accepted")
 	}
 }
+
+func TestServices(t *testing.T) {
+	ctx := context.Background()
+	db, _ := store.Open(ctx, filepath.Join(t.TempDir(), "panel.db"), migrations.Panel())
+	w := store.NewWriter(db, time.Hour, nil)
+	defer func() { w.Close(); db.Close() }()
+	s := &Storage{DB: db, W: w}
+	now := time.Now()
+	h := NewHist()
+	h.Add(30 * time.Millisecond)
+	s.Save(ctx, []Minute{{BotID: 1, TS: now.Unix() / 60 * 60, Counters: map[string]int64{
+		"svc_api.pay.example:443_conn": 10, "svc_api.pay.example:443_err": 2, "svc_api.pay.example:443_err_timeout": 2,
+		"svc_api.pay.example:443_in": 500, "svc_api.pay.example:443_out": 100,
+	}, Hists: map[string]Hist{"svc_api.pay.example:443": h}}})
+	m, err := s.services(ctx, 1, now.Add(-time.Hour), false)
+	sv := m["api.pay.example:443"]
+	if err != nil || sv == nil || sv.Conns != 10 || sv.ErrorRate != 0.2 || sv.In != 500 || sv.P95 <= 20 {
+		t.Fatalf("%+v %v", sv, err)
+	}
+	if !s.RememberHost(ctx, 1, "api.pay.example:443") || s.RememberHost(ctx, 1, "api.pay.example:443") {
+		t.Fatal("new address detection")
+	}
+}

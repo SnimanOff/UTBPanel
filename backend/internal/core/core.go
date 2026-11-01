@@ -197,6 +197,9 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		c.Ev.Emit("service_seen", botID, events.Info, map[string]any{"host": host})
 	}
 	c.Proxy.Hooks.OnConn = c.onConn
+	if cfg.ServiceErrorPct > 0 {
+		ServiceErrorRate = float64(cfg.ServiceErrorPct) / 100
+	}
 	c.Pipe.Account = append(c.Pipe.Account, c.Users.Account, c.Users.Payments)
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil

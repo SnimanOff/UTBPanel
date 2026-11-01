@@ -55,7 +55,10 @@ type Core struct {
 	BotPortLast  int    `yaml:"bot_port_last" env:"BOT_PORT_LAST"`
 	// TelegramAPI is the Bot API address; tests point it to a fake.
 	TelegramAPI string `yaml:"telegram_api" env:"TELEGRAM_API"`
-	Limits      Limits `yaml:"limits"`
+	// ServiceErrorPct: share of failed connections (over 5 min) that marks
+	// an external service as down.
+	ServiceErrorPct int    `yaml:"service_error_pct" env:"SERVICE_ERROR_PCT"`
+	Limits          Limits `yaml:"limits"`
 }
 
 // Limits are default per-bot resource limits.
@@ -96,14 +99,15 @@ func DefaultEdge() Edge {
 // DefaultCore returns core defaults.
 func DefaultCore() Core {
 	return Core{
-		Common:       defaultCommon(),
-		DataDir:      "/data/core",
-		KeysDir:      "/keys",
-		HostProc:     "/host/proc",
-		WebhookPort:  8443,
-		BotPortFirst: 20000,
-		BotPortLast:  29999,
-		TelegramAPI:  "https://api.telegram.org",
+		Common:          defaultCommon(),
+		DataDir:         "/data/core",
+		KeysDir:         "/keys",
+		HostProc:        "/host/proc",
+		WebhookPort:     8443,
+		BotPortFirst:    20000,
+		BotPortLast:     29999,
+		TelegramAPI:     "https://api.telegram.org",
+		ServiceErrorPct: 20,
 		Limits: Limits{
 			Memory:     256 << 20,
 			File:       1 << 30,

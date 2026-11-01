@@ -22,6 +22,7 @@ tags:
   - name: metrics
   - name: users
   - name: db
+  - name: network
   - name: groups
   - name: audit
   - name: keys
@@ -425,6 +426,32 @@ paths:
       responses:
         "200": { description: OK }
 
+  /api/bots/{id}/services:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_services
+      tags: [network]
+      summary: External services the bot connects to (through the proxy) with error rates and traffic
+      x-mcp: read
+      parameters:
+        - { name: period, in: query, schema: { type: string, enum: [1h, 24h, 7d, 30d] } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Service" } } } } }
+  /api/bots/{id}/services/known:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: mark_service_known
+      tags: [network]
+      summary: Mark an address as known (no more "new address" notifications)
+      x-mcp: write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [host], properties: { host: { type: string } } }
+      responses:
+        "204": { description: Done }
+
   /api/bots/{id}/releases:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -573,6 +600,15 @@ paths:
                     at: { type: string, format: date-time }
                     ok: { type: boolean }
                     error: { type: string }
+
+  /api/server/services:
+    get:
+      operationId: get_server_services
+      tags: [network]
+      summary: External addresses across all bots over the last 10 minutes
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Service" } } } } }
 
   /api/live:
     get:
@@ -845,6 +881,20 @@ components:
         sql: { type: string }
         rows: { type: integer }
         columns: { type: array, items: { $ref: "#/components/schemas/DBColumn" } }
+    Service:
+      type: object
+      required: [host, connections, errors, error_rate, connect_p95_ms, bytes_in, bytes_out, known]
+      properties:
+        host: { type: string }
+        connections: { type: integer }
+        errors: { type: integer }
+        error_rate: { type: number }
+        connect_p95_ms: { type: number }
+        bytes_in: { type: integer }
+        bytes_out: { type: integer }
+        first_seen: { type: string }
+        known: { type: boolean }
+        bots: { type: array, items: { type: integer } }
     DBBackup:
       type: object
       required: [name, created, size, reason, schema_version, ok]

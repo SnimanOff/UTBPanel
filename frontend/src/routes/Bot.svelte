@@ -13,6 +13,7 @@
   import Metrics from './bot/Metrics.svelte'
   import Users from './bot/Users.svelte'
   import Database from './bot/Database.svelte'
+  import Network from './bot/Network.svelte'
 
   let { id, tab }: { id: number; tab: string } = $props()
   const tabs = [
@@ -82,6 +83,8 @@
       <Logs botId={id} />
     {:else if tab === 'db'}
       <Database botId={id} />
+    {:else if tab === 'network'}
+      <Network botId={id} />
     {:else if tab === 'users'}
       <Users botId={id} />
     {:else if tab === 'settings'}

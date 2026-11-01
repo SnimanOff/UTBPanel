@@ -143,6 +143,8 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	// Minutes of metrics: fetched from the core, written, then confirmed.
 	p.Metrics = &metrics.Storage{DB: db, W: p.W, Log: log}
 	(&metrics.API{S: p.Metrics, Core: p.Core}).Register(p.API.Mux)
+	(&metrics.ServicesAPI{S: p.Metrics}).Register(p.API.Mux)
+	p.Events.Subscribe(p.Metrics.OnCoreEvent)
 	(&users.API{Core: p.Core, WriteErr: bots.WriteCoreError}).Register(p.API.Mux)
 	dbAPI := &dbgate.API{Core: p.Core, WriteErr: bots.WriteCoreError}
 	dbAPI.RegisterAPI(p.API.Mux)
