@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "0a891bea3214857d9982e22c3adf7b93e0699fbd915d19e11abc5c151574432c"
+const GeneratedHash = "19c500657fd3e1095a7191a673e601acb8be001cd479cb26b32c9536523b778e"
 
 // Op is one operation of the API.
 type Op struct {
@@ -19,6 +19,9 @@ var Ops = []Op{
 	{"list_bots", "GET", "/api/bots", "read", "Bots with statuses, groups and versions"},
 	{"get_bot", "GET", "/api/bots/{id}", "read", "One bot"},
 	{"get_audience", "GET", "/api/bots/{id}/audience", "read", "Languages, Premium share and sources of the bot's users"},
+	{"get_db_schema", "GET", "/api/bots/{id}/db", "read", "Tables of the bot database with schema, row counts and size"},
+	{"export_db", "GET", "/api/bots/{id}/db/export", "never", "A table or a read-only query as CSV"},
+	{"get_db_rows", "GET", "/api/bots/{id}/db/tables/{table}", "read", "A page of a table"},
 	{"get_logs", "GET", "/api/bots/{id}/logs", "read", "Last lines, or a search with from/to/search=1"},
 	{"download_logs", "GET", "/api/bots/{id}/logs/download", "never", "All log files as zip"},
 	{"stream_logs", "GET", "/api/bots/{id}/logs/stream", "never", "Live log lines (Server-Sent Events)"},
@@ -39,6 +42,8 @@ var Ops = []Op{
 	{"update_settings", "PATCH", "/api/bots/{id}/settings", "confirm", "Change env, variable renames and limits; applies after a restart"},
 	{"rename_group", "PATCH", "/api/groups/{gid}", "never", "Rename a group"},
 	{"create_bot", "POST", "/api/bots", "write", "Add a bot; the token is checked with getMe and never returned"},
+	{"exec_db", "POST", "/api/bots/{id}/db/exec", "never", "SQL that writes to the bot database (held button in the panel; the text goes to the audit)"},
+	{"query_db", "POST", "/api/bots/{id}/db/query", "read", "Read-only SQL (the connection is query_only; the text is not inspected)"},
 	{"upload_release", "POST", "/api/bots/{id}/releases", "write", "Upload a static linux/amd64 binary as a new version (does not deploy it)"},
 	{"deploy_release", "POST", "/api/bots/{id}/releases/{version}/switch", "confirm", "Switch the bot to a stored version"},
 	{"restart", "POST", "/api/bots/{id}/restart", "write", "Restart the bot"},

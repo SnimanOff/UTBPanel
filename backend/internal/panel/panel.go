@@ -19,6 +19,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
 	"github.com/SnimanOff/UTBPanel/backend/internal/counters"
+	"github.com/SnimanOff/UTBPanel/backend/internal/dbgate"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/livehub"
 	"github.com/SnimanOff/UTBPanel/backend/internal/metrics"
@@ -143,6 +144,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	p.Metrics = &metrics.Storage{DB: db, W: p.W, Log: log}
 	(&metrics.API{S: p.Metrics, Core: p.Core}).Register(p.API.Mux)
 	(&users.API{Core: p.Core, WriteErr: bots.WriteCoreError}).Register(p.API.Mux)
+	(&dbgate.API{Core: p.Core, WriteErr: bots.WriteCoreError}).RegisterAPI(p.API.Mux)
 	(&metrics.ServerAPI{S: p.Metrics, Procs: func(ctx context.Context) ([]procstat.Stats, error) {
 		var ps []procstat.Stats
 		err := p.Core.Call(ctx, "procs", struct{}{}, &ps)

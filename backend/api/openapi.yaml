@@ -21,6 +21,7 @@ tags:
   - name: releases
   - name: metrics
   - name: users
+  - name: db
   - name: groups
   - name: audit
   - name: keys
@@ -320,6 +321,70 @@ paths:
       x-mcp: read
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Audience" } } } }
+
+  /api/bots/{id}/db:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_db_schema
+      tags: [db]
+      summary: Tables of the bot database with schema, row counts and size
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DBInfo" } } } }
+  /api/bots/{id}/db/tables/{table}:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: table, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: get_db_rows
+      tags: [db]
+      summary: A page of a table
+      x-mcp: read
+      parameters:
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: offset, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DBResult" } } } }
+  /api/bots/{id}/db/query:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: query_db
+      tags: [db]
+      summary: Read-only SQL (the connection is query_only; the text is not inspected)
+      x-mcp: read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [sql], properties: { sql: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DBResult" } } } }
+  /api/bots/{id}/db/exec:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: exec_db
+      tags: [db]
+      summary: SQL that writes to the bot database (held button in the panel; the text goes to the audit)
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [sql], properties: { sql: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DBResult" } } } }
+  /api/bots/{id}/db/export:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: export_db
+      tags: [db]
+      summary: A table or a read-only query as CSV
+      x-mcp: never
+      parameters:
+        - { name: table, in: query, schema: { type: string } }
+        - { name: sql, in: query, schema: { type: string } }
+      responses:
+        "200": { description: text/csv }
 
   /api/bots/{id}/releases:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
@@ -705,6 +770,36 @@ components:
               Name: { type: string }
               CPUPercent: { type: number }
               RSS: { type: integer }
+    DBColumn:
+      type: object
+      required: [name, type, not_null, pk]
+      properties: { name: { type: string }, type: { type: string }, not_null: { type: boolean }, pk: { type: boolean } }
+    DBTable:
+      type: object
+      required: [name, type, sql, rows, columns]
+      properties:
+        name: { type: string }
+        type: { type: string }
+        sql: { type: string }
+        rows: { type: integer }
+        columns: { type: array, items: { $ref: "#/components/schemas/DBColumn" } }
+    DBInfo:
+      type: object
+      required: [size, wal_size, tables]
+      properties:
+        size: { type: integer }
+        wal_size: { type: integer }
+        tables: { type: array, items: { $ref: "#/components/schemas/DBTable" } }
+    DBResult:
+      type: object
+      required: [columns, types, rows, ms]
+      properties:
+        columns: { type: array, items: { type: string } }
+        types: { type: array, items: { type: string } }
+        rows: { type: array, items: { type: array, items: {} }, x-untrusted: true }
+        truncated: { type: boolean }
+        affected: { type: integer }
+        ms: { type: number }
     BotMetrics:
       type: object
       required: [series]

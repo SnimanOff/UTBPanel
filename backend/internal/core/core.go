@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
 	"github.com/SnimanOff/UTBPanel/backend/internal/counters"
+	"github.com/SnimanOff/UTBPanel/backend/internal/dbgate"
 	"github.com/SnimanOff/UTBPanel/backend/internal/deploy"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/ingress"
@@ -58,6 +60,7 @@ type Core struct {
 	Count    *counters.Counters
 	Host     *counters.HostSampler
 	Live     *counters.Live
+	DBG      *dbgate.Browser
 	hostMu   sync.Mutex
 	hostLast counters.Server
 
@@ -147,6 +150,10 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.Users = &users.Tracker{DB: db, W: c.W, Log: log, OnNew: c.Count.NewUser, OnBlock: c.Count.Block, OnPayment: c.Count.Payment}
 	c.Pipe.Observe = append(c.Pipe.Observe, c.Count.Observe)
 	c.Users.Register(c.Mux)
+	c.DBG = &dbgate.Browser{Path: func(id int64) string {
+		return filepath.Join(c.Cfg.DataDir, "bots", strconv.FormatInt(id, 10), "bot.db")
+	}}
+	c.DBG.Register(c.Mux, c.Journal)
 	c.Live = &counters.Live{
 		InFlight: c.Pipe.InFlight,
 		Usage: func(id int64) (float64, int64) {
@@ -265,6 +272,13 @@ func (c *Core) sampleHost(ctx context.Context) {
 		c.hostLast = s
 		c.hostMu.Unlock()
 		c.Count.RecordServer(s)
+		if time.Now().Second() == 0 {
+			for _, id := range c.runningBots() {
+				db, wal := c.DBG.Sizes(id)
+				c.Count.Gauge(id, "db_size", float64(db))
+				c.Count.Gauge(id, "db_wal", float64(wal))
+			}
+		}
 		for _, p := range c.Procs() {
 			c.Count.Gauge(counters.ServerBotID, "proc_"+p.Name+"_cpu", p.CPUPercent)
 			c.Count.Gauge(counters.ServerBotID, "proc_"+p.Name+"_rss", float64(p.RSS))
