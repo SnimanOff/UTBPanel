@@ -4,8 +4,23 @@
   import { api, errorText, type Schemas } from '../../lib/api/client'
   import { bytes } from '../../lib/format'
   import HoldButton from '../../lib/ui/HoldButton.svelte'
+	import { store } from '../../lib/api/stores.svelte'
 
   let { botId }: { botId: number } = $props()
+	const hasSDKDB = $derived(store.byId(botId)?.sdk?.modules.includes('db') ?? false)
+	let queryStats = $state<Schemas['DBQueryStats']>()
+	let statsError = $state('')
+	$effect(() => {
+		if (!hasSDKDB) { queryStats = undefined; return }
+		let active = true
+		async function refresh() {
+			try { const value = await api.get<Schemas['DBQueryStats']>(`/api/bots/${botId}/db/metrics`); if (active) { queryStats = value; statsError = '' } }
+			catch (e) { if (active) statsError = errorText(e) }
+		}
+		refresh()
+		const timer = setInterval(refresh, 5000)
+		return () => { active = false; clearInterval(timer) }
+	})
   type Info = Schemas['DBInfo']
   type Res = Schemas['DBResult']
   type Bk = Schemas['DBBackup']
@@ -77,6 +92,22 @@
   const show = (v: unknown) => (v === null ? 'NULL' : String(v))
 </script>
 
+{#if hasSDKDB}
+  <div class="sdk-metrics">
+    <h2>Запросы SDK</h2>
+    {#if statsError}<p class="danger">{statsError}</p>{/if}
+    {#if queryStats}
+      <p class="num">Активных: {queryStats.active} · Ошибок: {queryStats.failures}</p>
+      <p class="num">{Object.entries(queryStats.counts).map(([kind, count]) => `${kind}: ${count}`).join(' · ')}</p>
+      <details><summary>Задержка запросов</summary><p class="num">{queryStats.histogram.map((b) => `${b.le_ms ? `≤ ${b.le_ms}` : '> 5000'} мс: ${b.count}`).join(' · ')}</p></details>
+      <details><summary>Медленные запросы · {queryStats.slow.length}</summary>
+        {#each queryStats.slow.slice().reverse() as q}
+          <p class="mono" class:danger={q.failed}>{q.time.slice(0, 19).replace('T', ' ')} · {q.duration_ms.toFixed(1)} мс · {q.sql}</p>
+        {/each}
+      </details>
+    {/if}
+  </div>
+{/if}
 {#if error}<p class="danger">{error}</p>{/if}
 {#if info}
   <div class="layout">

@@ -94,6 +94,14 @@ type API struct {
 // RegisterAPI adds the routes.
 func (a *API) RegisterAPI(mux *api.Mux) {
 	mux.HandleFunc("GET /api/bots/{id}/db", a.tables)
+	mux.HandleFunc("GET /api/bots/{id}/db/metrics", func(w http.ResponseWriter, r *http.Request) {
+		var stats QueryStats
+		if err := a.Core.Call(r.Context(), "db.metrics", id(r), &stats); err != nil {
+			a.WriteErr(w, err)
+			return
+		}
+		api.WriteJSON(w, http.StatusOK, stats)
+	})
 	mux.HandleFunc("GET /api/bots/{id}/db/tables/{table}", a.rows)
 	mux.HandleFunc("POST /api/bots/{id}/db/query", a.query(false))
 	mux.HandleFunc("POST /api/bots/{id}/db/exec", a.query(true))

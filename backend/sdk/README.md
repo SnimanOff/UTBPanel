@@ -38,3 +38,10 @@ The driver supports transactions, prepared statements, named parameters,
 context cancellation, and batched result rows. Each SQL connection is pinned
 to its original transport session. A lost write response is returned as an
 error and is never automatically retried by the driver.
+
+Core queries use the bot's filesystem identity on Linux and cannot attach
+other databases or export through VACUUM INTO. The query timeout is 30 seconds
+(`TGPANEL_SDK_QUERY_TIMEOUT`); slow queries over 50 ms are recorded with
+literals and comments removed. The Database tab shows counts, active queries,
+latency buckets and the last 20 slow queries. Each session allows up to 64 SQL
+connections, with 128 statements and 16 result cursors per connection.

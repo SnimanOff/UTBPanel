@@ -54,6 +54,7 @@ type Core struct {
 	BotPortFirst    int           `yaml:"bot_port_first" env:"BOT_PORT_FIRST"`
 	BotPortLast     int           `yaml:"bot_port_last" env:"BOT_PORT_LAST"`
 	SDKReadyTimeout time.Duration `yaml:"sdk_ready_timeout" env:"SDK_READY_TIMEOUT"`
+	SDKQueryTimeout time.Duration `yaml:"sdk_query_timeout" env:"SDK_QUERY_TIMEOUT"`
 	// TelegramAPI is the Bot API address; tests point it to a fake.
 	TelegramAPI string `yaml:"telegram_api" env:"TELEGRAM_API"`
 	// ServiceErrorPct: share of failed connections (over 5 min) that marks
@@ -108,6 +109,7 @@ func DefaultCore() Core {
 		BotPortFirst:    20000,
 		BotPortLast:     29999,
 		SDKReadyTimeout: time.Minute,
+		SDKQueryTimeout: 30 * time.Second,
 		TelegramAPI:     "https://api.telegram.org",
 		ServiceErrorPct: 20,
 		Limits: Limits{
@@ -280,6 +282,9 @@ func (c Core) Validate() error {
 	errs := []error{c.Common.validate()}
 	if c.SDKReadyTimeout <= 0 {
 		errs = append(errs, errors.New("sdk_ready_timeout: must be positive"))
+	}
+	if c.SDKQueryTimeout <= 0 {
+		errs = append(errs, errors.New("sdk_query_timeout: must be positive"))
 	}
 	if c.DataDir == "" || c.KeysDir == "" {
 		errs = append(errs, errors.New("data_dir and keys_dir: must be set"))

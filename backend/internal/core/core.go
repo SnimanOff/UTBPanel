@@ -8,8 +8,10 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -80,6 +82,7 @@ type Core struct {
 	Host      *counters.HostSampler
 	Live      *counters.Live
 	DBG       *dbgate.Browser
+	SQL       *dbgate.Gateway
 	DBBackups *dbgate.Backups
 	DBChecks  *dbgate.Checks
 	Proxy     *tgproxy.Proxy
@@ -219,6 +222,31 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		return filepath.Join(c.Cfg.DataDir, "bots", strconv.FormatInt(id, 10), "bot.db")
 	}}
 	c.DBG.Register(c.Mux, c.Journal)
+	c.SQL = &dbgate.Gateway{Path: c.DBG.Path, Timeout: c.Cfg.SDKQueryTimeout, UID: func(id int64) int {
+		if runtime.GOOS == "linux" {
+			if os.Geteuid() == 0 {
+				return runner.UID(id)
+			}
+			return os.Geteuid()
+		}
+		return -1
+	}, Observe: func(id int64, kind string, d time.Duration, err error) {
+		c.Count.Add(id, "db_"+strings.ToLower(kind), 1)
+		c.Count.Latency(id, "db_query", d)
+		if err != nil {
+			c.Count.Add(id, "db_errors", 1)
+		}
+	}}
+	c.SDK.Setup = func(id int64, _ string, mux *wire.Mux) func(*wire.Conn) {
+		c.SQL.Register(mux, id)
+		return c.SQL.Disconnect
+	}
+	c.Mux.Handle("db.metrics", wire.Func(func(ctx context.Context, _ *wire.Conn, id int64) (dbgate.QueryStats, error) {
+		if err := c.botExists(ctx, id); err != nil {
+			return dbgate.QueryStats{}, err
+		}
+		return c.SQL.Snapshot(id), nil
+	}))
 	c.DBBackups = c.newBackups()
 	c.DBChecks = c.newChecks()
 	c.registerDBBackups()

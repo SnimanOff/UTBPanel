@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "dd82bd5eb10e61aeee7a2db244acae529a9c2494bd9c67839cf9919980d6d812"
+const GeneratedHash = "6a40da96aced78394f8efc94c13298bc2cf36ef64cfab1cb08c67b7a2768880f"
 
 // Op is one operation of the API.
 type Op struct {
@@ -34,6 +34,7 @@ var Ops = []Op{
 	{"list_db_backups", "GET", "/api/bots/{id}/db/backups", "read", "Backups of the bot database (checked with integrity_check)"},
 	{"download_db_backup", "GET", "/api/bots/{id}/db/backups/{name}", "never", "Download a backup file"},
 	{"export_db", "GET", "/api/bots/{id}/db/export", "never", "A table or a read-only query as CSV"},
+	{"get_db_metrics", "GET", "/api/bots/{id}/db/metrics", "read", "SDK query counts, active requests, latency histogram and redacted slow SQL"},
 	{"get_db_rows", "GET", "/api/bots/{id}/db/tables/{table}", "read", "A page of a table"},
 	{"list_deploy_reports", "GET", "/api/bots/{id}/deploy-reports", "read", "Hour before vs hour after each deploy (updates, errors, p95, crashes, CPU, RAM) and what got worse"},
 	{"list_deploys", "GET", "/api/bots/{id}/deploys", "read", "Deploy history (from, to, backup, who, result), newest first"},

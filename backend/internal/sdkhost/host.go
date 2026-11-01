@@ -37,8 +37,11 @@ type endpoint struct {
 }
 
 type Host struct {
-	Dir       string
-	Log       *slog.Logger
+	Dir string
+	Log *slog.Logger
+	// Setup attaches per-bot modules to this private router and returns an
+	// optional transport-disconnect hook for their resources.
+	Setup     func(int64, string, *wire.Mux) func(*wire.Conn)
 	mu        sync.Mutex
 	endpoints map[key]*endpoint
 }
@@ -83,6 +86,10 @@ func (h *Host) Start(id int64, instance string, uid int) error {
 	}
 	e := &endpoint{ln: ln}
 	mux := wire.NewMux()
+	var disconnected func(*wire.Conn)
+	if h.Setup != nil {
+		disconnected = h.Setup(id, instance, mux)
+	}
 	mux.Handle("sdk.register", wire.Func(func(_ context.Context, c *wire.Conn, r sdk.Registration) (any, error) {
 		if r.Version == "" || len(r.Version) > 64 || r.Instance != instance || len(r.Modules) > 16 {
 			return nil, wire.Errorf(wire.CodeBadRequest, "invalid SDK registration")
@@ -122,6 +129,9 @@ func (h *Host) Start(id int64, instance string, uid int) error {
 		HandshakeTimeout: 5 * time.Second,
 		Accept:           func(c net.Conn) error { return checkPeer(c, uid) },
 		OnDisconnect: func(c *wire.Conn, _ error) {
+			if disconnected != nil {
+				disconnected(c)
+			}
 			h.mu.Lock()
 			defer h.mu.Unlock()
 			if e.conn == c {

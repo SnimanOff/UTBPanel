@@ -865,6 +865,15 @@ paths:
       x-mcp: read
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DBInfo" } } } }
+  /api/bots/{id}/db/metrics:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_db_metrics
+      tags: [db]
+      summary: SDK query counts, active requests, latency histogram and redacted slow SQL
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DBQueryStats" } } } }
   /api/bots/{id}/db/tables/{table}:
     parameters:
       - { $ref: "#/components/parameters/BotID" }
@@ -1646,6 +1655,31 @@ components:
         size: { type: integer }
         wal_size: { type: integer }
         tables: { type: array, items: { $ref: "#/components/schemas/DBTable" } }
+    DBQueryStats:
+      type: object
+      required: [counts, active, failures, histogram, slow]
+      properties:
+        counts: { type: object, additionalProperties: { type: integer } }
+        active: { type: integer }
+        failures: { type: integer }
+        histogram:
+          type: array
+          items:
+            type: object
+            required: [le_ms, count]
+            properties:
+              le_ms: { type: number, description: Upper latency bucket boundary in milliseconds; zero is overflow }
+              count: { type: integer }
+        slow:
+          type: array
+          items:
+            type: object
+            required: [time, sql, duration_ms, failed]
+            properties:
+              time: { type: string, format: date-time }
+              sql: { type: string, description: SQL with literals and comments removed }
+              duration_ms: { type: number }
+              failed: { type: boolean }
     DBResult:
       type: object
       required: [columns, types, rows, ms]
