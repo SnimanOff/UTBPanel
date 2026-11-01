@@ -60,6 +60,7 @@ type Core struct {
 	Users     *users.Tracker
 	Bans      *users.Bans
 	Closed    *users.Closed
+	Flood     *users.Antiflood
 	Count     *counters.Counters
 	Host      *counters.HostSampler
 	Live      *counters.Live
@@ -78,6 +79,7 @@ type Core struct {
 	edge         edgeSync
 	targets      targets
 	delivery     delivery
+	onSettings   []func(context.Context, int64, string)
 	cpuMu        sync.Mutex
 	cpuPrev      map[int64]cpuSample
 	cpuLast      map[int64]float64
@@ -174,7 +176,9 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		return nil, err
 	}
 	c.Closed = &users.Closed{DB: db.R, W: db.W}
-	c.Pipe.Checks = append(c.Pipe.Checks, c.Bans.Check, c.Closed.Check)
+	c.Flood = &users.Antiflood{DB: db.R, Bans: c.Bans}
+	c.Pipe.Checks = append(c.Pipe.Checks, c.Bans.Check, c.Closed.Check, c.Flood.Check)
+	c.registerBotSettings()
 	c.registerBans()
 	c.registerClosed()
 	c.DBG = &dbgate.Browser{Path: func(id int64) string {

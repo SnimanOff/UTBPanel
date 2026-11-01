@@ -217,6 +217,23 @@ paths:
       responses:
         "200": { description: OK }
 
+  /api/bots/{id}/settings/{section}:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: section, in: path, required: true, schema: { type: string, enum: [antiflood, texts, tz, stop, crash_updates] } }
+    put:
+      operationId: put_settings_section
+      tags: [settings]
+      summary: Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates)
+      x-mcp: confirm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "204": { description: Done }
+
   /api/bots/{id}/secrets:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:

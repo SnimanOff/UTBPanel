@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "c49aff4ff602f0723b319dd20b8f37f48ab63c8b5f1180a2ea5dd65373455491"
+const GeneratedHash = "26ed8e1bc5c3a019092bf30b2579e674f661895f3f075dc0c356e8c8be96df90"
 
 // Op is one operation of the API.
 type Op struct {
@@ -74,6 +74,7 @@ var Ops = []Op{
 	{"set_closed", "PUT", "/api/bots/{id}/closed", "confirm", "Turn closed mode on or off and set its text"},
 	{"set_bot_group", "PUT", "/api/bots/{id}/group", "never", "Move the bot to another group"},
 	{"set_secret", "PUT", "/api/bots/{id}/secrets/{name}", "never", "Set a secret (write-only). Neural networks use request_secret instead"},
+	{"put_settings_section", "PUT", "/api/bots/{id}/settings/{section}", "confirm", "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates)"},
 	{"set_token", "PUT", "/api/bots/{id}/token", "never", "Replace the token (checked with getMe). Neural networks use request_secret instead"},
 	{"order_groups", "PUT", "/api/groups/order", "never", "Reorder groups"},
 	{"set_panel_settings", "PUT", "/api/settings", "never", "Change panel settings (owner only)"},

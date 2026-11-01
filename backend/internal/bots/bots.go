@@ -92,6 +92,7 @@ func (s *Service) Register(mux *api.Mux) {
 	mux.HandleFunc("POST /api/bots/{id}/restart", s.lifecycle("bots.restart"))
 	mux.HandleFunc("GET /api/bots/{id}/settings", s.settings)
 	mux.HandleFunc("PATCH /api/bots/{id}/settings", s.updateSettings)
+	mux.HandleFunc("PUT /api/bots/{id}/settings/{section}", s.putSection)
 	mux.HandleFunc("GET /api/bots/{id}/secrets", s.listSecrets)
 	mux.HandleFunc("PUT /api/bots/{id}/secrets/{name}", s.setSecret)
 	mux.HandleFunc("DELETE /api/bots/{id}/secrets/{name}", s.deleteSecret)
@@ -572,5 +573,26 @@ func (s *Service) orderGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	audit.Skip(r)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// putSection replaces one section of the settings document: antiflood,
+// texts, tz, stop, crash_updates.
+func (s *Service) putSection(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var raw json.RawMessage
+	if !decode(w, r, &raw) {
+		return
+	}
+	sec := r.PathValue("section")
+	in := core.SettingPut{BotID: id, Key: sec, Value: string(raw), Actor: api.Actor(r.Context())}
+	if err := s.Call(r.Context(), "settings.put", in, nil); err != nil {
+		WriteCoreError(w, err)
+		return
+	}
+	audit.Annotate(r, "settings."+sec, "", map[string]any{"value": raw})
 	w.WriteHeader(http.StatusNoContent)
 }
