@@ -113,3 +113,28 @@ func TestPullAcksAfterWrite(t *testing.T) {
 		t.Fatalf("n=%d acked=%d err=%v", n, acked, err)
 	}
 }
+
+func TestQuery(t *testing.T) {
+	ctx := context.Background()
+	db, _ := store.Open(ctx, filepath.Join(t.TempDir(), "panel.db"), migrations.Panel())
+	w := store.NewWriter(db, time.Hour, nil)
+	defer func() { w.Close(); db.Close() }()
+	s := &Storage{DB: db, W: w}
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	var ms []Minute
+	for i := range int64(30) {
+		ms = append(ms, sample(now.Unix()-i*60, 10))
+	}
+	s.Save(ctx, ms)
+	s.AddDeploy(ctx, 1, now.Add(-10*time.Minute), "v2", "ok")
+	got, err := s.Query(ctx, 1, "1h", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Points) != 30 || got.Totals[Updates] != 300 || got.P50 <= 5 || got.P50 > 10 || len(got.Deploys) != 1 {
+		t.Fatalf("%+v", got)
+	}
+	if _, err := s.Query(ctx, 1, "2h", now); err == nil {
+		t.Fatal("bad period accepted")
+	}
+}

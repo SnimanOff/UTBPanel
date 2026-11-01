@@ -139,6 +139,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerWebhooks()
 	c.Users = &users.Tracker{DB: db, W: c.W, Log: log, OnNew: c.Count.NewUser, OnBlock: c.Count.Block, OnPayment: c.Count.Payment}
 	c.Pipe.Observe = append(c.Pipe.Observe, c.Count.Observe)
+	c.Users.Register(c.Mux)
 	c.Pipe.Account = append(c.Pipe.Account, c.Users.Account, c.Users.Payments)
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil

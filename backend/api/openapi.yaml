@@ -19,6 +19,7 @@ tags:
   - name: settings
   - name: logs
   - name: releases
+  - name: metrics
   - name: groups
   - name: audit
   - name: keys
@@ -283,6 +284,18 @@ paths:
       responses:
         "200": { description: application/zip }
 
+  /api/bots/{id}/metrics:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_metrics
+      tags: [metrics]
+      summary: Metrics of the bot for a period, with user numbers and deploy marks
+      x-mcp: read
+      parameters:
+        - { name: period, in: query, schema: { type: string, enum: [1h, 24h, 7d, 30d, 90d, 1y, all] } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/BotMetrics" } } } }
+
   /api/bots/{id}/releases:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -527,6 +540,50 @@ components:
         s: { type: string, enum: [stdout, stderr, core, canary] }
         l: { type: string, enum: [debug, info, warn, error] }
         m: { type: string, x-untrusted: true }
+    MetricsPoint:
+      type: object
+      required: [ts]
+      properties:
+        ts: { type: integer }
+        c: { type: object, additionalProperties: { type: integer } }
+        g: { type: object, additionalProperties: { type: number } }
+        p50: { type: number }
+        p95: { type: number }
+        p99: { type: number }
+    MetricsSeries:
+      type: object
+      required: [period, step, points, totals, p50, p95, p99, uniques, deploys]
+      properties:
+        period: { type: string }
+        step: { type: integer }
+        points: { type: array, items: { $ref: "#/components/schemas/MetricsPoint" } }
+        totals: { type: object, additionalProperties: { type: integer } }
+        p50: { type: number }
+        p95: { type: number }
+        p99: { type: number }
+        uniques: { type: object, additionalProperties: { type: integer } }
+        deploys:
+          type: array
+          items:
+            type: object
+            required: [ts, version]
+            properties: { ts: { type: integer }, version: { type: string }, result: { type: string } }
+    UserStats:
+      type: object
+      properties:
+        total: { type: integer }
+        blocked: { type: integer }
+        banned: { type: integer }
+        premium: { type: integer }
+        d1: { type: number }
+        d7: { type: number }
+        d30: { type: number }
+    BotMetrics:
+      type: object
+      required: [series]
+      properties:
+        series: { $ref: "#/components/schemas/MetricsSeries" }
+        users: { $ref: "#/components/schemas/UserStats" }
     Release:
       type: object
       required: [version, sha256, size, uploaded, source, current, previous, build]

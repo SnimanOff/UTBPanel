@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "4c629a0d57d9aae33f8f17a80d1258ed8d078f0d7d592c688442918ae3af3b3c"
+const GeneratedHash = "c5649b838db9ae52dc747c5aec22c4bc8c1266b70fd73a16a96b769118dd1e31"
 
 // Op is one operation of the API.
 type Op struct {
@@ -21,6 +21,7 @@ var Ops = []Op{
 	{"get_logs", "GET", "/api/bots/{id}/logs", "read", "Last lines, or a search with from/to/search=1"},
 	{"download_logs", "GET", "/api/bots/{id}/logs/download", "never", "All log files as zip"},
 	{"stream_logs", "GET", "/api/bots/{id}/logs/stream", "never", "Live log lines (Server-Sent Events)"},
+	{"get_metrics", "GET", "/api/bots/{id}/metrics", "read", "Metrics of the bot for a period, with user numbers and deploy marks"},
 	{"list_versions", "GET", "/api/bots/{id}/releases", "read", "Stored versions with build data"},
 	{"list_secrets", "GET", "/api/bots/{id}/secrets", "read", "Names of the bot's secrets; values are never returned"},
 	{"get_settings", "GET", "/api/bots/{id}/settings", "read", "Settings of the bot (env, renames, limits)"},
