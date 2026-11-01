@@ -189,6 +189,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.Pipe.Observe = append(c.Pipe.Observe, c.Live.Observe, c.observeDelivery)
 	c.apiW = apiWatch{api: map[int64]time.Time{}, delivered: map[int64]time.Time{}, warned: map[int64]time.Time{}}
 	c.Proxy.Hooks.OnCall = c.onCall
+	c.Proxy.Hooks.Intercept = c.intercept
 	c.Pipe.Account = append(c.Pipe.Account, c.Users.Account, c.Users.Payments)
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
