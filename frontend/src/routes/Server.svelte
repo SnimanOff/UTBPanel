@@ -6,6 +6,7 @@
   import { bytes, compact } from '../lib/format'
   import { live } from '../lib/live.svelte'
   import { router } from '../lib/router.svelte'
+  import AlertRules from '../lib/ui/AlertRules.svelte'
   import Box from '../lib/ui/Box.svelte'
   import Chart from '../lib/ui/Chart.svelte'
   import Tile from '../lib/ui/Tile.svelte'
@@ -146,7 +147,12 @@
   </div>
 </div>
 
+<div class="rules"><AlertRules /></div>
+
 <style>
+  .rules {
+    margin-top: var(--s3);
+  }
   h1 {
     margin-bottom: var(--s3);
   }

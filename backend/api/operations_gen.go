@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "78752c1f9c7cd57aefd19c162c8578450c0fa78c7fc2f229adbd1ac7d5fb4c4e"
+const GeneratedHash = "9d3be7d1ecd885942d56423cbadde91b55fa99234fdbb2a092c48a3d1385f983"
 
 // Op is one operation of the API.
 type Op struct {
@@ -12,11 +12,14 @@ type Op struct {
 
 // Ops lists all operations.
 var Ops = []Op{
+	{"delete_alert_rule", "DELETE", "/api/alert-rules/{rid}", "write", "Delete a rule"},
 	{"delete_bot", "DELETE", "/api/bots/{id}", "never", "Stop the bot, remove its webhook and delete all its data"},
 	{"stop_canary", "DELETE", "/api/bots/{id}/canary", "write", "Cancel the canary; everyone goes back to the main version, the database is not touched"},
 	{"closed_remove", "DELETE", "/api/bots/{id}/closed/allow/{uid}", "write", "Remove a user from the closed mode list"},
 	{"delete_secret", "DELETE", "/api/bots/{id}/secrets/{name}", "confirm", "Delete a secret"},
 	{"delete_group", "DELETE", "/api/groups/{gid}", "never", "Delete a group; its bots move to \"No group\""},
+	{"list_alert_rules", "GET", "/api/alert-rules", "read", "Threshold rules; ?bot=id for one bot (0 = rules for all bots)"},
+	{"alerts_log", "GET", "/api/alerts/log", "read", "Firings and recoveries of rules, newest first"},
 	{"get_audit", "GET", "/api/audit", "read", "Action log with filters"},
 	{"list_bots", "GET", "/api/bots", "read", "Bots with statuses, groups and versions"},
 	{"get_bot", "GET", "/api/bots/{id}", "read", "One bot"},
@@ -67,6 +70,7 @@ var Ops = []Op{
 	{"update_profile", "PATCH", "/api/bots/{id}/profile", "confirm", "Send only changed fields (name, descriptions, commands, menu); errors come per field"},
 	{"update_settings", "PATCH", "/api/bots/{id}/settings", "confirm", "Change env, variable renames and limits; applies after a restart"},
 	{"rename_group", "PATCH", "/api/groups/{gid}", "never", "Rename a group"},
+	{"save_alert_rule", "POST", "/api/alert-rules", "write", "Add or change a rule (metric p95 | err_rate | cpu | rss | updates | silence | revenue_drop, condition, minutes)"},
 	{"create_bot", "POST", "/api/bots", "write", "Add a bot; the token is checked with getMe and never returned"},
 	{"create_broadcast", "POST", "/api/bots/{id}/broadcasts", "never", "Start a broadcast now or at starts_at (UTC); text, optional picture and link buttons"},
 	{"test_broadcast", "POST", "/api/bots/{id}/broadcasts/test", "write", "Send the message once to the owner's Telegram ID"},

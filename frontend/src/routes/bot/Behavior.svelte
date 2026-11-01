@@ -3,6 +3,7 @@
   // mode with its list, texts and the zone of times in texts.
   import { api, errorText, type Schemas } from '../../lib/api/client'
   import { defaultTZ, pair, validZone, zones } from '../../lib/tz'
+  import AlertRules from '../../lib/ui/AlertRules.svelte'
   import Box from '../../lib/ui/Box.svelte'
 
   let { botId }: { botId: number } = $props()
@@ -126,6 +127,8 @@
     </label>
     <div><button onclick={saveTexts}>Сохранить</button></div>
   </Box>
+
+  <AlertRules {botId} />
 
   <Box title="Апдейты при падениях">
     <label class="check">

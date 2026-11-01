@@ -160,6 +160,19 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		return b.Name
 	}}
 	notes.Register(p.API.Mux)
+	rules := &alerts.Rules{S: p.Metrics, Notes: notes, Bots: func(ctx context.Context) []int64 {
+		var bs []core.Bot
+		if p.Core.Call(ctx, "bots.list", struct{}{}, &bs) != nil {
+			return nil
+		}
+		ids := make([]int64, len(bs))
+		for i, b := range bs {
+			ids[i] = b.ID
+		}
+		return ids
+	}}
+	rules.Register(p.API.Mux)
+	p.Go(rules.Run)
 	p.Events.Subscribe(notes.OnCoreEvent)
 	p.Go(func(ctx context.Context) {
 		for {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
@@ -201,4 +202,27 @@ func (a *ReportsAPI) Register(mux *api.Mux) {
 		}
 		api.WriteJSON(w, http.StatusOK, rs)
 	})
+}
+
+// Revenue sums payments (pay_<currency>_sum, all currencies) in [from, to).
+func (s *Storage) Revenue(ctx context.Context, botID int64, from, to time.Time) (int64, error) {
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT data FROM m_minute WHERE bot_id = ? AND ts >= ? AND ts < ?`, botID, from.Unix(), to.Unix())
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	var sum int64
+	for rows.Next() {
+		var data []byte
+		var m Minute
+		if rows.Scan(&data) != nil || Decode(data, &m) != nil {
+			continue
+		}
+		for k, v := range m.Counters {
+			if strings.HasPrefix(k, PaymentsPrefix) && strings.HasSuffix(k, "_sum") {
+				sum += v
+			}
+		}
+	}
+	return sum, rows.Err()
 }
