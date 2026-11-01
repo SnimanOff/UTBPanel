@@ -12,6 +12,7 @@
   import Settings from './bot/Settings.svelte'
   import Metrics from './bot/Metrics.svelte'
   import Users from './bot/Users.svelte'
+  import Database from './bot/Database.svelte'
 
   let { id, tab }: { id: number; tab: string } = $props()
   const tabs = [
@@ -79,6 +80,8 @@
   <div class="tab">
     {#if tab === 'logs'}
       <Logs botId={id} />
+    {:else if tab === 'db'}
+      <Database botId={id} />
     {:else if tab === 'users'}
       <Users botId={id} />
     {:else if tab === 'settings'}
