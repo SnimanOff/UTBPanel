@@ -18,6 +18,7 @@ import (
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
 	"github.com/SnimanOff/UTBPanel/backend/internal/core"
+	"github.com/SnimanOff/UTBPanel/backend/internal/dbgate"
 	"github.com/SnimanOff/UTBPanel/backend/internal/deploy"
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
@@ -216,5 +217,138 @@ func TestBotCrash(t *testing.T) {
 	}
 	if n < 2 {
 		t.Fatalf("setWebhook calls = %d", n)
+	}
+}
+
+// upload builds a version of the test bots and stores it.
+func upload(t *testing.T, c *wire.Conn, botID int64, version, mode string) {
+	t.Helper()
+	bin := "/tmp/badbot-" + mode
+	build := exec.Command("go", "build", "-ldflags", "-X main.mode="+mode, "-o", bin, ".")
+	build.Dir = "badbot"
+	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build %s: %v %s", mode, err, out)
+	}
+	data, _ := os.ReadFile(bin)
+	var id string
+	call(t, c, "releases.begin", core.UploadBegin{BotID: botID, Version: version, Actor: actor}, &id)
+	for off := 0; off < len(data); off += 256 << 10 {
+		call(t, c, "releases.chunk", core.UploadChunk{ID: id, Data: data[off:min(off+256<<10, len(data))]}, nil)
+	}
+	var rel deploy.Release
+	call(t, c, "releases.finish", core.UploadFinish{ID: id, BotID: botID, Actor: actor}, &rel)
+}
+
+func current(t *testing.T, c *wire.Conn, id int64) string {
+	var b core.Bot
+	call(t, c, "bots.get", id, &b)
+	return b.Version
+}
+
+func lastDeploy(t *testing.T, c *wire.Conn, id int64) core.DeployRecord {
+	var ds []core.DeployRecord
+	call(t, c, "deploys.list", id, &ds)
+	if len(ds) == 0 {
+		t.Fatal("no deploys")
+	}
+	return ds[0]
+}
+
+func groupMessage(user int, text string) string {
+	return fmt.Sprintf(`{"update_id":%d,"message":{"message_id":1,"date":0,"chat":{"id":-100%d,"type":"group"},"from":{"id":%d,"is_bot":false,"first_name":"A"},"text":%q}}`,
+		time.Now().UnixNano()%1e9, user, user, text)
+}
+
+// TestDeployRollback: bad versions are rolled back to v1 by themselves;
+// a version that changed the schema gets the database back.
+func TestDeployRollback(t *testing.T) {
+	c := dial(t)
+	defer c.Close()
+	id := botID(t, c)
+	for _, mode := range []string{"crash", "notready", "errors", "schema"} {
+		t.Run(mode, func(t *testing.T) {
+			upload(t, c, id, "bad-"+mode, mode)
+			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+			err := c.Call(ctx, "releases.switch", core.SwitchVersion{BotID: id, Version: "bad-" + mode, Actor: actor}, nil)
+			cancel()
+			if mode == "notready" {
+				if err == nil || !strings.Contains(err.Error(), "rolled_back") {
+					t.Fatalf("not ready version: %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if mode == "errors" || mode == "schema" {
+				for i := 0; i < 12; i++ {
+					send(t, message(90+i, "x"))
+				}
+			}
+			eventually(t, "rollback of "+mode, 90*time.Second, func() bool {
+				return current(t, c, id) == "v1" && lastDeploy(t, c, id).Result == "rolled_back"
+			})
+			eventually(t, "v1 answers again", 60*time.Second, func() bool {
+				_, body := send(t, message(77, "again"))
+				return strings.Contains(body, "again (#")
+			})
+		})
+	}
+	var info dbgate.Info
+	call(t, c, "db.tables", id, &info)
+	for _, tb := range info.Tables {
+		if tb.Name == "v2_only" {
+			t.Fatal("the schema change survived the rollback: backup not restored")
+		}
+	}
+}
+
+// TestCanary: listed users and a share go to the canary, groups stay on
+// the main instance; promote moves everyone, cancel brings them back.
+func TestCanary(t *testing.T) {
+	c := dial(t)
+	defer c.Close()
+	id := botID(t, c)
+	upload(t, c, id, "v2", "echo2")
+	call(t, c, "canary.start", core.CanaryReq{BotID: id, Version: "v2", Users: []int64{501}, Actor: actor}, nil)
+	eventually(t, "canary answers the listed user", 30*time.Second, func() bool {
+		_, body := send(t, message(501, "hi"))
+		return strings.Contains(body, "v2:hi")
+	})
+	if _, body := send(t, message(502, "hi")); !strings.Contains(body, "hi (#") {
+		t.Fatalf("others must stay on main: %s", body)
+	}
+	if _, body := send(t, groupMessage(501, "in group")); strings.Contains(body, "v2:") {
+		t.Fatalf("groups must stay on main: %s", body)
+	}
+
+	call(t, c, "canary.set", core.CanaryReq{BotID: id, Share: 50, Users: []int64{501}, Actor: actor}, nil)
+	sides := map[bool]int{}
+	for u := 600; u < 620; u++ {
+		_, a := send(t, message(u, "s"))
+		_, b := send(t, message(u, "s"))
+		if strings.Contains(a, "v2:") != strings.Contains(b, "v2:") {
+			t.Fatalf("user %d switched sides: %s / %s", u, a, b)
+		}
+		sides[strings.Contains(a, "v2:")]++
+	}
+	if sides[true] == 0 || sides[false] == 0 {
+		t.Fatalf("50%% share: %v", sides)
+	}
+
+	call(t, c, "canary.promote", core.CanaryReq{BotID: id, Actor: actor}, nil)
+	eventually(t, "promoted", 60*time.Second, func() bool {
+		_, body := send(t, message(502, "all"))
+		return current(t, c, id) == "v2" && strings.Contains(body, "v2:all")
+	})
+
+	// A canary of v1 for one user, cancelled: everyone stays on v2.
+	call(t, c, "canary.start", core.CanaryReq{BotID: id, Version: "v1", Users: []int64{503}, Actor: actor}, nil)
+	eventually(t, "v1 canary", 30*time.Second, func() bool {
+		_, body := send(t, message(503, "c"))
+		return strings.Contains(body, "c (#")
+	})
+	call(t, c, "canary.stop", core.CanaryReq{BotID: id, Actor: actor}, nil)
+	if _, body := send(t, message(503, "back")); !strings.Contains(body, "v2:back") {
+		t.Fatalf("after cancel: %s", body)
 	}
 }

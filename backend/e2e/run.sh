@@ -2,7 +2,9 @@
 # End-to-end test of the update pipeline in docker compose:
 #   delivery to the echo bot, user accounting, maintenance replies while the
 #   core is down with the queue handed over afterwards, "bot unavailable"
-#   after a crash, and the webhook set again.
+#   after a crash, and the webhook set again; bad versions rolled back
+#   (with the database when the schema changed); canary routing, promote
+#   and cancel.
 set -eu
 cd "$(dirname "$0")/../.."
 export PUBLIC_ADDR=edge COMPOSE_PROJECT_NAME=tge2e
@@ -23,5 +25,8 @@ phase TestQueueHandedOver
 
 dc exec -T core sh -c 'kill -9 $(pgrep -f "[r]eleases/") 2>/dev/null; true'
 phase TestBotCrash
+
+phase TestDeployRollback
+phase TestCanary
 
 echo "e2e: all phases passed"
