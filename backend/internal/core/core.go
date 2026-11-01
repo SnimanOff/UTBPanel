@@ -29,6 +29,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/procstat"
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
+	"github.com/SnimanOff/UTBPanel/backend/internal/sdkhost"
 	"github.com/SnimanOff/UTBPanel/backend/internal/secrets"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store/migrations"
@@ -57,6 +58,7 @@ type Core struct {
 	TG        *telegram.Client
 	GH        *github.Client
 	Runner    *runner.Runner
+	SDK       *sdkhost.Host
 	Logs      *logs.Store
 	Journal   *journal.Journal
 	Releases  *deploy.Store
@@ -171,6 +173,8 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.Host = &counters.HostSampler{Proc: counters.Root(cfg.HostProc), DataDir: cfg.DataDir}
 	c.Logs = c.newLogs()
 	c.registerLogs()
+	c.SDK = &sdkhost.Host{Dir: filepath.Join(cfg.RunDir, "sdk"), Log: log}
+	c.OnClose(func(context.Context) error { return c.SDK.Close() })
 	c.Runner = c.newRunner()
 	c.registerLifecycle()
 	c.Releases = c.newReleases()

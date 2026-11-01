@@ -69,6 +69,7 @@
     <h1>{bot.name}</h1>
     <span class="muted">@{bot.username}</span>
     <span class="num muted">{bot.version || 'нет версии'}</span>
+	{#if bot.sdk}<span class="muted">SDK v{bot.sdk.version}: {bot.sdk.modules.join(', ')}{bot.sdk.connected ? '' : ' · нет связи'}</span>{/if}
     {#if bot.status?.running}<span class="num muted">аптайм {uptime(bot.status.started)}</span>{/if}
     {#if bot.maintenance}<span class="maint">{bot.maintenance}</span>{/if}
     {#if bot.canary}<span class="canary">{bot.canary}</span>{/if}

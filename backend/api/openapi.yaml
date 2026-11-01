@@ -1281,6 +1281,14 @@ components:
         created_at: { type: string, format: date-time }
         maintenance: { type: string }
         canary: { type: string }
+        sdk: { $ref: "#/components/schemas/SDKInfo" }
+    SDKInfo:
+      type: object
+      required: [version, modules, connected]
+      properties:
+        version: { type: string }
+        modules: { type: array, items: { type: string } }
+        connected: { type: boolean }
     Status:
       type: object
       required: [restarts, last_exit, running]

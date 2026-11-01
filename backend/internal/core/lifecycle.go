@@ -51,6 +51,16 @@ func (c *Core) newRunner() *runner.Runner {
 			OpenFiles: int64(l.OpenFiles), Threads: int64(l.Threads),
 		},
 		Hooks: runner.Hooks{
+			Prepare: func(_ context.Context, b runner.Bot) error {
+				uid := -1
+				if runtime.GOOS == "linux" {
+					uid = os.Geteuid()
+					if uid == 0 {
+						uid = runner.UID(b.ID)
+					}
+				}
+				return c.SDK.Start(b.ID, b.Instance, uid)
+			},
 			Output: func(l runner.Line) {
 				if l.Stream != "core" {
 					c.panicParser(l.BotID, l.Instance).Line(l.BotID, l.Text, l.Time)
@@ -77,6 +87,7 @@ func (c *Core) newRunner() *runner.Runner {
 			// Every bot gets its own proxy port: the bot is known from the
 			// port, no guessing by token.
 			Env: func(b runner.Bot, env map[string]string) {
+				env["TGPANEL_SDK"] = "unix://" + c.SDK.Path(b.ID, b.Instance)
 				port, inst := ProxyPort(b.Port), "main"
 				if b.Instance == "canary" {
 					inst = "canary"

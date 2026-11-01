@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
+	"github.com/SnimanOff/UTBPanel/backend/internal/sdkhost"
 	"github.com/SnimanOff/UTBPanel/backend/internal/secrets"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	"github.com/SnimanOff/UTBPanel/backend/internal/telegram"
@@ -39,7 +40,8 @@ type Bot struct {
 	// Maintenance: "пауза" or "техработы 18:00–19:00", empty when none.
 	Maintenance string `cbor:"9,keyasint,omitempty" json:"maintenance,omitempty"`
 	// Canary: "канарейка v2 · 10 %", empty when none.
-	Canary string `cbor:"10,keyasint,omitempty" json:"canary,omitempty"`
+	Canary string        `cbor:"10,keyasint,omitempty" json:"canary,omitempty"`
+	SDK    *sdkhost.Info `cbor:"11,keyasint,omitempty" json:"sdk,omitempty"`
 }
 
 // CreateBot is the request to add a bot.
@@ -98,6 +100,9 @@ func (c *Core) Bots(ctx context.Context) ([]Bot, error) {
 			b.Maintenance = c.maintLabel(ctx, b.ID)
 			b.Canary = c.canaryLabel(ctx, b.ID)
 		}
+		if c.SDK != nil {
+			b.SDK = c.SDK.Info(b.ID, "")
+		}
 		out = append(out, b)
 	}
 	return out, rows.Err()
@@ -112,6 +117,9 @@ func (c *Core) Bot(ctx context.Context, id int64) (Bot, error) {
 	if err == nil && c.Maint != nil {
 		b.Maintenance = c.maintLabel(ctx, b.ID)
 		b.Canary = c.canaryLabel(ctx, b.ID)
+	}
+	if err == nil && c.SDK != nil {
+		b.SDK = c.SDK.Info(b.ID, "")
 	}
 	return b, err
 }

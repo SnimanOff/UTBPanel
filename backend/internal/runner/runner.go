@@ -69,6 +69,8 @@ type Line struct {
 
 // Hooks lets the core react to the life cycle.
 type Hooks struct {
+	// Prepare must succeed before launching either process instance.
+	Prepare func(context.Context, Bot) error
 	// Output receives every line the bot prints.
 	Output func(Line)
 	// Event reports life cycle events (bot_started, bot_crashed…).
@@ -291,6 +293,11 @@ func (r *Runner) Start(ctx context.Context, b Bot) error {
 	}
 	if err := r.prepareDirs(b.ID); err != nil {
 		return err
+	}
+	if r.cfg.Hooks.Prepare != nil {
+		if err := r.cfg.Hooks.Prepare(ctx, b); err != nil {
+			return err
+		}
 	}
 	env, err := r.Env(ctx, b)
 	if err != nil {

@@ -53,6 +53,9 @@ type Server struct {
 	Log          *slog.Logger
 	OnConnect    func(*Conn)
 	OnDisconnect func(*Conn, error)
+	// Accept checks the operating-system identity before reading any frames.
+	Accept           func(net.Conn) error
+	HandshakeTimeout time.Duration
 
 	mu    sync.Mutex
 	conns map[*Conn]struct{}
@@ -73,12 +76,22 @@ func (s *Server) Serve(ln net.Listener) error {
 }
 
 func (s *Server) handle(nc net.Conn) {
+	if s.Accept != nil {
+		if err := s.Accept(nc); err != nil {
+			nc.Close()
+			return
+		}
+	}
+	if s.HandshakeTimeout > 0 {
+		nc.SetDeadline(time.Now().Add(s.HandshakeTimeout))
+	}
 	c := newConn(nc, s.Mux, s.Log)
 	if err := c.serverHandshake(append([]Hello{s.Hello}, s.Also...)); err != nil {
 		c.log.Warn("wire handshake failed", "proto", s.Hello.Proto, "err", err)
 		c.shutdown(err)
 		return
 	}
+	nc.SetDeadline(time.Time{})
 	s.mu.Lock()
 	if s.conns == nil {
 		s.conns = map[*Conn]struct{}{}

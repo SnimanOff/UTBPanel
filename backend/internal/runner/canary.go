@@ -32,6 +32,11 @@ func (r *Runner) StartCanary(ctx context.Context, b Bot) error {
 	if _, err := os.Stat(bin); err != nil {
 		return fmt.Errorf("runner: binary of version %s: %w", b.Version, err)
 	}
+	if r.cfg.Hooks.Prepare != nil {
+		if err := r.cfg.Hooks.Prepare(ctx, b); err != nil {
+			return err
+		}
+	}
 	env, err := r.Env(ctx, b)
 	if err != nil {
 		return err
