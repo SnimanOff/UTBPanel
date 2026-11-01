@@ -23,6 +23,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/livehub"
 	"github.com/SnimanOff/UTBPanel/backend/internal/metrics"
 	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
+	"github.com/SnimanOff/UTBPanel/backend/internal/procstat"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
 	"github.com/SnimanOff/UTBPanel/backend/internal/sources"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
@@ -142,6 +143,11 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	p.Metrics = &metrics.Storage{DB: db, W: p.W, Log: log}
 	(&metrics.API{S: p.Metrics, Core: p.Core}).Register(p.API.Mux)
 	(&users.API{Core: p.Core, WriteErr: bots.WriteCoreError}).Register(p.API.Mux)
+	(&metrics.ServerAPI{S: p.Metrics, Procs: func(ctx context.Context) ([]procstat.Stats, error) {
+		var ps []procstat.Stats
+		err := p.Core.Call(ctx, "procs", struct{}{}, &ps)
+		return ps, err
+	}}).Register(p.API.Mux)
 	hub := &livehub.LiveHub{Core: p.Core, Log: log}
 	hub.Register(p.API.Mux)
 	p.Go(hub.Run)

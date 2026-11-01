@@ -413,6 +413,40 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /api/server/metrics:
+    get:
+      operationId: get_server_metrics
+      tags: [metrics]
+      summary: Server metrics (CPU, RAM, disk, network), processes and the sum over all bots
+      x-mcp: read
+      parameters:
+        - { name: period, in: query, schema: { type: string, enum: [1h, 24h, 7d, 30d] } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ServerMetrics" } } } }
+  /api/server/bots:
+    get:
+      operationId: get_bots_load
+      tags: [metrics]
+      summary: Load and revenue of every bot over 24 hours
+      x-mcp: read
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [bot_id, updates_24h, errors_24h, cpu_max, rss_max, revenue_24h]
+                  properties:
+                    bot_id: { type: integer }
+                    updates_24h: { type: integer }
+                    errors_24h: { type: integer }
+                    cpu_max: { type: number }
+                    rss_max: { type: number }
+                    revenue_24h: { type: object, additionalProperties: { type: integer } }
+
   /api/live:
     get:
       operationId: stream_live
@@ -650,6 +684,27 @@ components:
         premium: { type: integer }
         languages: { type: array, items: { $ref: "#/components/schemas/Share" } }
         sources: { type: array, items: { $ref: "#/components/schemas/Share" } }
+    ServerMetrics:
+      type: object
+      required: [period, step, points, bots, procs]
+      properties:
+        period: { type: string }
+        step: { type: integer }
+        points:
+          type: array
+          items:
+            type: object
+            required: [ts, g]
+            properties: { ts: { type: integer }, g: { type: object, additionalProperties: { type: number } } }
+        bots: { $ref: "#/components/schemas/MetricsSeries" }
+        procs:
+          type: array
+          items:
+            type: object
+            properties:
+              Name: { type: string }
+              CPUPercent: { type: number }
+              RSS: { type: integer }
     BotMetrics:
       type: object
       required: [series]

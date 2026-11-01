@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "d40df7b4e52a48bf0110e8d524057c3a866d037d896a48049aca98a235fbe87e"
+const GeneratedHash = "0a891bea3214857d9982e22c3adf7b93e0699fbd915d19e11abc5c151574432c"
 
 // Op is one operation of the API.
 type Op struct {
@@ -32,6 +32,8 @@ var Ops = []Op{
 	{"list_keys", "GET", "/api/keys", "never", "Access keys"},
 	{"stream_live", "GET", "/api/live", "never", "Live metrics of the server and bots once a second (Server-Sent Events)"},
 	{"ping", "GET", "/api/ping", "read", "Check the connection and see the key name"},
+	{"get_bots_load", "GET", "/api/server/bots", "read", "Load and revenue of every bot over 24 hours"},
+	{"get_server_metrics", "GET", "/api/server/metrics", "read", "Server metrics (CPU, RAM, disk, network), processes and the sum over all bots"},
 	{"enroll_status", "GET", "/enroll/{id}", "never", "State of an enrollment request (gate.exe polls it)"},
 	{"rename_bot", "PATCH", "/api/bots/{id}", "write", "Rename the bot in the panel (the Telegram name is in the profile)"},
 	{"update_settings", "PATCH", "/api/bots/{id}/settings", "confirm", "Change env, variable renames and limits; applies after a restart"},
