@@ -8,6 +8,29 @@
   let { botId }: { botId: number } = $props()
   type Info = Schemas['DBInfo']
   type Res = Schemas['DBResult']
+  type Bk = Schemas['DBBackup']
+  let backups = $state<Bk[]>([])
+  let bkError = $state('')
+  async function loadBackups() {
+    try {
+      backups = await api.get<Bk[]>(`/api/bots/${botId}/db/backups`)
+    } catch {}
+  }
+  $effect(() => {
+    void botId
+    loadBackups()
+  })
+  async function bkAct(fn: () => Promise<unknown>) {
+    bkError = ''
+    try {
+      await fn()
+    } catch (e) {
+      bkError = errorText(e)
+    }
+    loadBackups()
+    loadInfo()
+  }
+  const reasons: Record<string, string> = { daily: 'ежедневный', deploy: 'перед деплоем', manual: 'вручную' }
   const PAGE = 100
   let info = $state<Info>()
   let table = $state('')
@@ -95,6 +118,29 @@
           {/if}
         {/if}
       {/if}
+
+      <h2 class="console-title">Бэкапы</h2>
+      <div class="run">
+        <button onclick={() => bkAct(() => api.post(`/api/bots/${botId}/db/backups`))}>Сделать бэкап</button>
+        <span class="muted small">раз в сутки и перед каждым деплоем; каждая копия проверяется integrity_check</span>
+      </div>
+      {#if bkError}<p class="danger pre">{bkError}</p>{/if}
+      <table class="backups">
+        <tbody>
+          {#each backups as b (b.name)}
+            <tr>
+              <td class="num">{b.created.slice(0, 19).replace('T', ' ')}</td>
+              <td class="muted">{reasons[b.reason] ?? b.reason}</td>
+              <td class="num">{bytes(b.size)}</td>
+              <td class:danger={!b.ok}>{b.ok ? 'проверен' : 'повреждён: ' + (b.error ?? '')}</td>
+              <td><a href="/api/bots/{botId}/db/backups/{b.name}" download>скачать</a></td>
+              <td>{#if b.ok}<HoldButton onconfirm={() => bkAct(() => api.post(`/api/bots/${botId}/db/backups/${b.name}/restore`))}>восстановить</HoldButton>{/if}</td>
+            </tr>
+          {:else}
+            <tr><td class="muted">Бэкапов пока нет</td></tr>
+          {/each}
+        </tbody>
+      </table>
 
       <h2 class="console-title">SQL-консоль</h2>
       <textarea bind:value={sql} rows="4" spellcheck="false"></textarea>

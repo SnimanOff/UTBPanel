@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/dbgate"
 	"github.com/SnimanOff/UTBPanel/backend/internal/deploy"
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
@@ -78,6 +79,10 @@ func (c *Core) SwitchVersion(ctx context.Context, in SwitchVersion) error {
 	}
 	if b.Version == in.Version {
 		return nil
+	}
+	// A copy of the database before every deploy.
+	if _, err := c.BackupDB(ctx, in.BotID, "deploy"); err != nil && err != dbgate.ErrNoDB {
+		return wire.Errorf("backup_failed", "бэкап базы перед деплоем не удался: %v", err)
 	}
 	wasRunning := c.Runner.IsRunning(in.BotID)
 	if wasRunning {

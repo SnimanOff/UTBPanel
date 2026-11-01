@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "19c500657fd3e1095a7191a673e601acb8be001cd479cb26b32c9536523b778e"
+const GeneratedHash = "bf38faa810d6bac00db1e7de4eb5949acfc8aea71d734c6a26b5dc74f1b1f899"
 
 // Op is one operation of the API.
 type Op struct {
@@ -20,6 +20,8 @@ var Ops = []Op{
 	{"get_bot", "GET", "/api/bots/{id}", "read", "One bot"},
 	{"get_audience", "GET", "/api/bots/{id}/audience", "read", "Languages, Premium share and sources of the bot's users"},
 	{"get_db_schema", "GET", "/api/bots/{id}/db", "read", "Tables of the bot database with schema, row counts and size"},
+	{"list_db_backups", "GET", "/api/bots/{id}/db/backups", "read", "Backups of the bot database (checked with integrity_check)"},
+	{"download_db_backup", "GET", "/api/bots/{id}/db/backups/{name}", "never", "Download a backup file"},
 	{"export_db", "GET", "/api/bots/{id}/db/export", "never", "A table or a read-only query as CSV"},
 	{"get_db_rows", "GET", "/api/bots/{id}/db/tables/{table}", "read", "A page of a table"},
 	{"get_logs", "GET", "/api/bots/{id}/logs", "read", "Last lines, or a search with from/to/search=1"},
@@ -42,6 +44,8 @@ var Ops = []Op{
 	{"update_settings", "PATCH", "/api/bots/{id}/settings", "confirm", "Change env, variable renames and limits; applies after a restart"},
 	{"rename_group", "PATCH", "/api/groups/{gid}", "never", "Rename a group"},
 	{"create_bot", "POST", "/api/bots", "write", "Add a bot; the token is checked with getMe and never returned"},
+	{"backup_db", "POST", "/api/bots/{id}/db/backups", "write", "Make a backup now (VACUUM INTO, the bot keeps running)"},
+	{"restore_db", "POST", "/api/bots/{id}/db/backups/{name}/restore", "never", "Stop the bot, restore the database from a backup, start it again"},
 	{"exec_db", "POST", "/api/bots/{id}/db/exec", "never", "SQL that writes to the bot database (held button in the panel; the text goes to the audit)"},
 	{"query_db", "POST", "/api/bots/{id}/db/query", "read", "Read-only SQL (the connection is query_only; the text is not inspected)"},
 	{"upload_release", "POST", "/api/bots/{id}/releases", "write", "Upload a static linux/amd64 binary as a new version (does not deploy it)"},

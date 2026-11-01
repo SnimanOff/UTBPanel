@@ -42,27 +42,28 @@ const (
 
 // Core is the running core process.
 type Core struct {
-	Cfg      config.Core
-	Log      *slog.Logger
-	DB       *store.DB
-	W        *store.Writer
-	Mux      *wire.Mux
-	Srv      *wire.Server
-	Ev       *events.Bus
-	Sec      *secrets.Store
-	TG       *telegram.Client
-	Runner   *runner.Runner
-	Logs     *logs.Store
-	Journal  *journal.Journal
-	Releases *deploy.Store
-	Pipe     *ingress.Pipeline
-	Users    *users.Tracker
-	Count    *counters.Counters
-	Host     *counters.HostSampler
-	Live     *counters.Live
-	DBG      *dbgate.Browser
-	hostMu   sync.Mutex
-	hostLast counters.Server
+	Cfg       config.Core
+	Log       *slog.Logger
+	DB        *store.DB
+	W         *store.Writer
+	Mux       *wire.Mux
+	Srv       *wire.Server
+	Ev        *events.Bus
+	Sec       *secrets.Store
+	TG        *telegram.Client
+	Runner    *runner.Runner
+	Logs      *logs.Store
+	Journal   *journal.Journal
+	Releases  *deploy.Store
+	Pipe      *ingress.Pipeline
+	Users     *users.Tracker
+	Count     *counters.Counters
+	Host      *counters.HostSampler
+	Live      *counters.Live
+	DBG       *dbgate.Browser
+	DBBackups *dbgate.Backups
+	hostMu    sync.Mutex
+	hostLast  counters.Server
 
 	mu           sync.Mutex
 	procs        map[string]procstat.Stats
@@ -154,6 +155,8 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		return filepath.Join(c.Cfg.DataDir, "bots", strconv.FormatInt(id, 10), "bot.db")
 	}}
 	c.DBG.Register(c.Mux, c.Journal)
+	c.DBBackups = c.newBackups()
+	c.registerDBBackups()
 	c.Live = &counters.Live{
 		InFlight: c.Pipe.InFlight,
 		Usage: func(id int64) (float64, int64) {
@@ -219,6 +222,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "users", func() { c.Users.Run(ctx) })
 	safe.Go(c.Log, "server metrics", func() { c.sampleHost(ctx) })
 	safe.Go(c.Log, "live metrics", func() { c.Live.Run(ctx) })
+	safe.Go(c.Log, "db backups", func() { c.dailyBackups(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)

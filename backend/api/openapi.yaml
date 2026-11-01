@@ -386,6 +386,45 @@ paths:
       responses:
         "200": { description: text/csv }
 
+  /api/bots/{id}/db/backups:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: list_db_backups
+      tags: [db]
+      summary: Backups of the bot database (checked with integrity_check)
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/DBBackup" } } } } }
+    post:
+      operationId: backup_db
+      tags: [db]
+      summary: Make a backup now (VACUUM INTO, the bot keeps running)
+      x-mcp: write
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/DBBackup" } } } }
+  /api/bots/{id}/db/backups/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: download_db_backup
+      tags: [db]
+      summary: Download a backup file
+      x-mcp: never
+      responses:
+        "200": { description: application/vnd.sqlite3 }
+  /api/bots/{id}/db/backups/{name}/restore:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: restore_db
+      tags: [db]
+      summary: Stop the bot, restore the database from a backup, start it again
+      x-mcp: never
+      responses:
+        "200": { description: OK }
+
   /api/bots/{id}/releases:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -783,6 +822,17 @@ components:
         sql: { type: string }
         rows: { type: integer }
         columns: { type: array, items: { $ref: "#/components/schemas/DBColumn" } }
+    DBBackup:
+      type: object
+      required: [name, created, size, reason, schema_version, ok]
+      properties:
+        name: { type: string }
+        created: { type: string, format: date-time }
+        size: { type: integer }
+        reason: { type: string, enum: [daily, deploy, manual] }
+        schema_version: { type: integer }
+        ok: { type: boolean }
+        error: { type: string }
     DBInfo:
       type: object
       required: [size, wal_size, tables]

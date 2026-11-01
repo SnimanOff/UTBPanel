@@ -144,7 +144,9 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	p.Metrics = &metrics.Storage{DB: db, W: p.W, Log: log}
 	(&metrics.API{S: p.Metrics, Core: p.Core}).Register(p.API.Mux)
 	(&users.API{Core: p.Core, WriteErr: bots.WriteCoreError}).Register(p.API.Mux)
-	(&dbgate.API{Core: p.Core, WriteErr: bots.WriteCoreError}).RegisterAPI(p.API.Mux)
+	dbAPI := &dbgate.API{Core: p.Core, WriteErr: bots.WriteCoreError}
+	dbAPI.RegisterAPI(p.API.Mux)
+	dbAPI.RegisterBackups(p.API.Mux)
 	(&metrics.ServerAPI{S: p.Metrics, Procs: func(ctx context.Context) ([]procstat.Stats, error) {
 		var ps []procstat.Stats
 		err := p.Core.Call(ctx, "procs", struct{}{}, &ps)
