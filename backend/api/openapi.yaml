@@ -645,6 +645,49 @@ paths:
       responses:
         "200": { description: OK }
 
+  /api/backups:
+    get:
+      operationId: list_full_backups
+      tags: [system]
+      summary: Full backups, schedule and last download (owner only)
+      x-mcp: never
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FullBackupStatus" } } } }
+    post:
+      operationId: create_full_backup
+      tags: [system]
+      summary: Create a full archive encrypted by the core's master key (owner only)
+      x-mcp: never
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, properties: { files: { type: boolean } } }
+      responses:
+        "201": { description: Backup created, content: { application/json: { schema: { $ref: "#/components/schemas/FullBackupFile" } } } }
+        "409": { description: A backup is already running }
+  /api/backups/settings:
+    put:
+      operationId: set_full_backup_settings
+      tags: [system]
+      summary: Set UTC schedule and retention count (owner only)
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FullBackupSettings" }
+      responses:
+        "204": { description: Saved }
+  /api/backups/{backup}:
+    parameters: [{ name: backup, in: path, required: true, schema: { type: string } }]
+    get:
+      operationId: download_full_backup
+      tags: [system]
+      summary: Download an encrypted full archive and record the download time (owner only)
+      x-mcp: never
+      responses:
+        "200": { description: Encrypted backup file, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+
   /api/imports/bots:
     post:
       operationId: inspect_bot_import
@@ -1492,6 +1535,33 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
   schemas:
+    FullBackupSettings:
+      type: object
+      required: [enabled, cron, keep, files]
+      properties:
+        enabled: { type: boolean }
+        cron: { type: string, description: Five-field cron evaluated in UTC }
+        keep: { type: integer, minimum: 1, maximum: 100 }
+        files: { type: boolean }
+    FullBackupFile:
+      type: object
+      required: [id, name, size, created]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        size: { type: integer }
+        created: { type: string, format: date-time }
+        downloaded_at: { type: string, format: date-time }
+    FullBackupStatus:
+      type: object
+      required: [files, settings, busy]
+      properties:
+        files: { type: array, items: { $ref: "#/components/schemas/FullBackupFile" } }
+        settings: { $ref: "#/components/schemas/FullBackupSettings" }
+        busy: { type: boolean }
+        next: { type: string, format: date-time }
+        last_error: { type: string }
+        last_download: { type: string, format: date-time }
     BotImportPreview:
       type: object
       required: [id, manifest, document, expires, metrics]

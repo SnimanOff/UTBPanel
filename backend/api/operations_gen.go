@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "3ad02eb3e02a4133b6b9ffddcaa3f3039d4b5a4bb9d98846559bdf2de44d4e93"
+const GeneratedHash = "a1d04a19dfce297468f7a10d646f9adec27f2b58f1e0ef0cf62c277d246dbb4c"
 
 // Op is one operation of the API.
 type Op struct {
@@ -23,6 +23,8 @@ var Ops = []Op{
 	{"list_alert_rules", "GET", "/api/alert-rules", "read", "Threshold rules; ?bot=id for one bot (0 = rules for all bots)"},
 	{"alerts_log", "GET", "/api/alerts/log", "read", "Firings and recoveries of rules, newest first"},
 	{"get_audit", "GET", "/api/audit", "read", "Action log with filters"},
+	{"list_full_backups", "GET", "/api/backups", "never", "Full backups, schedule and last download (owner only)"},
+	{"download_full_backup", "GET", "/api/backups/{backup}", "never", "Download an encrypted full archive and record the download time (owner only)"},
 	{"get_bot_config_schema", "GET", "/api/bot-config/schema", "read", "JSON Schema of the portable settings document derived from OpenAPI"},
 	{"list_bots", "GET", "/api/bots", "read", "Bots with statuses, groups and versions"},
 	{"get_bot", "GET", "/api/bots/{id}", "read", "One bot"},
@@ -80,6 +82,7 @@ var Ops = []Op{
 	{"update_settings", "PATCH", "/api/bots/{id}/settings", "confirm", "Change env, variable renames and limits; applies after a restart"},
 	{"rename_group", "PATCH", "/api/groups/{gid}", "never", "Rename a group"},
 	{"save_alert_rule", "POST", "/api/alert-rules", "write", "Add or change a rule (metric p95 | err_rate | cpu | rss | updates | silence | revenue_drop, condition, minutes)"},
+	{"create_full_backup", "POST", "/api/backups", "never", "Create a full archive encrypted by the core's master key (owner only)"},
 	{"create_bot", "POST", "/api/bots", "write", "Add a bot; the token is checked with getMe and never returned"},
 	{"create_broadcast", "POST", "/api/bots/{id}/broadcasts", "never", "Start a broadcast now or at starts_at (UTC); text, optional picture and link buttons"},
 	{"test_broadcast", "POST", "/api/bots/{id}/broadcasts/test", "write", "Send the message once to the owner's Telegram ID"},
@@ -120,6 +123,7 @@ var Ops = []Op{
 	{"read_notifications", "POST", "/api/notifications/read", "write", "Mark notifications read (all when ids is empty)"},
 	{"ban_user_everywhere", "POST", "/api/users/{uid}/ban", "never", "Ban a user in all bots at once"},
 	{"enroll", "POST", "/enroll", "never", "Request a device certificate (gate.exe with its enrollment certificate)"},
+	{"set_full_backup_settings", "PUT", "/api/backups/settings", "never", "Set UTC schedule and retention count (owner only)"},
 	{"order_bots", "PUT", "/api/bots/order", "never", "Put bots into a group in this order (0 = no group)"},
 	{"set_closed", "PUT", "/api/bots/{id}/closed", "confirm", "Turn closed mode on or off and set its text"},
 	{"set_github", "PUT", "/api/bots/{id}/github", "confirm", "Set repository (owner/repo, empty turns it off), asset mask, auto deploy and token; the webhook secret is returned once"},

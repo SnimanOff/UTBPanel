@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
@@ -54,6 +55,9 @@ type Core struct {
 	ConfigGuard botconfig.Guard
 	Exports     *backup.Files
 	Imports     *backup.Imports
+	FullBackups *backup.Files
+	backupMu    sync.Mutex
+	backupBusy  atomic.Bool
 	Cfg         config.Core
 	Log         *slog.Logger
 	DB          *store.DB
@@ -268,6 +272,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerConfig()
 	c.registerExports()
 	c.registerImports()
+	c.registerFullBackups()
 	c.DBChecks = c.newChecks()
 	c.registerDBBackups()
 	c.Live = &counters.Live{
@@ -344,6 +349,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "restore bots", func() { c.Runner.Restore(ctx) })
 	safe.Go(c.Log, "prune exports", func() { c.Exports.Run(ctx) })
 	safe.Go(c.Log, "prune imports", func() { c.Imports.Run(ctx) })
+	safe.Go(c.Log, "scheduled full backups", func() { c.runFullBackups(ctx) })
 	safe.Go(c.Log, "SDK tasks", func() {
 		if err := c.SDKTasks.Run(ctx); err != nil {
 			c.Log.Error("SDK tasks stopped", "err", err)

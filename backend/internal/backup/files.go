@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -19,11 +20,13 @@ import (
 var ErrExpired = errors.New("архив не найден или срок хранения истёк")
 
 type File struct {
-	ID      string    `cbor:"1,keyasint" json:"id"`
-	BotID   int64     `cbor:"2,keyasint" json:"bot_id"`
-	Name    string    `cbor:"3,keyasint" json:"name"`
-	Size    int64     `cbor:"4,keyasint" json:"size"`
-	Expires time.Time `cbor:"5,keyasint" json:"expires"`
+	Created      time.Time `cbor:"6,keyasint" json:"created,omitzero"`
+	DownloadedAt time.Time `cbor:"7,keyasint" json:"downloaded_at,omitzero"`
+	ID           string    `cbor:"1,keyasint" json:"id"`
+	BotID        int64     `cbor:"2,keyasint" json:"bot_id"`
+	Name         string    `cbor:"3,keyasint" json:"name"`
+	Size         int64     `cbor:"4,keyasint" json:"size"`
+	Expires      time.Time `cbor:"5,keyasint" json:"expires"`
 }
 type FileRef struct {
 	ID     string `cbor:"1,keyasint"`
@@ -114,7 +117,8 @@ func (f *Files) Create(ctx context.Context, botID int64, name string, fill func(
 	if ttl <= 0 {
 		ttl = time.Hour
 	}
-	out := File{ID: id, BotID: botID, Name: name, Size: stat.Size(), Expires: f.now().Add(ttl).UTC()}
+	now := f.now().UTC()
+	out := File{ID: id, BotID: botID, Name: name, Size: stat.Size(), Created: now, Expires: now.Add(ttl)}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	path := filepath.Join(f.Dir, id)
@@ -147,6 +151,66 @@ func (f *Files) Open(ref FileRef) (*os.File, error) {
 		return nil, err
 	}
 	return os.Open(filepath.Join(f.Dir, ref.ID))
+}
+
+func (f *Files) List() ([]File, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	entries, err := os.ReadDir(f.Dir)
+	if os.IsNotExist(err) {
+		return []File{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := []File{}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		id := strings.TrimSuffix(entry.Name(), ".json")
+		if !validID(id) {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(f.Dir, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+		var info File
+		if err := json.Unmarshal(raw, &info); err != nil {
+			return nil, err
+		}
+		if info.ID != id {
+			return nil, fmt.Errorf("invalid stored backup metadata")
+		}
+		if f.now().Before(info.Expires) {
+			out = append(out, info)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Created.After(out[j].Created) })
+	return out, nil
+}
+func (f *Files) MarkDownloaded(ref FileRef) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	info, err := f.info(ref)
+	if err != nil {
+		return err
+	}
+	info.DownloadedAt = f.now().UTC()
+	temp, err := os.CreateTemp(f.Dir, ".meta-")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(temp.Name())
+	defer temp.Close()
+	if err := json.NewEncoder(temp).Encode(info); err != nil {
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temp.Name(), filepath.Join(f.Dir, ref.ID+".json"))
 }
 func (f *Files) info(ref FileRef) (File, error) {
 	raw, err := os.ReadFile(filepath.Join(f.Dir, ref.ID+".json"))

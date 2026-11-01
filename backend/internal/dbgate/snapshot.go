@@ -41,3 +41,12 @@ func sqliteURI(path string, q url.Values) string {
 	}
 	return (&url.URL{Scheme: "file", Path: path, RawQuery: q.Encode()}).String()
 }
+
+func OpenReadOnly(path string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite", dsn(path, false))
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	return db, nil
+}

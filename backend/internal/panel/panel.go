@@ -197,6 +197,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	documents.Register(p.API.Mux)
 	exportFiles := &backup.Files{Dir: filepath.Join(cfg.DataDir, "export-temp")}
 	(&sources.Exports{Core: p.Core, Documents: documents, Metrics: p.Metrics, Extras: exportFiles, Groups: p.Bots.Groups}).Register(p.API.Mux, p.CoreMux)
+	(&sources.FullBackups{Core: p.Core, DB: p.DB, W: p.W, PKI: filepath.Join(cfg.DataDir, "pki"), Extras: exportFiles}).Register(p.API.Mux, p.CoreMux)
 	p.Go(exportFiles.Run)
 	rules.Register(p.API.Mux)
 	p.Go(rules.Run)

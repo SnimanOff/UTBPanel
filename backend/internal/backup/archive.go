@@ -3,6 +3,7 @@ package backup
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -88,8 +89,6 @@ func Encrypt(ctx context.Context, out io.Writer, password string, manifest Manif
 	if err != nil {
 		return err
 	}
-	gzipWriter := gzip.NewWriter(encrypted)
-	tw := tar.NewWriter(gzipWriter)
 	manifest.Format = "utbpanel.bot"
 	manifest.Version = FormatVersion
 	manifest.Created = time.Now().UTC()
@@ -97,24 +96,44 @@ func Encrypt(ctx context.Context, out io.Writer, password string, manifest Manif
 	if manifest.Releases == nil {
 		manifest.Releases = []deploy.Release{}
 	}
-	a := &Archive{ctx: ctx, tar: tw, manifest: &manifest}
+	if err := writeArchive(ctx, encrypted, fill, func(entries map[string]Entry) ([]byte, error) {
+		manifest.Entries = entries
+		return json.Marshal(manifest)
+	}); err != nil {
+		return err
+	}
+	return encrypted.Close()
+}
+
+func writeArchive(ctx context.Context, out io.Writer, fill func(*Archive) error, manifest func(map[string]Entry) ([]byte, error)) error {
+	gz := gzip.NewWriter(out)
+	tw := tar.NewWriter(gz)
+	a := &Archive{ctx: ctx, tar: tw, manifest: &Manifest{Entries: map[string]Entry{}}}
 	if err := fill(a); err != nil {
 		return err
 	}
-	raw, err := json.Marshal(manifest)
+	raw, err := manifest(a.manifest.Entries)
 	if err != nil {
 		return err
 	}
-	if err := a.add("manifest.json", int64(len(raw)), 0o600, strings.NewReader(string(raw)), false); err != nil {
+	if err := a.add("manifest.json", int64(len(raw)), 0o600, bytes.NewReader(raw), false); err != nil {
 		return err
 	}
 	if err := tw.Close(); err != nil {
 		return err
 	}
-	if err := gzipWriter.Close(); err != nil {
+	return gz.Close()
+}
+
+// Parts streams the panel's private contribution over the authenticated core
+// socket. The complete archive is encrypted by the core with its master key.
+func Parts(ctx context.Context, out io.Writer, fill func(*Archive) error) error {
+	tw := tar.NewWriter(out)
+	a := &Archive{ctx: ctx, tar: tw, manifest: &Manifest{Entries: map[string]Entry{}}}
+	if err := fill(a); err != nil {
 		return err
 	}
-	return encrypted.Close()
+	return tw.Close()
 }
 
 func (a *Archive) add(name string, size int64, mode int64, r io.Reader, record bool) error {
