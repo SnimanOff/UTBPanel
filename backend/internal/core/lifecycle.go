@@ -12,6 +12,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/metrics"
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
+	"github.com/SnimanOff/UTBPanel/backend/internal/tgproxy"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
 
@@ -55,6 +56,18 @@ func (c *Core) newRunner() *runner.Runner {
 				c.Ev.Emit(typ, id, sev, data)
 			},
 			Usage: c.usage,
+			// Every bot gets its own proxy port: the bot is known from the
+			// port, no guessing by token.
+			Env: func(b runner.Bot, env map[string]string) {
+				port := ProxyPort(b.Port)
+				if err := c.Proxy.Start(b.ID, "main", port); err != nil {
+					c.Log.Error("bot proxy did not start", "bot", b.ID, "err", err)
+					return
+				}
+				for k, v := range tgproxy.Env(port, c.bundle) {
+					env[k] = v
+				}
+			},
 			Started: func(ctx context.Context, b runner.Bot) {
 				for _, fn := range c.onStarted {
 					fn(ctx, b)
@@ -164,3 +177,9 @@ type cpuSample struct {
 	ticks int64
 	at    time.Time
 }
+
+// ProxyOffset separates proxy ports from bot ports (20000+ → 40000+).
+const ProxyOffset = 20000
+
+// ProxyPort is the tgproxy port of a bot instance listening on botPort.
+func ProxyPort(botPort int) int { return botPort + ProxyOffset }

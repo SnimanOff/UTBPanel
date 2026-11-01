@@ -30,6 +30,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store/migrations"
 	"github.com/SnimanOff/UTBPanel/backend/internal/telegram"
+	"github.com/SnimanOff/UTBPanel/backend/internal/tgproxy"
 	"github.com/SnimanOff/UTBPanel/backend/internal/users"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
@@ -63,6 +64,8 @@ type Core struct {
 	DBG       *dbgate.Browser
 	DBBackups *dbgate.Backups
 	DBChecks  *dbgate.Checks
+	Proxy     *tgproxy.Proxy
+	bundle    string
 	hostMu    sync.Mutex
 	hostLast  counters.Server
 
@@ -134,6 +137,16 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.Journal = journal.New(db, c.Mux, log)
 	c.registerSecrets()
 	c.registerBots()
+	ca, err := tgproxy.LoadCA(filepath.Join(cfg.DataDir, "tgproxy-ca"))
+	if err != nil {
+		return nil, err
+	}
+	c.bundle = filepath.Join(cfg.DataDir, "tgproxy", "ca-bundle.pem")
+	if err := ca.WriteBundle(c.bundle); err != nil {
+		return nil, err
+	}
+	os.Chmod(filepath.Dir(c.bundle), 0o755)
+	c.Proxy = &tgproxy.Proxy{CA: ca, Upstream: cfg.TelegramAPI, Log: log}
 	c.Count = counters.New()
 	c.Count.Register(c.Mux)
 	c.Host = &counters.HostSampler{Proc: counters.Root(cfg.HostProc), DataDir: cfg.DataDir}
