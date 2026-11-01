@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
+	"github.com/SnimanOff/UTBPanel/backend/internal/metrics"
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
@@ -53,6 +54,7 @@ func (c *Core) newRunner() *runner.Runner {
 			Event: func(id int64, typ, sev string, data map[string]any) {
 				c.Ev.Emit(typ, id, sev, data)
 			},
+			Usage: c.usage,
 			Started: func(ctx context.Context, b runner.Bot) {
 				for _, fn := range c.onStarted {
 					fn(ctx, b)
@@ -137,3 +139,25 @@ func (c *Core) registerLifecycle() {
 }
 
 func nowUTC() time.Time { return time.Now().UTC() }
+
+// usage turns the limits watcher's measurements into gauges; CPU comes from
+// the difference of CPU ticks between two measurements.
+func (c *Core) usage(id int64, u runner.Usage) {
+	now := time.Now()
+	c.cpuMu.Lock()
+	prev, ok := c.cpuPrev[id]
+	c.cpuPrev[id] = cpuSample{u.CPUTicks, now}
+	c.cpuMu.Unlock()
+	if ok && now.After(prev.at) && u.CPUTicks >= prev.ticks {
+		pct := float64(u.CPUTicks-prev.ticks) / 100 / now.Sub(prev.at).Seconds() * 100
+		c.Count.Gauge(id, metrics.CPU, pct)
+	}
+	c.Count.Gauge(id, metrics.RSS, float64(u.RSS))
+	c.Count.Gauge(id, metrics.OpenFiles, float64(u.OpenFiles))
+	c.Count.Gauge(id, metrics.Threads, float64(u.Threads))
+}
+
+type cpuSample struct {
+	ticks int64
+	at    time.Time
+}

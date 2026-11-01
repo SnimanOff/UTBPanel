@@ -4,6 +4,7 @@ go 1.27
 
 require (
 	github.com/SnimanOff/UTBPanel/backend/sdk v0.0.0
+	github.com/axiomhq/hyperloglog v0.3.0
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/crypto v0.58.0
 	golang.org/x/sys v0.49.0
@@ -11,9 +12,11 @@ require (
 )
 
 require (
+	github.com/dgryski/go-metro v0.0.0-20250106013310-edb8663e5e33 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.10.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/kamstrup/intmap v0.5.2 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect

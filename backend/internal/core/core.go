@@ -15,6 +15,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
+	"github.com/SnimanOff/UTBPanel/backend/internal/counters"
 	"github.com/SnimanOff/UTBPanel/backend/internal/deploy"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/ingress"
@@ -54,12 +55,15 @@ type Core struct {
 	Releases *deploy.Store
 	Pipe     *ingress.Pipeline
 	Users    *users.Tracker
+	Count    *counters.Counters
 
 	mu           sync.Mutex
 	procs        map[string]procstat.Stats
 	edge         edgeSync
 	targets      targets
 	delivery     delivery
+	cpuMu        sync.Mutex
+	cpuPrev      map[int64]cpuSample
 	onStarted    []func(context.Context, runner.Bot)
 	onStopping   []func(context.Context, runner.Bot)
 	pausedChecks []func(context.Context, int64) bool
@@ -92,11 +96,12 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	}
 	c := &Core{
 		Cfg: cfg, Log: log, DB: db,
-		W:     store.NewWriter(db, 10*time.Second, log),
-		Mux:   wire.NewMux(),
-		procs: map[string]procstat.Stats{},
-		Sec:   &secrets.Store{DB: db, Box: box, Redact: redact},
-		TG:    telegram.New(),
+		W:       store.NewWriter(db, 10*time.Second, log),
+		Mux:     wire.NewMux(),
+		procs:   map[string]procstat.Stats{},
+		cpuPrev: map[int64]cpuSample{},
+		Sec:     &secrets.Store{DB: db, Box: box, Redact: redact},
+		TG:      telegram.New(),
 	}
 	c.TG.Base = cfg.TelegramAPI
 	c.Srv = &wire.Server{
@@ -118,6 +123,8 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.Journal = journal.New(db, c.Mux, log)
 	c.registerSecrets()
 	c.registerBots()
+	c.Count = counters.New()
+	c.Count.Register(c.Mux)
 	c.Logs = c.newLogs()
 	c.registerLogs()
 	c.Runner = c.newRunner()
@@ -130,7 +137,8 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerIngress()
 	c.registerDeferred()
 	c.registerWebhooks()
-	c.Users = &users.Tracker{DB: db, W: c.W, Log: log}
+	c.Users = &users.Tracker{DB: db, W: c.W, Log: log, OnNew: c.Count.NewUser, OnBlock: c.Count.Block, OnPayment: c.Count.Payment}
+	c.Pipe.Observe = append(c.Pipe.Observe, c.Count.Observe)
 	c.Pipe.Account = append(c.Pipe.Account, c.Users.Account, c.Users.Payments)
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
