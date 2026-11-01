@@ -46,13 +46,14 @@ type Edge struct {
 
 // Core runs bots and owns secrets.
 type Core struct {
-	Common       `yaml:",inline"`
-	DataDir      string `yaml:"data_dir" env:"CORE_DATA_DIR"`
-	KeysDir      string `yaml:"keys_dir" env:"KEYS_DIR"`
-	HostProc     string `yaml:"host_proc" env:"HOST_PROC"`
-	WebhookPort  int    `yaml:"webhook_port" env:"WEBHOOK_PORT"` // public edge port in WEBHOOK_URL
-	BotPortFirst int    `yaml:"bot_port_first" env:"BOT_PORT_FIRST"`
-	BotPortLast  int    `yaml:"bot_port_last" env:"BOT_PORT_LAST"`
+	Common          `yaml:",inline"`
+	DataDir         string        `yaml:"data_dir" env:"CORE_DATA_DIR"`
+	KeysDir         string        `yaml:"keys_dir" env:"KEYS_DIR"`
+	HostProc        string        `yaml:"host_proc" env:"HOST_PROC"`
+	WebhookPort     int           `yaml:"webhook_port" env:"WEBHOOK_PORT"` // public edge port in WEBHOOK_URL
+	BotPortFirst    int           `yaml:"bot_port_first" env:"BOT_PORT_FIRST"`
+	BotPortLast     int           `yaml:"bot_port_last" env:"BOT_PORT_LAST"`
+	SDKReadyTimeout time.Duration `yaml:"sdk_ready_timeout" env:"SDK_READY_TIMEOUT"`
 	// TelegramAPI is the Bot API address; tests point it to a fake.
 	TelegramAPI string `yaml:"telegram_api" env:"TELEGRAM_API"`
 	// ServiceErrorPct: share of failed connections (over 5 min) that marks
@@ -106,6 +107,7 @@ func DefaultCore() Core {
 		WebhookPort:     8443,
 		BotPortFirst:    20000,
 		BotPortLast:     29999,
+		SDKReadyTimeout: time.Minute,
 		TelegramAPI:     "https://api.telegram.org",
 		ServiceErrorPct: 20,
 		Limits: Limits{
@@ -276,6 +278,9 @@ func (c Edge) TelegramPrefixes() []netip.Prefix {
 // Validate checks core settings.
 func (c Core) Validate() error {
 	errs := []error{c.Common.validate()}
+	if c.SDKReadyTimeout <= 0 {
+		errs = append(errs, errors.New("sdk_ready_timeout: must be positive"))
+	}
 	if c.DataDir == "" || c.KeysDir == "" {
 		errs = append(errs, errors.New("data_dir and keys_dir: must be set"))
 	}

@@ -39,18 +39,20 @@ func (c *Core) newRunner() *runner.Runner {
 	self, _ := os.Executable()
 	l := c.Cfg.Limits
 	return runner.New(runner.Config{
-		DataDir:        c.Cfg.DataDir,
-		WebhookURL:     c.WebhookURL,
-		Secrets:        c.Sec,
-		DB:             c.DB,
-		Log:            c.Log,
-		DropPrivileges: runtime.GOOS == "linux" && os.Geteuid() == 0,
-		ExecSelf:       self,
+		DataDir:         c.Cfg.DataDir,
+		WebhookURL:      c.WebhookURL,
+		Secrets:         c.Sec,
+		DB:              c.DB,
+		Log:             c.Log,
+		DropPrivileges:  runtime.GOOS == "linux" && os.Geteuid() == 0,
+		ExecSelf:        self,
+		SDKReadyTimeout: c.Cfg.SDKReadyTimeout,
 		DefaultLimits: runner.Limits{
 			Memory: int64(l.Memory), File: int64(l.File), FilesTotal: int64(l.FilesTotal),
 			OpenFiles: int64(l.OpenFiles), Threads: int64(l.Threads),
 		},
 		Hooks: runner.Hooks{
+			Readiness: func(b runner.Bot) (bool, bool) { return c.SDK.Readiness(b.ID, b.Instance) },
 			Prepare: func(_ context.Context, b runner.Bot) error {
 				uid := -1
 				if runtime.GOOS == "linux" {

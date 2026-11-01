@@ -29,10 +29,11 @@ type key struct {
 	instance string
 }
 type endpoint struct {
-	ln   net.Listener
-	srv  *wire.Server
-	conn *wire.Conn
-	info Info
+	ln    net.Listener
+	srv   *wire.Server
+	conn  *wire.Conn
+	info  Info
+	ready bool
 }
 
 type Host struct {
@@ -107,6 +108,15 @@ func (h *Host) Start(id int64, instance string, uid int) error {
 		e.info = Info{Version: r.Version, Modules: slices.Compact(modules), Connected: true}
 		return nil, nil
 	}))
+	mux.Handle("sdk.ready", func(_ context.Context, c *wire.Conn, _ wire.Raw) (any, error) {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		if h.endpoints[k] != e || e.conn != c || !slices.Contains(e.info.Modules, "ready") {
+			return nil, wire.Errorf(wire.CodeBadRequest, "ready module is not registered")
+		}
+		e.ready = true
+		return nil, nil
+	})
 	e.srv = &wire.Server{Mux: mux, Log: h.Log,
 		Hello:            wire.Hello{Proto: sdk.Protocol, Version: sdk.ProtocolVersion, MinVersion: max(1, sdk.ProtocolVersion-2), Name: "core-sdk", Caps: []string{"db", "ready", "metrics", "tasks", "flags"}},
 		HandshakeTimeout: 5 * time.Second,
@@ -117,6 +127,7 @@ func (h *Host) Start(id int64, instance string, uid int) error {
 			if e.conn == c {
 				e.conn = nil
 				e.info.Connected = false
+				e.ready = false
 			}
 		},
 	}
@@ -130,6 +141,18 @@ func (h *Host) Start(id int64, instance string, uid int) error {
 		}
 	}()
 	return nil
+}
+
+// Readiness keeps the module requirement through a disconnect. A reconnect
+// must replay Ready before this instance can finish starting.
+func (h *Host) Readiness(id int64, instance string) (usesSDK, ready bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	e := h.endpoints[key{id, instance}]
+	if e == nil {
+		return false, false
+	}
+	return slices.Contains(e.info.Modules, "ready"), e.info.Connected && e.ready
 }
 
 func (h *Host) Info(id int64, instance string) *Info {

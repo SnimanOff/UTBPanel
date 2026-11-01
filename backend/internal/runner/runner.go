@@ -71,6 +71,8 @@ type Line struct {
 type Hooks struct {
 	// Prepare must succeed before launching either process instance.
 	Prepare func(context.Context, Bot) error
+	// Readiness reports whether this instance requires an explicit SDK signal.
+	Readiness func(Bot) (usesSDK, ready bool)
 	// Output receives every line the bot prints.
 	Output func(Line)
 	// Event reports life cycle events (bot_started, bot_crashed…).
@@ -97,8 +99,9 @@ type Config struct {
 	DropPrivileges bool
 	// ExecSelf is the core binary: with DropPrivileges a bot is started as
 	// `core exec-bot`, which sets limits and the uid and then becomes the bot.
-	ExecSelf      string
-	DefaultLimits Limits
+	ExecSelf        string
+	DefaultLimits   Limits
+	SDKReadyTimeout time.Duration
 	// Proc reads /proc; nil means the real one.
 	Proc ProcReader
 }
@@ -327,7 +330,7 @@ func (r *Runner) Start(ctx context.Context, b Bot) error {
 	}()
 	r.coreLine(b.ID, "starting version %s (pid %d)", b.Version, cmd.Process.Pid)
 
-	if err := waitPort(ctx, b.Port, p.done, ReadyTimeout); err != nil {
+	if err := r.waitReady(ctx, b, p.done); err != nil {
 		r.coreLine(b.ID, "not ready: %v", err)
 		if err != ErrExited {
 			r.mu.Lock()

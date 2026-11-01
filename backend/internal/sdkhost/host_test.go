@@ -40,7 +40,7 @@ func TestRegistrationAndIsolation(t *testing.T) {
 	}
 	t.Setenv("TGPANEL_SDK", "unix://"+h.Path(1, ""))
 	t.Setenv("TGPANEL_CANARY", "")
-	k := sdk.New(sdk.WithModules("metrics"))
+	k := sdk.New(sdk.WithoutReady(), sdk.WithModules("metrics"))
 	defer k.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/sdk/ready"
 	"github.com/SnimanOff/UTBPanel/backend/sdk/wire"
 )
 
@@ -30,6 +31,19 @@ type Registration struct {
 }
 
 type Option func(*Kit)
+
+// WithoutReady keeps port-based readiness for bots that only use other modules.
+func WithoutReady() Option { return func(k *Kit) { delete(k.modules, "ready") } }
+
+// WithConnectTimeout bounds the initial ready-module registration. It has no
+// effect when TGPANEL_SDK is absent; reconnecting continues in the background.
+func WithConnectTimeout(d time.Duration) Option {
+	return func(k *Kit) {
+		if d > 0 {
+			k.connectTimeout = d
+		}
+	}
+}
 
 func WithLogger(log *slog.Logger) Option {
 	return func(k *Kit) {
@@ -50,24 +64,27 @@ func WithModules(modules ...string) Option {
 
 // Kit owns one reconnecting connection. Its methods are safe for concurrent use.
 type Kit struct {
-	mu         sync.Mutex
-	registerMu sync.Mutex
-	modules    map[string]bool
-	conn       *wire.Conn
-	changed    chan struct{}
-	client     *wire.Client
-	mux        *wire.Mux
-	log        *slog.Logger
-	path       string
-	instance   string
-	cancel     context.CancelFunc
-	done       chan struct{}
+	mu             sync.Mutex
+	registerMu     sync.Mutex
+	modules        map[string]bool
+	conn           *wire.Conn
+	changed        chan struct{}
+	client         *wire.Client
+	mux            *wire.Mux
+	log            *slog.Logger
+	path           string
+	instance       string
+	cancel         context.CancelFunc
+	done           chan struct{}
+	ready          ready.State
+	connectTimeout time.Duration
 }
 
-// New never waits for a panel. Invalid socket settings are logged and leave
-// the kit autonomous. Close releases the background reconnect loop.
+// New is immediate without TGPANEL_SDK. With ready enabled it registers before
+// returning so the runner learns to wait before the bot can open its HTTP port.
+// An unavailable configured core delays startup by at most five seconds.
 func New(options ...Option) *Kit {
-	k := &Kit{modules: map[string]bool{}, changed: make(chan struct{}), done: make(chan struct{}), mux: wire.NewMux(), log: slog.Default()}
+	k := &Kit{modules: map[string]bool{"ready": true}, changed: make(chan struct{}), done: make(chan struct{}), mux: wire.NewMux(), log: slog.Default(), connectTimeout: 5 * time.Second}
 	for _, opt := range options {
 		opt(k)
 	}
@@ -94,6 +111,14 @@ func New(options ...Option) *Kit {
 			c.Close()
 			return
 		}
+		readyCtx, readyCancel := context.WithTimeout(ctx, 5*time.Second)
+		err := k.ready.Resend(readyCtx, c)
+		readyCancel()
+		if err != nil {
+			k.log.Warn("sdk: ready signal failed", "err", err)
+			c.Close()
+			return
+		}
 		k.mu.Lock()
 		k.conn = c
 		k.signal()
@@ -111,8 +136,25 @@ func New(options ...Option) *Kit {
 		}
 	}
 	go func() { defer close(k.done); k.client.Run(ctx) }()
+	if k.modules["ready"] {
+		initial, stop := context.WithTimeout(ctx, k.connectTimeout)
+		if err := k.Wait(initial); err != nil {
+			k.log.Warn("sdk: core unavailable, using autonomous mode", "err", err)
+		}
+		stop()
+	}
 	return k
 }
+
+// Ready signals that startup work has finished. Call it after migrations and
+// warmup, before serving updates. It is harmless in autonomous mode.
+func (k *Kit) Ready() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return k.ReadyContext(ctx)
+}
+
+func (k *Kit) ReadyContext(ctx context.Context) error { return k.ready.Signal(ctx, k) }
 
 func (k *Kit) signal() { close(k.changed); k.changed = make(chan struct{}) }
 

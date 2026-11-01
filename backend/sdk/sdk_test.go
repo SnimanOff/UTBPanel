@@ -16,6 +16,9 @@ func TestAutonomous(t *testing.T) {
 	t.Setenv("TGPANEL_SDK", "")
 	k := New()
 	defer k.Close()
+	if err := k.Ready(); err != nil {
+		t.Fatal(err)
+	}
 	if k.Configured() || k.Connected() {
 		t.Fatal("unexpected connection")
 	}
@@ -49,7 +52,7 @@ func TestReconnectAndModules(t *testing.T) {
 	}
 	defer ln.Close()
 	go srv.Serve(ln)
-	k := New(WithModules("metrics"))
+	k := New(WithoutReady(), WithModules("metrics"))
 	defer k.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
@@ -81,7 +84,7 @@ func TestReconnectAndModules(t *testing.T) {
 
 func TestUnavailableDoesNotBlockNew(t *testing.T) {
 	t.Setenv("TGPANEL_SDK", "unix://"+filepath.Join(t.TempDir(), "absent.sock"))
-	k := New()
+	k := New(WithConnectTimeout(20 * time.Millisecond))
 	defer k.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()

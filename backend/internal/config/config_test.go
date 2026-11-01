@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func writeFile(t *testing.T, body string) string {
@@ -14,6 +15,21 @@ func writeFile(t *testing.T, body string) string {
 		t.Fatal(err)
 	}
 	return p
+}
+
+func TestSDKReadyTimeout(t *testing.T) {
+	t.Setenv("TGPANEL_SDK_READY_TIMEOUT", "90s")
+	cfg := DefaultCore()
+	if err := Load(&cfg, ""); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SDKReadyTimeout != 90*time.Second {
+		t.Fatal(cfg.SDKReadyTimeout)
+	}
+	t.Setenv("TGPANEL_SDK_READY_TIMEOUT", "0s")
+	if err := Load(&cfg, ""); err == nil {
+		t.Fatal("accepted zero timeout")
+	}
 }
 
 func TestPriority(t *testing.T) {

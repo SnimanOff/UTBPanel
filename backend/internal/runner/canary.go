@@ -76,7 +76,7 @@ func (r *Runner) StartCanary(ctx context.Context, b Bot) error {
 		}
 	}()
 	r.coreLine(b.ID, "starting canary %s (pid %d, port %d)", b.Version, cmd.Process.Pid, b.Port)
-	if err := waitPort(ctx, b.Port, p.done, ReadyTimeout); err != nil {
+	if err := r.waitReady(ctx, b, p.done); err != nil {
 		r.coreLine(b.ID, "canary not ready: %v", err)
 		r.mu.Lock()
 		p.stopping = true
