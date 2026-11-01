@@ -72,6 +72,7 @@
     <span class="num">{bot.status?.running ? uptime(bot.status.started) : '—'}</span>
     <span class="num">{bot.version || 'нет версии'}</span>
     {#if bot.maintenance}<span class="maint">{bot.maintenance}</span>{/if}
+    {#if bot.canary}<span class="canary">{bot.canary}</span>{/if}
     {#if (bot.panics_24h ?? 0) > 0}<span class="panics" title="Паники за 24 ч">⚠ {bot.panics_24h}</span>{/if}
   </div>
   <div class="row small">
@@ -135,6 +136,9 @@
   .panics {
     color: var(--danger);
     margin-left: auto;
+  }
+  .canary {
+    color: var(--accent-hi);
   }
   .maint {
     color: var(--warn);

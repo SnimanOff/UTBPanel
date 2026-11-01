@@ -471,6 +471,15 @@ paths:
       x-mcp: write
       responses:
         "204": { description: Done }
+  /api/bots/{id}/canary/promote:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: promote_canary
+      tags: [releases]
+      summary: Move everyone to the canary's version (deploy with observation and autorollback)
+      x-mcp: confirm
+      responses:
+        "204": { description: Done }
   /api/bots/{id}/github:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -1165,6 +1174,7 @@ components:
         version: { type: string }
         created_at: { type: string, format: date-time }
         maintenance: { type: string }
+        canary: { type: string }
     Status:
       type: object
       required: [restarts, last_exit, running]

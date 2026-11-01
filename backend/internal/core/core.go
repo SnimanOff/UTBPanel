@@ -298,6 +298,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "maintenance schedule", func() { c.runSchedule(ctx) })
 	safe.Go(c.Log, "broadcasts", func() { c.Bcast.Run(ctx) })
 	safe.Go(c.Log, "github", func() { c.runGitHub(ctx) })
+	safe.Go(c.Log, "canaries", func() { c.watchCanaries(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)

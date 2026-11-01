@@ -68,6 +68,7 @@
     <span class="num muted">{bot.version || 'нет версии'}</span>
     {#if bot.status?.running}<span class="num muted">аптайм {uptime(bot.status.started)}</span>{/if}
     {#if bot.maintenance}<span class="maint">{bot.maintenance}</span>{/if}
+    {#if bot.canary}<span class="canary">{bot.canary}</span>{/if}
     {#if (bot.status?.restarts ?? 0) > 0}<span class="num muted">рестартов {bot.status.restarts}</span>{/if}
     <span class="grow"></span>
     {#if running}
@@ -117,6 +118,9 @@
     gap: var(--s3);
     margin-bottom: var(--s3);
     flex-wrap: wrap;
+  }
+  .canary {
+    color: var(--accent-hi);
   }
   .maint {
     color: var(--warn);

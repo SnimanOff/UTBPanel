@@ -61,6 +61,9 @@ func (c *Core) newRunner() *runner.Runner {
 				if typ == "bot_crashed" {
 					c.Count.Add(id, metrics.Crashes, 1)
 				}
+				if typ == "canary_crashed" {
+					go c.StopCanary(context.Background(), id, "канарейка упала")
+				}
 				c.Ev.Emit(typ, id, sev, data)
 			},
 			Usage: c.usage,

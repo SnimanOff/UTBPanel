@@ -7,6 +7,7 @@
   import { bytes, utc } from '../../lib/format'
   import Box from '../../lib/ui/Box.svelte'
   import HoldButton from '../../lib/ui/HoldButton.svelte'
+  import Canary from './Canary.svelte'
 
   let { botId }: { botId: number } = $props()
   type GH = {
@@ -163,6 +164,7 @@
 </Box>
 
 <div class="cols">
+  <Canary {botId} {releases} onchange={load} />
   <Box title="GitHub Releases">
     <form onsubmit={saveGitHub}>
       <label>Репозиторий <input bind:value={repo} placeholder="owner/repo" /></label>

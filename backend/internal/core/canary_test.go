@@ -3,7 +3,9 @@ package core
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/deploy"
 	"github.com/SnimanOff/UTBPanel/backend/internal/ingress"
 )
 
@@ -36,5 +38,24 @@ func TestCanaryChecksAndRoute(t *testing.T) {
 	}
 	if cn, err := c.CanaryOf(ctx, b.ID); cn != nil || err != nil {
 		t.Fatalf("%v %v", cn, err)
+	}
+}
+
+func TestCanaryVerdict(t *testing.T) {
+	r := deploy.DefaultRules
+	if v, _ := CanaryVerdict(r, 6, 4, 100, 0, time.Minute, 0); v != "cancel" {
+		t.Fatalf("40%% errors: %q", v)
+	}
+	if v, _ := CanaryVerdict(r, 1, 2, 100, 0, time.Minute, 0); v != "" {
+		t.Fatal("too few updates to judge")
+	}
+	if v, _ := CanaryVerdict(r, 100, 1, 100, 1, 31*time.Minute, 30*time.Minute); v != "promote" {
+		t.Fatalf("no worse than main after 30 min: %q", v)
+	}
+	if v, _ := CanaryVerdict(r, 90, 9, 100, 0, 31*time.Minute, 30*time.Minute); v != "" {
+		t.Fatalf("more errors than main must not promote: %q", v)
+	}
+	if v, _ := CanaryVerdict(r, 100, 0, 100, 0, 10*time.Minute, 30*time.Minute); v != "" {
+		t.Fatal("promoted too early")
 	}
 }

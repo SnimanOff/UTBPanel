@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "c1d98aeb0632100ed64e1ad984fc1039f75176b8d5c080fffabe2af44dac2020"
+const GeneratedHash = "be41e66090f183444d9bdbefbec1209f61706ea67798d60de62190367be3783a"
 
 // Op is one operation of the API.
 type Op struct {
@@ -68,6 +68,7 @@ var Ops = []Op{
 	{"pause_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/pause", "write", "Pause sending; progress is kept"},
 	{"resume_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/resume", "write", "Continue a paused broadcast"},
 	{"start_canary", "POST", "/api/bots/{id}/canary", "confirm", "Start a canary with a version for listed users and/or a share of users in private chats"},
+	{"promote_canary", "POST", "/api/bots/{id}/canary/promote", "confirm", "Move everyone to the canary's version (deploy with observation and autorollback)"},
 	{"closed_allow", "POST", "/api/bots/{id}/closed/allow", "write", "Add a user to the closed mode list by id, @username (known users only) or \"me\""},
 	{"backup_db", "POST", "/api/bots/{id}/db/backups", "write", "Make a backup now (VACUUM INTO, the bot keeps running)"},
 	{"restore_db", "POST", "/api/bots/{id}/db/backups/{name}/restore", "never", "Stop the bot, restore the database from a backup, start it again"},

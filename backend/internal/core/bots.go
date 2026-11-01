@@ -38,6 +38,8 @@ type Bot struct {
 	CreatedAt time.Time `cbor:"8,keyasint" json:"created_at"`
 	// Maintenance: "пауза" or "техработы 18:00–19:00", empty when none.
 	Maintenance string `cbor:"9,keyasint,omitempty" json:"maintenance,omitempty"`
+	// Canary: "канарейка v2 · 10 %", empty when none.
+	Canary string `cbor:"10,keyasint,omitempty" json:"canary,omitempty"`
 }
 
 // CreateBot is the request to add a bot.
@@ -94,6 +96,7 @@ func (c *Core) Bots(ctx context.Context) ([]Bot, error) {
 		}
 		if c.Maint != nil {
 			b.Maintenance = c.maintLabel(ctx, b.ID)
+			b.Canary = c.canaryLabel(ctx, b.ID)
 		}
 		out = append(out, b)
 	}
@@ -108,6 +111,7 @@ func (c *Core) Bot(ctx context.Context, id int64) (Bot, error) {
 	}
 	if err == nil && c.Maint != nil {
 		b.Maintenance = c.maintLabel(ctx, b.ID)
+		b.Canary = c.canaryLabel(ctx, b.ID)
 	}
 	return b, err
 }

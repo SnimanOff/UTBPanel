@@ -13,6 +13,7 @@ func (s *Service) registerCanary(mux *api.Mux) {
 	mux.HandleFunc("POST /api/bots/{id}/canary", s.canaryOp("canary.start"))
 	mux.HandleFunc("PATCH /api/bots/{id}/canary", s.canaryOp("canary.set"))
 	mux.HandleFunc("DELETE /api/bots/{id}/canary", s.canaryOp("canary.stop"))
+	mux.HandleFunc("POST /api/bots/{id}/canary/promote", s.canaryOp("canary.promote"))
 }
 
 func (s *Service) getCanary(w http.ResponseWriter, r *http.Request) {

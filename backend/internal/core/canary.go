@@ -54,9 +54,12 @@ type canaryRoute struct {
 }
 
 type canaryRoutes struct {
-	mu sync.RWMutex
-	m  map[int64]canaryRoute
+	mu    sync.RWMutex
+	m     map[int64]canaryRoute
+	stats map[int64]*canaryStats
 }
+
+var errNoCanary = wire.Errorf(wire.CodeNotFound, "канарейки нет")
 
 // route is the pipeline's Route: users of the canary go to its port.
 func (c *Core) route(u *ingress.Update) (int, bool) {
@@ -156,6 +159,8 @@ func (c *Core) StartCanary(ctx context.Context, in CanaryReq) error {
 		c.Proxy.Stop(in.BotID, "canary")
 		return runnerError(err)
 	}
+	c.dropCanaryStats(in.BotID)
+	c.canaryStatsOf(in.BotID)
 	c.setRoute(in.BotID, &canaryRoute{port: cb.Port, share: in.Share, users: userSet(in.Users)})
 	c.Ev.Emit("canary", in.BotID, events.Info, map[string]any{"action": "started", "version": in.Version, "share": in.Share, "users": len(in.Users)})
 	return nil
@@ -178,7 +183,7 @@ func (c *Core) SetCanary(ctx context.Context, in CanaryReq) error {
 		return err
 	}
 	if cn == nil {
-		return wire.Errorf(wire.CodeNotFound, "канарейки нет")
+		return errNoCanary
 	}
 	users, _ := json.Marshal(nonNilIDs(in.Users))
 	if _, err := c.DB.W.ExecContext(ctx, `UPDATE canaries SET share = ?, users = ?, auto_after = ? WHERE bot_id = ?`,
@@ -201,6 +206,7 @@ func (c *Core) StopCanary(ctx context.Context, botID int64, reason string) error
 		return err
 	}
 	c.setRoute(botID, nil)
+	c.dropCanaryStats(botID)
 	c.Runner.StopCanary(botID)
 	c.Proxy.Stop(botID, "canary")
 	c.DB.W.ExecContext(ctx, `DELETE FROM canaries WHERE bot_id = ?`, botID)
@@ -211,6 +217,7 @@ func (c *Core) StopCanary(ctx context.Context, botID int64, reason string) error
 
 func (c *Core) registerCanary() {
 	c.Pipe.Route = c.route
+	c.Pipe.Observe = append(c.Pipe.Observe, c.observeCanary)
 	// A canary does not outlive the core: users are back on the main
 	// instance after a restart.
 	if rows, err := c.DB.R.Query(`SELECT bot_id, version FROM canaries`); err == nil {
@@ -248,6 +255,11 @@ func (c *Core) registerCanary() {
 	c.Mux.Handle("canary.set", wire.Func(func(ctx context.Context, _ *wire.Conn, in CanaryReq) (struct{}, error) {
 		return struct{}{}, c.Journal.Do(ctx, in.Actor, "canary.set", in.BotID, map[string]any{"share": in.Share, "users": len(in.Users)}, func() error {
 			return c.SetCanary(ctx, in)
+		})
+	}))
+	c.Mux.Handle("canary.promote", wire.Func(func(ctx context.Context, _ *wire.Conn, in CanaryReq) (struct{}, error) {
+		return struct{}{}, c.Journal.Do(ctx, in.Actor, "canary.promote", in.BotID, nil, func() error {
+			return c.PromoteCanary(ctx, in.BotID, in.Actor)
 		})
 	}))
 	c.Mux.Handle("canary.stop", wire.Func(func(ctx context.Context, _ *wire.Conn, in CanaryReq) (struct{}, error) {
