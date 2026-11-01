@@ -23,6 +23,7 @@
   let closed = $state<Schemas['ClosedState']>({ enabled: false, text: '', allow: [] })
   let unavailable = $state('')
   let tz = $state(defaultTZ)
+  let crashUpdates = $state(false)
   let who = $state('')
   let note = $state('')
   let error = $state('')
@@ -34,6 +35,7 @@
       flood = { ...floodDefault, ...(s.antiflood ?? {}) }
       unavailable = s.texts?.unavailable ?? ''
       tz = s.tz || defaultTZ
+      crashUpdates = !!s.crash_updates
       closed = await api.get<Schemas['ClosedState']>(`/api/bots/${botId}/closed`)
     } catch (e) {
       error = errorText(e)
@@ -123,6 +125,18 @@
       <textarea rows="2" bind:value={unavailable} placeholder="Бот перезапускается, попробуйте через минуту"></textarea>
     </label>
     <div><button onclick={saveTexts}>Сохранить</button></div>
+  </Box>
+
+  <Box title="Апдейты при падениях">
+    <label class="check">
+      <input
+        type="checkbox"
+        bind:checked={crashUpdates}
+        onchange={() => section('crash_updates', new Blob([JSON.stringify(crashUpdates)], { type: 'application/json' }), crashUpdates ? 'Сохранение включено' : 'Сохранение выключено, сохранённое удалено')}
+      />
+      сохранять апдейты, бывшие в обработке при падении или ответе 5xx
+    </label>
+    <p class="muted">Это сообщения пользователей: последние 20, 7 дней, только во вкладке «Паники». В архив переноса не попадают.</p>
   </Box>
 
   <Box title="Часовой пояс текстов">

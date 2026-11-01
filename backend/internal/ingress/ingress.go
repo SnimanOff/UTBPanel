@@ -46,6 +46,8 @@ type Update struct {
 	MemberStatus string
 	// Instance that got the update: "" (main) or "canary".
 	Instance string
+	// Failure is "crash" when the bot dropped the connection mid-update.
+	Failure string
 }
 
 // Payment is a successful or refunded payment.
@@ -365,6 +367,7 @@ func (p *Pipeline) forward(ctx context.Context, u *Update) (edge.Reply, string, 
 		if errors.As(err, &oe) && oe.Op == "dial" {
 			return edge.Reply{Status: http.StatusOK}, "unavailable", lat
 		}
+		u.Failure = "crash"
 		return edge.Reply{Status: http.StatusBadGateway}, "error", lat
 	}
 	defer resp.Body.Close()

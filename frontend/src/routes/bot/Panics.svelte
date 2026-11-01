@@ -8,11 +8,15 @@
   type G = Schemas['PanicGroup']
   let groups = $state<G[]>([])
   let open = $state<number | null>(null)
+  type CU = { id: number; ts: string; status: number; reason: string; body: unknown }
+  let crashes = $state<CU[]>([])
+  let openCU = $state<number | null>(null)
   let error = $state('')
 
   async function load() {
     try {
       groups = await api.get<G[]>(`/api/bots/${botId}/panics`)
+      crashes = await api.get<CU[]>(`/api/bots/${botId}/crash-updates`)
     } catch (e) {
       error = errorText(e)
     }
@@ -45,7 +49,30 @@
   </section>
 {/each}
 
+<h2 class="sub">Апдейты в момент падения</h2>
+{#if crashes.length === 0}
+  <p class="muted">Нет. Включите «Сохранять апдейты при падениях» в настройках бота — тела апдейтов, бывших в обработке при падении или ответе 5xx, сохранятся здесь (последние 20, 7 дней).</p>
+{/if}
+{#each crashes as cu (cu.id)}
+  {@const near = groups.find((g) => Math.abs(new Date(g.last_at).getTime() - new Date(cu.ts).getTime()) < 10000)}
+  <section class="group crash">
+    <button class="head" onclick={() => (openCU = openCU === cu.id ? null : cu.id)}>
+      <span class="num">{utc(cu.ts, true)}</span>
+      <span>{cu.reason === 'crash' ? 'падение' : cu.reason === 'timeout' ? 'таймаут' : `ответ ${cu.status}`}</span>
+      {#if near}<span class="muted">· {near.kind}</span>{/if}
+    </button>
+    {#if openCU === cu.id}<pre>{JSON.stringify(cu.body, null, 2)}</pre>{/if}
+  </section>
+{/each}
+
 <style>
+  .sub {
+    font-size: var(--fs-m);
+    margin: var(--s4) 0 var(--s2);
+  }
+  .group.crash {
+    border-left-color: var(--warn);
+  }
   .group {
     border: var(--line);
     border-left: 3px solid var(--danger);

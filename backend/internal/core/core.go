@@ -70,6 +70,7 @@ type Core struct {
 	watch     watches
 	canaries  canaryRoutes
 	parsers   panicParsers
+	crashSet  crashSetting
 	rules     deploy.Rules // autorollback; zero means deploy.DefaultRules
 	warnHook  func(ctx context.Context, botID int64, text string) error
 	Count     *counters.Counters
@@ -204,6 +205,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.GH = github.New()
 	c.registerGitHub()
 	c.registerCanary()
+	c.registerCrashUpdates()
 	c.registerBotSettings()
 	c.registerBans()
 	c.registerClosed()

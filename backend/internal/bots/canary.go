@@ -14,6 +14,7 @@ func (s *Service) registerCanary(mux *api.Mux) {
 	mux.HandleFunc("PATCH /api/bots/{id}/canary", s.canaryOp("canary.set"))
 	mux.HandleFunc("DELETE /api/bots/{id}/canary", s.canaryOp("canary.stop"))
 	mux.HandleFunc("POST /api/bots/{id}/canary/promote", s.canaryOp("canary.promote"))
+	mux.HandleFunc("GET /api/bots/{id}/crash-updates", s.crashUpdates)
 }
 
 func (s *Service) getCanary(w http.ResponseWriter, r *http.Request) {
@@ -66,4 +67,18 @@ func (s *Service) canaryOp(method string) http.HandlerFunc {
 		audit.Annotate(r, method, in.Version, map[string]any{"share": in.Share, "users": len(in.Users)})
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// crashUpdates lists updates kept at crashes (crash_updates setting).
+func (s *Service) crashUpdates(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var out []core.CrashUpdate
+	if err := s.Call(r.Context(), "crash_updates.list", id, &out); err != nil {
+		WriteCoreError(w, err)
+		return
+	}
+	api.WriteJSON(w, http.StatusOK, out)
 }

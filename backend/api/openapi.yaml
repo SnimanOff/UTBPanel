@@ -489,6 +489,15 @@ paths:
       x-mcp: read
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PanicGroup" } } } } }
+  /api/bots/{id}/crash-updates:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: list_crash_updates
+      tags: [logs]
+      summary: Updates that were with the bot when it fell or answered 5xx (with the crash_updates setting; last 20, 7 days)
+      x-mcp: never
+      responses:
+        "200": { description: OK }
   /api/panics/summary:
     get:
       operationId: panics_summary

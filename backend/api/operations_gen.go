@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "dc865518982dcf7d3ec3e0ed18a370adaffeee8c4f59e57d8253d1ea939c1ead"
+const GeneratedHash = "a331d79ccea22b8e90afdb9845c8fae67ee6e5ad01c1f4cd4c570c0828f6dee3"
 
 // Op is one operation of the API.
 type Op struct {
@@ -26,6 +26,7 @@ var Ops = []Op{
 	{"get_broadcast", "GET", "/api/bots/{id}/broadcasts/{bid}", "read", "One broadcast with its progress"},
 	{"get_canary", "GET", "/api/bots/{id}/canary", "read", "The canary of the bot (second instance with a new version), or null"},
 	{"get_closed", "GET", "/api/bots/{id}/closed", "read", "Closed mode of the bot and its list"},
+	{"list_crash_updates", "GET", "/api/bots/{id}/crash-updates", "never", "Updates that were with the bot when it fell or answered 5xx (with the crash_updates setting; last 20, 7 days)"},
 	{"get_db_schema", "GET", "/api/bots/{id}/db", "read", "Tables of the bot database with schema, row counts and size"},
 	{"list_db_backups", "GET", "/api/bots/{id}/db/backups", "read", "Backups of the bot database (checked with integrity_check)"},
 	{"download_db_backup", "GET", "/api/bots/{id}/db/backups/{name}", "never", "Download a backup file"},
