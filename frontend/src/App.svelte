@@ -9,6 +9,7 @@
   import Keys from './routes/Keys.svelte'
   import Audit from './routes/Audit.svelte'
   import Server from './routes/Server.svelte'
+  import Mini from './routes/Mini.svelte'
 
   const titles: Record<string, string> = {
     home: 'Главная',
@@ -25,7 +26,7 @@
 </script>
 
 {#if r.name === 'mini'}
-  <Placeholder title="Мини-окно" />
+  <Mini />
 {:else}
   <Header />
   <main>

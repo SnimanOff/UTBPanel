@@ -25,6 +25,7 @@ const runName = "TGPanelGate"
 // tray shows the icon with the menu and Windows notifications; it blocks
 // until "Выход".
 func tray(ctx context.Context, stop context.CancelFunc, g *gate.Gate) {
+	var win mini
 	systray.Run(func() {
 		systray.SetIcon(icon(false))
 		systray.SetTooltip("TG Panel")
@@ -36,7 +37,8 @@ func tray(ctx context.Context, stop context.CancelFunc, g *gate.Gate) {
 		systray.AddSeparator()
 		auto := systray.AddMenuItemCheckbox("Запускать вместе с Windows", "", autostart())
 		quit := systray.AddMenuItem("Выход", "")
-		systray.SetOnTapped(g.OpenPanel) // a click on the icon opens the panel
+		// A click on the icon opens the small window; the menu opens the panel.
+		systray.SetOnTapped(func() { win.open(g) })
 
 		go g.Watch(ctx, func(n gate.Note) {
 			if n.Severity == "ok" || n.Severity == "error" || n.Severity == "warn" {
@@ -75,6 +77,7 @@ func tray(ctx context.Context, stop context.CancelFunc, g *gate.Gate) {
 						auto.Check()
 					}
 				case <-quit.ClickedCh:
+					win.close()
 					stop()
 					systray.Quit()
 					return
