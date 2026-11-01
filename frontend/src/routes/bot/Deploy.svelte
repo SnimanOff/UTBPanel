@@ -21,6 +21,7 @@
   }
   let releases = $state<Release[]>([])
   let deploys = $state<Schemas['DeployRecord'][]>([])
+  let reports = $state<Schemas['DeployReport'][]>([])
   let gh = $state<GH | null>(null)
   let repo = $state('')
   let mask = $state('*linux_amd64*')
@@ -39,6 +40,7 @@
         api.get<Release[]>(`/api/bots/${botId}/releases`),
         api.get<Schemas['DeployRecord'][]>(`/api/bots/${botId}/deploys`),
       ])
+      reports = await api.get<Schemas['DeployReport'][]>(`/api/bots/${botId}/deploy-reports`)
       const g = await api.get<{ github: GH | null }>(`/api/bots/${botId}/github`)
       gh = g.github
       if (gh) {
@@ -103,6 +105,15 @@
   const dropToken = () => run(() => api.put(`/api/bots/${botId}/github`, { repo, asset_mask: mask, auto_deploy: auto, token: '' }), 'Токен удалён')
   const check = () => run(() => api.post(`/api/bots/${botId}/github/check`), 'Проверено')
 
+  type Sum = Schemas['DeploySummary']
+  const rows: [string, (s: Sum) => string][] = [
+    ['апдейты', (s) => String(s.updates)],
+    ['ошибки', (s) => `${s.errors} (${(s.err_rate * 100).toFixed(1)}%)`],
+    ['p95', (s) => `${Math.round(s.p95_ms)} мс`],
+    ['падения', (s) => String(s.crashes)],
+    ['CPU', (s) => `${s.cpu_avg.toFixed(1)}%`],
+    ['RAM', (s) => bytes(s.rss_max)],
+  ]
   const results: Record<string, string> = {
     running: 'идёт', observing: 'наблюдение', ok: 'готово', failed: 'ошибка', rolled_back: 'откачен',
   }
@@ -200,7 +211,38 @@
   </Box>
 </div>
 
+{#if reports.length}
+  <Box title="Отчёты: час до и час после деплоя">
+    <div class="reports">
+      {#each reports as r (r.deploy_id)}
+        <div class="report" class:bad={r.worse.length > 0}>
+          <div class="num">{r.version} · {utc(new Date(r.ts * 1000).toISOString())}</div>
+          <table>
+            <thead><tr><th></th><th>до</th><th>после</th></tr></thead>
+            <tbody>
+              {#each rows as [label, f]}<tr><td class="muted">{label}</td><td class="num">{f(r.before)}</td><td class="num">{f(r.after)}</td></tr>{/each}
+            </tbody>
+          </table>
+          {#each r.worse as w}<p class="danger">{w}</p>{/each}
+        </div>
+      {/each}
+    </div>
+  </Box>
+{/if}
+
 <style>
+  .reports {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: var(--s3);
+  }
+  .report {
+    border: var(--line);
+    padding: var(--s2);
+  }
+  .report.bad {
+    border-color: var(--danger);
+  }
   table {
     width: 100%;
   }

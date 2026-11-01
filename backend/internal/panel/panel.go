@@ -146,6 +146,15 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	p.Metrics = &metrics.Storage{DB: db, W: p.W, Log: log}
 	(&metrics.API{S: p.Metrics, Core: p.Core}).Register(p.API.Mux)
 	(&metrics.ServicesAPI{S: p.Metrics}).Register(p.API.Mux)
+	(&metrics.ReportsAPI{S: p.Metrics}).Register(p.API.Mux)
+	p.Go(func(ctx context.Context) {
+		p.Metrics.RunReports(ctx, func(botID int64, data map[string]any) {
+			ev := events.Event{Type: "deploy_worse", BotID: botID, Severity: events.Warn, Data: data}
+			if err := p.Core.Call(ctx, events.MethodEmit, ev, nil); err != nil {
+				log.Warn("deploy report event not sent", "bot", botID, "err", err)
+			}
+		})
+	})
 	p.Events.Subscribe(p.Metrics.OnCoreEvent)
 	usersAPI := &users.API{Core: p.Core, WriteErr: bots.WriteCoreError}
 	usersAPI.Register(p.API.Mux)

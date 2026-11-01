@@ -54,6 +54,7 @@ type Event struct {
 // Socket names.
 const (
 	MethodSince = "events.since"
+	MethodEmit  = "events.emit" // panel → core: an event found by the panel
 	EventPush   = "event"
 )
 
@@ -81,6 +82,10 @@ func NewBus(db *store.DB, srv *wire.Server, mux *wire.Mux, log *slog.Logger) *Bu
 	b := &Bus{db: db, srv: srv, log: log}
 	mux.Handle(MethodSince, wire.Func(func(ctx wire.Context, _ *wire.Conn, after int64) ([]Event, error) {
 		return b.Since(ctx, after, 1000)
+	}))
+	// The panel's own findings (deploy reports) share the core's ids.
+	mux.Handle(MethodEmit, wire.Func(func(_ wire.Context, _ *wire.Conn, ev Event) (Event, error) {
+		return b.Emit(ev.Type, ev.BotID, ev.Severity, ev.Data), nil
 	}))
 	return b
 }

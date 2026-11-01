@@ -53,6 +53,9 @@ func (c *Core) newRunner() *runner.Runner {
 		Hooks: runner.Hooks{
 			Output: func(l runner.Line) { c.Logs.Add(l.BotID, l.Stream, l.Text, l.Time) },
 			Event: func(id int64, typ, sev string, data map[string]any) {
+				if typ == "bot_crashed" {
+					c.Count.Add(id, metrics.Crashes, 1)
+				}
 				c.Ev.Emit(typ, id, sev, data)
 			},
 			Usage: c.usage,

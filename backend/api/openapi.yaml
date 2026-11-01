@@ -410,6 +410,15 @@ paths:
       x-mcp: read
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/DeployRecord" } } } } }
+  /api/bots/{id}/deploy-reports:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: list_deploy_reports
+      tags: [releases]
+      summary: Hour before vs hour after each deploy (updates, errors, p95, crashes, CPU, RAM) and what got worse
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/DeployReport" } } } } }
   /api/bots/{id}/github:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -1314,6 +1323,28 @@ components:
         finished_at: { type: string, format: date-time }
         result: { type: string, enum: [running, observing, ok, failed, rolled_back] }
         error: { type: string }
+    DeploySummary:
+      type: object
+      required: [minutes, updates, errors, err_rate, p95_ms, crashes, cpu_avg, rss_max]
+      properties:
+        minutes: { type: integer }
+        updates: { type: integer }
+        errors: { type: integer }
+        err_rate: { type: number }
+        p95_ms: { type: number }
+        crashes: { type: integer }
+        cpu_avg: { type: number }
+        rss_max: { type: number }
+    DeployReport:
+      type: object
+      required: [deploy_id, ts, version, before, after, worse]
+      properties:
+        deploy_id: { type: integer }
+        ts: { type: integer }
+        version: { type: string }
+        before: { $ref: "#/components/schemas/DeploySummary" }
+        after: { $ref: "#/components/schemas/DeploySummary" }
+        worse: { type: array, items: { type: string } }
     BanRequest:
       type: object
       required: [reason]
