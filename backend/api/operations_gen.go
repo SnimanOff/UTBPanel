@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "e2b77f74321f9db5be3f4e4112e163833d01d65e320b9001fc05baadf9325974"
+const GeneratedHash = "d4df21a0a02968e957029c745481a8335db6db6cbd1806c8e2bc55ac2be9249a"
 
 // Op is one operation of the API.
 type Op struct {
@@ -29,6 +29,7 @@ var Ops = []Op{
 	{"get_logs", "GET", "/api/bots/{id}/logs", "read", "Last lines, or a search with from/to/search=1"},
 	{"download_logs", "GET", "/api/bots/{id}/logs/download", "never", "All log files as zip"},
 	{"stream_logs", "GET", "/api/bots/{id}/logs/stream", "never", "Live log lines (Server-Sent Events)"},
+	{"get_maintenance", "GET", "/api/bots/{id}/maintenance", "read", "Pause or maintenance of the bot, if any"},
 	{"get_metrics", "GET", "/api/bots/{id}/metrics", "read", "Metrics of the bot for a period, with user numbers and deploy marks"},
 	{"list_versions", "GET", "/api/bots/{id}/releases", "read", "Stored versions with build data"},
 	{"list_secrets", "GET", "/api/bots/{id}/secrets", "read", "Names of the bot's secrets; values are never returned"},
@@ -55,6 +56,8 @@ var Ops = []Op{
 	{"restore_db", "POST", "/api/bots/{id}/db/backups/{name}/restore", "never", "Stop the bot, restore the database from a backup, start it again"},
 	{"exec_db", "POST", "/api/bots/{id}/db/exec", "never", "SQL that writes to the bot database (held button in the panel; the text goes to the audit)"},
 	{"query_db", "POST", "/api/bots/{id}/db/query", "read", "Read-only SQL (the connection is query_only; the text is not inspected)"},
+	{"schedule_maintenance", "POST", "/api/bots/{id}/maintenance", "confirm", "Plan maintenance (times in UTC; text with {start} and {end}; optionally switch to a version)"},
+	{"extend_maintenance", "POST", "/api/bots/{id}/maintenance/extend", "write", "Move the planned end (+15, +30, +60 minutes)"},
 	{"pause", "POST", "/api/bots/{id}/pause", "write", "Pause the bot: the process runs, users get the maintenance text, payments wait"},
 	{"upload_release", "POST", "/api/bots/{id}/releases", "write", "Upload a static linux/amd64 binary as a new version (does not deploy it)"},
 	{"deploy_release", "POST", "/api/bots/{id}/releases/{version}/switch", "confirm", "Switch the bot to a stored version"},

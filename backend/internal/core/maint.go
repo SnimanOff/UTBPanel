@@ -104,3 +104,71 @@ func (c *Core) registerMaintenance() {
 		})
 	}))
 }
+
+// ScheduleReq plans maintenance.
+type ScheduleReq struct {
+	Plan    maintenance.Plan `cbor:"1,keyasint"`
+	Minutes int              `cbor:"2,keyasint,omitempty"` // extend
+	Actor   journal.Actor    `cbor:"9,keyasint"`
+}
+
+var scheduleActor = journal.Actor{Source: journal.SourceSchedule, Name: "schedule"}
+
+// runSchedule starts planned maintenance, deploys the chosen version and
+// notices overdue maintenance.
+func (c *Core) runSchedule(ctx context.Context) {
+	c.Maint.Run(ctx, maintenance.Hooks{
+		Deploy: func(ctx context.Context, botID int64, version string) error {
+			return c.Journal.Do(ctx, scheduleActor, "releases.switch", botID, map[string]string{"version": version}, func() error {
+				return c.SwitchVersion(ctx, SwitchVersion{BotID: botID, Version: version, Actor: scheduleActor})
+			})
+		},
+		Event: func(botID int64, typ string, data map[string]any) {
+			c.Ev.Emit(typ, botID, events.Warn, data)
+		},
+		Warn: c.maintWarn,
+	})
+}
+
+func (c *Core) registerSchedule() {
+	c.Mux.Handle("maintenance.schedule", wire.Func(func(ctx context.Context, _ *wire.Conn, in ScheduleReq) (struct{}, error) {
+		return struct{}{}, c.Journal.Do(ctx, in.Actor, "maintenance.schedule", in.Plan.BotID, in.Plan, func() error {
+			if err := c.botExists(ctx, in.Plan.BotID); err != nil {
+				return err
+			}
+			if in.Plan.Version != "" && !c.Releases.Exists(in.Plan.BotID, in.Plan.Version) {
+				return wire.Errorf(wire.CodeNotFound, "нет версии %s", in.Plan.Version)
+			}
+			switch err := c.Maint.Schedule(ctx, in.Plan); err {
+			case nil:
+				return nil
+			case maintenance.ErrTimes:
+				return wire.Errorf(wire.CodeBadRequest, "окончание должно быть позже начала")
+			case maintenance.ErrPast:
+				return wire.Errorf(wire.CodeBadRequest, "окончание уже прошло")
+			case maintenance.ErrActive:
+				return wire.Errorf("conflict", "у бота уже идут техработы")
+			default:
+				return err
+			}
+		})
+	}))
+	c.Mux.Handle("maintenance.extend", wire.Func(func(ctx context.Context, _ *wire.Conn, in ScheduleReq) (struct{}, error) {
+		return struct{}{}, c.Journal.Do(ctx, in.Actor, "maintenance.extend", in.Plan.BotID, map[string]int{"minutes": in.Minutes}, func() error {
+			if in.Minutes <= 0 || in.Minutes > 24*60 {
+				return wire.Errorf(wire.CodeBadRequest, "продлить можно на 1–1440 минут")
+			}
+			return c.Maint.Extend(ctx, in.Plan.BotID, time.Duration(in.Minutes)*time.Minute)
+		})
+	}))
+}
+
+// maintWarn sends the early warning; it works once broadcasts exist.
+func (c *Core) maintWarn(ctx context.Context, m maintenance.M, text string) error {
+	if c.warnHook == nil {
+		return errNoBroadcast
+	}
+	return c.warnHook(ctx, m.BotID, text)
+}
+
+var errNoBroadcast = wire.Errorf("unavailable", "broadcasts are not available yet")

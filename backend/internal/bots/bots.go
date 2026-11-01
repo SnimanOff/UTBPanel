@@ -18,6 +18,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
 	"github.com/SnimanOff/UTBPanel/backend/internal/core"
 	"github.com/SnimanOff/UTBPanel/backend/internal/logs"
+	"github.com/SnimanOff/UTBPanel/backend/internal/maintenance"
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
 	"github.com/SnimanOff/UTBPanel/backend/internal/secrets"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
@@ -92,6 +93,9 @@ func (s *Service) Register(mux *api.Mux) {
 	mux.HandleFunc("POST /api/bots/{id}/restart", s.lifecycle("bots.restart"))
 	mux.HandleFunc("POST /api/bots/{id}/pause", s.maint("maintenance.pause", "bot.pause"))
 	mux.HandleFunc("POST /api/bots/{id}/resume", s.maint("maintenance.end", "bot.resume"))
+	mux.HandleFunc("GET /api/bots/{id}/maintenance", s.getMaint)
+	mux.HandleFunc("POST /api/bots/{id}/maintenance", s.schedule)
+	mux.HandleFunc("POST /api/bots/{id}/maintenance/extend", s.extend)
 	mux.HandleFunc("GET /api/bots/{id}/settings", s.settings)
 	mux.HandleFunc("PATCH /api/bots/{id}/settings", s.updateSettings)
 	mux.HandleFunc("PUT /api/bots/{id}/settings/{section}", s.putSection)
@@ -620,4 +624,56 @@ func (s *Service) maint(method, action string) http.HandlerFunc {
 		audit.Annotate(r, action, "", nil)
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func (s *Service) getMaint(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var m *maintenance.M
+	if err := s.Call(r.Context(), "maintenance.get", id, &m); err != nil {
+		WriteCoreError(w, err)
+		return
+	}
+	api.WriteJSON(w, http.StatusOK, map[string]any{"maintenance": m})
+}
+
+// schedule plans maintenance; times are in UTC like everything in the panel.
+func (s *Service) schedule(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var p maintenance.Plan
+	if !decode(w, r, &p) {
+		return
+	}
+	p.BotID = id
+	if err := s.Call(r.Context(), "maintenance.schedule", core.ScheduleReq{Plan: p, Actor: api.Actor(r.Context())}, nil); err != nil {
+		WriteCoreError(w, err)
+		return
+	}
+	audit.Annotate(r, "maintenance.schedule", p.Version, map[string]any{"starts_at": p.StartsAt, "ends_at": p.EndsAt})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Service) extend(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		Minutes int `json:"minutes"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	req := core.ScheduleReq{Plan: maintenance.Plan{BotID: id}, Minutes: in.Minutes, Actor: api.Actor(r.Context())}
+	if err := s.Call(r.Context(), "maintenance.extend", req, nil); err != nil {
+		WriteCoreError(w, err)
+		return
+	}
+	audit.Annotate(r, "maintenance.extend", "", map[string]any{"minutes": in.Minutes})
+	w.WriteHeader(http.StatusNoContent)
 }

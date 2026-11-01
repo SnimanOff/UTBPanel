@@ -63,6 +63,7 @@ type Core struct {
 	Closed    *users.Closed
 	Flood     *users.Antiflood
 	Maint     *maintenance.Service
+	warnHook  func(ctx context.Context, botID int64, text string) error
 	Count     *counters.Counters
 	Host      *counters.HostSampler
 	Live      *counters.Live
@@ -186,6 +187,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	// Steps 7–10: ban, closed mode, maintenance, antiflood.
 	c.Pipe.Checks = append(c.Pipe.Checks, c.Bans.Check, c.Closed.Check, c.Maint.Check, c.Flood.Check)
 	c.registerMaintenance()
+	c.registerSchedule()
 	c.registerBotSettings()
 	c.registerBans()
 	c.registerClosed()
@@ -278,6 +280,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "proxy bypass check", func() { c.checkBypass(ctx) })
 	safe.Go(c.Log, "services", func() { c.watchServices(ctx) })
 	safe.Go(c.Log, "bans", func() { c.Bans.Run(ctx) })
+	safe.Go(c.Log, "maintenance schedule", func() { c.runSchedule(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)

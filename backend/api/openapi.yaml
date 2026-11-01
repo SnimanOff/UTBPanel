@@ -218,6 +218,51 @@ paths:
       responses:
         "204": { description: Done }
 
+  /api/bots/{id}/maintenance:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_maintenance
+      tags: [lifecycle]
+      summary: Pause or maintenance of the bot, if any
+      x-mcp: read
+      responses:
+        "200": { description: OK }
+    post:
+      operationId: schedule_maintenance
+      tags: [lifecycle]
+      summary: Plan maintenance (times in UTC; text with {start} and {end}; optionally switch to a version)
+      x-mcp: confirm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [starts_at, ends_at]
+              properties:
+                starts_at: { type: string, format: date-time }
+                ends_at: { type: string, format: date-time }
+                text: { type: string }
+                version: { type: string }
+                auto_end: { type: boolean }
+                warn_hours: { type: integer }
+      responses:
+        "204": { description: Done }
+  /api/bots/{id}/maintenance/extend:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: extend_maintenance
+      tags: [lifecycle]
+      summary: Move the planned end (+15, +30, +60 minutes)
+      x-mcp: write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [minutes], properties: { minutes: { type: integer } } }
+      responses:
+        "204": { description: Done }
+
   /api/bots/{id}/settings:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
