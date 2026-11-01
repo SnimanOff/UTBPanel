@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
+	"github.com/SnimanOff/UTBPanel/backend/internal/broadcast"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
 	"github.com/SnimanOff/UTBPanel/backend/internal/counters"
@@ -63,6 +64,7 @@ type Core struct {
 	Closed    *users.Closed
 	Flood     *users.Antiflood
 	Maint     *maintenance.Service
+	Bcast     *broadcast.Service
 	warnHook  func(ctx context.Context, botID int64, text string) error
 	Count     *counters.Counters
 	Host      *counters.HostSampler
@@ -189,6 +191,8 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerMaintenance()
 	c.registerSchedule()
 	c.registerProfile()
+	c.Bcast = c.newBroadcasts()
+	c.registerBroadcasts()
 	c.registerBotSettings()
 	c.registerBans()
 	c.registerClosed()
@@ -282,6 +286,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "services", func() { c.watchServices(ctx) })
 	safe.Go(c.Log, "bans", func() { c.Bans.Run(ctx) })
 	safe.Go(c.Log, "maintenance schedule", func() { c.runSchedule(ctx) })
+	safe.Go(c.Log, "broadcasts", func() { c.Bcast.Run(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)

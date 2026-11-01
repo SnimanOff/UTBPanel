@@ -33,6 +33,10 @@ func (w *apiWatch) touch(m map[int64]time.Time, id int64) {
 func (c *Core) onCall(call tgproxy.Call) {
 	id := call.BotID
 	c.Count.Add(id, "api_calls", 1)
+	// The bot's own calls come first; broadcasts get the rest of the second.
+	if c.Bcast != nil && !call.Local {
+		c.Bcast.Limit.Note(id)
+	}
 	if call.Method != "" {
 		c.Count.Add(id, "api_m_"+call.Method, 1)
 	}

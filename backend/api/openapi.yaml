@@ -24,6 +24,7 @@ tags:
   - name: db
   - name: network
   - name: profile
+  - name: broadcasts
   - name: groups
   - name: audit
   - name: keys
@@ -295,6 +296,110 @@ paths:
                 menu: { $ref: "#/components/schemas/MenuButton" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProfileSaved" } } } }
+
+  /api/bots/{id}/broadcasts:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: list_broadcasts
+      tags: [broadcasts]
+      summary: History of broadcasts with results, newest first
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Broadcast" } } } } }
+    post:
+      operationId: create_broadcast
+      tags: [broadcasts]
+      summary: Start a broadcast now or at starts_at (UTC); text, optional picture and link buttons
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BroadcastRequest" }
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                data: { type: string, description: BroadcastRequest as JSON }
+                photo: { type: string, format: binary }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Broadcast" } } } }
+  /api/bots/{id}/broadcasts/test:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: test_broadcast
+      tags: [broadcasts]
+      summary: Send the message once to the owner's Telegram ID
+      x-mcp: write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BroadcastRequest" }
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                data: { type: string, description: BroadcastRequest as JSON }
+                photo: { type: string, format: binary }
+      responses:
+        "204": { description: Sent }
+  /api/bots/{id}/broadcasts/estimate:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: estimate_broadcast
+      tags: [broadcasts]
+      summary: Number of recipients for an audience
+      x-mcp: read
+      parameters:
+        - { name: audience, in: query, schema: { type: string, enum: [all, active] } }
+        - { name: days, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, required: [count], properties: { count: { type: integer } } } } } }
+  /api/bots/{id}/broadcasts/{bid}:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: bid, in: path, required: true, schema: { type: integer } }
+    get:
+      operationId: get_broadcast
+      tags: [broadcasts]
+      summary: One broadcast with its progress
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Broadcast" } } } }
+  /api/bots/{id}/broadcasts/{bid}/pause:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: bid, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: pause_broadcast
+      tags: [broadcasts]
+      summary: Pause sending; progress is kept
+      x-mcp: write
+      responses:
+        "204": { description: Done }
+  /api/bots/{id}/broadcasts/{bid}/resume:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: bid, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: resume_broadcast
+      tags: [broadcasts]
+      summary: Continue a paused broadcast
+      x-mcp: write
+      responses:
+        "204": { description: Done }
+  /api/bots/{id}/broadcasts/{bid}/cancel:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: bid, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: cancel_broadcast
+      tags: [broadcasts]
+      summary: Stop a broadcast for good
+      x-mcp: confirm
+      responses:
+        "204": { description: Done }
 
   /api/bots/{id}/settings:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
@@ -1113,6 +1218,43 @@ components:
             type: object
             required: [message]
             properties: { message: { type: string }, retry_at: { type: string, format: date-time } }
+    BroadcastRequest:
+      type: object
+      properties:
+        text: { type: string }
+        parse_mode: { type: string, enum: [HTML, MarkdownV2] }
+        buttons: { type: array, items: { $ref: "#/components/schemas/LinkButton" } }
+        audience: { type: string, enum: [all, active] }
+        active_days: { type: integer }
+        starts_at: { type: string, format: date-time }
+    LinkButton:
+      type: object
+      required: [text, url]
+      properties: { text: { type: string }, url: { type: string } }
+    Broadcast:
+      type: object
+      required: [id, bot_id, text, parse_mode, buttons, audience, starts_at, state, created_by, created_at, total, sent, blocked, failed, errors]
+      properties:
+        id: { type: integer }
+        bot_id: { type: integer }
+        text: { type: string }
+        parse_mode: { type: string }
+        photo_name: { type: string }
+        buttons: { type: array, items: { $ref: "#/components/schemas/LinkButton" } }
+        audience: { type: string }
+        active_days: { type: integer }
+        starts_at: { type: string, format: date-time }
+        state: { type: string, enum: [scheduled, running, paused, done, cancelled] }
+        kind: { type: string }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        total: { type: integer }
+        sent: { type: integer }
+        blocked: { type: integer }
+        failed: { type: integer }
+        errors: { type: object, additionalProperties: { type: integer } }
     BanRequest:
       type: object
       required: [reason]

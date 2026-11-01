@@ -151,6 +151,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	usersAPI.Register(p.API.Mux)
 	p.Settings = &settings.Store{DB: db}
 	p.Settings.Register(p.API.Mux)
+	p.Bots.Owner = func(r *http.Request) int64 { return p.Settings.Get(r.Context()).OwnerTgID }
 	usersAPI.RegisterClosed(p.API.Mux, func(r *http.Request) int64 { return p.Settings.Get(r.Context()).OwnerTgID })
 	dbAPI := &dbgate.API{Core: p.Core, WriteErr: bots.WriteCoreError}
 	dbAPI.RegisterAPI(p.API.Mux)

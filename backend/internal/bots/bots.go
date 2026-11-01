@@ -29,6 +29,8 @@ import (
 type Service struct {
 	Core   *wire.Client
 	Groups *Groups
+	// Owner is the owner's Telegram ID from the panel settings (previews).
+	Owner func(*http.Request) int64
 }
 
 // Call calls the core.
@@ -96,6 +98,7 @@ func (s *Service) Register(mux *api.Mux) {
 	mux.HandleFunc("POST /api/bots/{id}/resume", s.maint("maintenance.end", "bot.resume"))
 	mux.HandleFunc("GET /api/bots/{id}/maintenance", s.getMaint)
 	mux.HandleFunc("GET /api/bots/{id}/profile", s.getProfile)
+	s.registerBroadcasts(mux)
 	mux.HandleFunc("PATCH /api/bots/{id}/profile", s.setProfile)
 	mux.HandleFunc("POST /api/bots/{id}/maintenance", s.schedule)
 	mux.HandleFunc("POST /api/bots/{id}/maintenance/extend", s.extend)

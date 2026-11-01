@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "6f339d96788d5dbc73d41d6941c1ecce020ca235ae22548e688ff6e77b58fad6"
+const GeneratedHash = "1effa2621181847115365484b219ff9097f4f3a622eab33ac6d64386eb8ea3ac"
 
 // Op is one operation of the API.
 type Op struct {
@@ -20,6 +20,9 @@ var Ops = []Op{
 	{"list_bots", "GET", "/api/bots", "read", "Bots with statuses, groups and versions"},
 	{"get_bot", "GET", "/api/bots/{id}", "read", "One bot"},
 	{"get_audience", "GET", "/api/bots/{id}/audience", "read", "Languages, Premium share and sources of the bot's users"},
+	{"list_broadcasts", "GET", "/api/bots/{id}/broadcasts", "read", "History of broadcasts with results, newest first"},
+	{"estimate_broadcast", "GET", "/api/bots/{id}/broadcasts/estimate", "read", "Number of recipients for an audience"},
+	{"get_broadcast", "GET", "/api/bots/{id}/broadcasts/{bid}", "read", "One broadcast with its progress"},
 	{"get_closed", "GET", "/api/bots/{id}/closed", "read", "Closed mode of the bot and its list"},
 	{"get_db_schema", "GET", "/api/bots/{id}/db", "read", "Tables of the bot database with schema, row counts and size"},
 	{"list_db_backups", "GET", "/api/bots/{id}/db/backups", "read", "Backups of the bot database (checked with integrity_check)"},
@@ -53,6 +56,11 @@ var Ops = []Op{
 	{"update_settings", "PATCH", "/api/bots/{id}/settings", "confirm", "Change env, variable renames and limits; applies after a restart"},
 	{"rename_group", "PATCH", "/api/groups/{gid}", "never", "Rename a group"},
 	{"create_bot", "POST", "/api/bots", "write", "Add a bot; the token is checked with getMe and never returned"},
+	{"create_broadcast", "POST", "/api/bots/{id}/broadcasts", "never", "Start a broadcast now or at starts_at (UTC); text, optional picture and link buttons"},
+	{"test_broadcast", "POST", "/api/bots/{id}/broadcasts/test", "write", "Send the message once to the owner's Telegram ID"},
+	{"cancel_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/cancel", "confirm", "Stop a broadcast for good"},
+	{"pause_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/pause", "write", "Pause sending; progress is kept"},
+	{"resume_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/resume", "write", "Continue a paused broadcast"},
 	{"closed_allow", "POST", "/api/bots/{id}/closed/allow", "write", "Add a user to the closed mode list by id, @username (known users only) or \"me\""},
 	{"backup_db", "POST", "/api/bots/{id}/db/backups", "write", "Make a backup now (VACUUM INTO, the bot keeps running)"},
 	{"restore_db", "POST", "/api/bots/{id}/db/backups/{name}/restore", "never", "Stop the bot, restore the database from a backup, start it again"},
