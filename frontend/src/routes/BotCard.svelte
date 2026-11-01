@@ -11,7 +11,7 @@
   import Spark from '../lib/ui/Spark.svelte'
   import StatusSquare from '../lib/ui/StatusSquare.svelte'
 
-  let { bot }: { bot: BotView & { panics_24h?: number; users?: number; maintenance?: string } } = $props()
+  let { bot }: { bot: BotView & { panics_24h?: number; users?: number } } = $props()
   let editing = $state(false)
   let name = $state('')
   let busy = $state(false)
@@ -86,8 +86,8 @@
       <button disabled={busy} onclick={() => act('start')} title="Старт">▶</button>
     {/if}
     <button disabled={busy || !running} onclick={() => act('restart')} title="Рестарт">↻</button>
-    <!-- Pause arrives together with maintenance on the backend. -->
-    <button disabled title="Пауза">⏸</button>
+    <button disabled={busy || !running} class:active={bot.state === 'paused'} onclick={() => act(bot.state === 'paused' ? 'resume' : 'pause')}
+      title={bot.state === 'paused' ? 'Снять паузу' : 'Пауза: пользователи получат текст техработ'}>⏸</button>
   </div>
   {#if error}<div class="danger small err">{error}</div>{/if}
 </div>
@@ -142,6 +142,9 @@
   .buttons button,
   .buttons :global(.hold) {
     min-width: 34px;
+  }
+  .active {
+    border-color: var(--accent-hi);
   }
   .err {
     white-space: pre-wrap;

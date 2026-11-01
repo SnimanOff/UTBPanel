@@ -36,6 +36,8 @@ type Bot struct {
 	Port      int       `cbor:"6,keyasint" json:"port"`
 	Version   string    `cbor:"7,keyasint" json:"version"`
 	CreatedAt time.Time `cbor:"8,keyasint" json:"created_at"`
+	// Maintenance: "пауза" or "техработы 18:00–19:00", empty when none.
+	Maintenance string `cbor:"9,keyasint,omitempty" json:"maintenance,omitempty"`
 }
 
 // CreateBot is the request to add a bot.
@@ -90,6 +92,9 @@ func (c *Core) Bots(ctx context.Context) ([]Bot, error) {
 		if err != nil {
 			return nil, err
 		}
+		if c.Maint != nil {
+			b.Maintenance = c.maintLabel(ctx, b.ID)
+		}
 		out = append(out, b)
 	}
 	return out, rows.Err()
@@ -100,6 +105,9 @@ func (c *Core) Bot(ctx context.Context, id int64) (Bot, error) {
 	b, err := scanBot(c.DB.R.QueryRowContext(ctx, `SELECT `+botColumns+` FROM bots WHERE id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return b, errNoBot
+	}
+	if err == nil && c.Maint != nil {
+		b.Maintenance = c.maintLabel(ctx, b.ID)
 	}
 	return b, err
 }

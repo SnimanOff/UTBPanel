@@ -63,6 +63,7 @@
     <span class="muted">@{bot.username}</span>
     <span class="num muted">{bot.version || 'нет версии'}</span>
     {#if bot.status?.running}<span class="num muted">аптайм {uptime(bot.status.started)}</span>{/if}
+    {#if bot.maintenance}<span class="maint">{bot.maintenance}</span>{/if}
     {#if (bot.status?.restarts ?? 0) > 0}<span class="num muted">рестартов {bot.status.restarts}</span>{/if}
     <span class="grow"></span>
     {#if running}
@@ -71,7 +72,9 @@
       <button disabled={busy} onclick={() => act('start')}>▶ Старт</button>
     {/if}
     <button disabled={busy || !running} onclick={() => act('restart')}>↻ Рестарт</button>
-    <button disabled title="Пауза">⏸</button>
+    <button disabled={busy || !running} onclick={() => act(bot.state === 'paused' ? 'resume' : 'pause')}>
+      {bot.state === 'paused' ? '▶ Снять паузу' : '⏸ Пауза'}
+    </button>
   </div>
   {#if error}<p class="danger err">{error}</p>{/if}
 
@@ -102,6 +105,9 @@
     gap: var(--s3);
     margin-bottom: var(--s3);
     flex-wrap: wrap;
+  }
+  .maint {
+    color: var(--warn);
   }
   .grow {
     flex: 1;

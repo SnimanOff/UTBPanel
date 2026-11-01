@@ -90,6 +90,8 @@ func (s *Service) Register(mux *api.Mux) {
 	mux.HandleFunc("POST /api/bots/{id}/start", s.lifecycle("bots.start"))
 	mux.HandleFunc("POST /api/bots/{id}/stop", s.lifecycle("bots.stop"))
 	mux.HandleFunc("POST /api/bots/{id}/restart", s.lifecycle("bots.restart"))
+	mux.HandleFunc("POST /api/bots/{id}/pause", s.maint("maintenance.pause", "bot.pause"))
+	mux.HandleFunc("POST /api/bots/{id}/resume", s.maint("maintenance.end", "bot.resume"))
 	mux.HandleFunc("GET /api/bots/{id}/settings", s.settings)
 	mux.HandleFunc("PATCH /api/bots/{id}/settings", s.updateSettings)
 	mux.HandleFunc("PUT /api/bots/{id}/settings/{section}", s.putSection)
@@ -595,4 +597,27 @@ func (s *Service) putSection(w http.ResponseWriter, r *http.Request) {
 	}
 	audit.Annotate(r, "settings."+sec, "", map[string]any{"value": raw})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// maint pauses a bot (users get the maintenance text, payments wait) or
+// ends pause and maintenance.
+func (s *Service) maint(method, action string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		var in struct {
+			Text string `json:"text"`
+		}
+		if r.ContentLength > 0 && !decode(w, r, &in) {
+			return
+		}
+		if err := s.Call(r.Context(), method, core.MaintReq{BotID: id, Text: in.Text, Actor: api.Actor(r.Context())}, nil); err != nil {
+			WriteCoreError(w, err)
+			return
+		}
+		audit.Annotate(r, action, "", nil)
+		w.WriteHeader(http.StatusNoContent)
+	}
 }

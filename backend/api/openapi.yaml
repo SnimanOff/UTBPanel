@@ -195,6 +195,29 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Status" } } } }
 
+  /api/bots/{id}/pause:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: pause
+      tags: [lifecycle]
+      summary: "Pause the bot: the process runs, users get the maintenance text, payments wait"
+      x-mcp: write
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { text: { type: string } } }
+      responses:
+        "204": { description: Done }
+  /api/bots/{id}/resume:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: resume
+      tags: [lifecycle]
+      summary: End pause or maintenance; deferred updates go to the bot first
+      x-mcp: write
+      responses:
+        "204": { description: Done }
+
   /api/bots/{id}/settings:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -851,6 +874,7 @@ components:
         port: { type: integer }
         version: { type: string }
         created_at: { type: string, format: date-time }
+        maintenance: { type: string }
     Status:
       type: object
       required: [restarts, last_exit, running]

@@ -23,6 +23,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/ingress"
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/logs"
+	"github.com/SnimanOff/UTBPanel/backend/internal/maintenance"
 	"github.com/SnimanOff/UTBPanel/backend/internal/procstat"
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
@@ -61,6 +62,7 @@ type Core struct {
 	Bans      *users.Bans
 	Closed    *users.Closed
 	Flood     *users.Antiflood
+	Maint     *maintenance.Service
 	Count     *counters.Counters
 	Host      *counters.HostSampler
 	Live      *counters.Live
@@ -177,7 +179,13 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	}
 	c.Closed = &users.Closed{DB: db.R, W: db.W}
 	c.Flood = &users.Antiflood{DB: db.R, Bans: c.Bans}
-	c.Pipe.Checks = append(c.Pipe.Checks, c.Bans.Check, c.Closed.Check, c.Flood.Check)
+	c.Maint = c.newMaintenance()
+	if err := c.Maint.Load(ctx); err != nil {
+		return nil, err
+	}
+	// Steps 7–10: ban, closed mode, maintenance, antiflood.
+	c.Pipe.Checks = append(c.Pipe.Checks, c.Bans.Check, c.Closed.Check, c.Maint.Check, c.Flood.Check)
+	c.registerMaintenance()
 	c.registerBotSettings()
 	c.registerBans()
 	c.registerClosed()
