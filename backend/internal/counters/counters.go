@@ -115,6 +115,17 @@ func (c *Counters) Gauge(botID int64, name string, v float64) {
 	c.mu.Unlock()
 }
 
+// SetGauge records the latest application value, including negative values.
+func (c *Counters) SetGauge(botID int64, name string, v float64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	a := c.bot(botID)
+	if a.m.Gauges == nil {
+		a.m.Gauges = map[string]float64{}
+	}
+	a.m.Gauges[name] = v
+}
+
 // Latency records a duration into a histogram.
 func (c *Counters) Latency(botID int64, name string, d time.Duration) {
 	c.mu.Lock()

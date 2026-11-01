@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"sort"
+	"strings"
 )
 
 // The stored form of a minute (hour, day): a version byte, then counters,
@@ -67,7 +68,7 @@ func Encode(m *Minute) []byte {
 	}
 	gk := keys(len(m.Gauges), func(f func(string)) {
 		for k, v := range m.Gauges {
-			if v != 0 {
+			if v != 0 || strings.HasPrefix(k, "sdk_") {
 				f(k)
 			}
 		}

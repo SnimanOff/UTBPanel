@@ -856,6 +856,33 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Audience" } } } }
 
+  /api/bots/{id}/sdk/metrics:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: list_sdk_metrics
+      tags: [metrics]
+      summary: Custom SDK metrics, current values and dashboard selection
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/SDKMetric" } } } } }
+  /api/bots/{id}/sdk/metrics/selected:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    put:
+      operationId: select_sdk_metrics
+      tags: [metrics]
+      summary: Select SDK metrics to show on the bot dashboard
+      x-mcp: write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [names]
+              properties:
+                names: { type: array, maxItems: 200, items: { type: string } }
+      responses:
+        "204": { description: Done }
   /api/bots/{id}/db:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -1655,6 +1682,15 @@ components:
         size: { type: integer }
         wal_size: { type: integer }
         tables: { type: array, items: { $ref: "#/components/schemas/DBTable" } }
+    SDKMetric:
+      type: object
+      required: [name, kind, counter, value, selected]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [counter, value] }
+        counter: { type: integer }
+        value: { type: number }
+        selected: { type: boolean }
     DBQueryStats:
       type: object
       required: [counts, active, failures, histogram, slow]

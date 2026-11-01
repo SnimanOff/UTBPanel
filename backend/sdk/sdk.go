@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/sdk/metrics"
 	"github.com/SnimanOff/UTBPanel/backend/sdk/ready"
 	"github.com/SnimanOff/UTBPanel/backend/sdk/wire"
 )
@@ -78,6 +79,7 @@ type Kit struct {
 	done           chan struct{}
 	ready          ready.State
 	connectTimeout time.Duration
+	metrics        *metrics.Registry
 }
 
 // New is immediate without TGPANEL_SDK. With ready enabled it registers before
@@ -85,6 +87,7 @@ type Kit struct {
 // An unavailable configured core delays startup by at most five seconds.
 func New(options ...Option) *Kit {
 	k := &Kit{modules: map[string]bool{"ready": true}, changed: make(chan struct{}), done: make(chan struct{}), mux: wire.NewMux(), log: slog.Default(), connectTimeout: 5 * time.Second}
+	k.metrics = metrics.New(k)
 	for _, opt := range options {
 		opt(k)
 	}
@@ -135,7 +138,13 @@ func New(options ...Option) *Kit {
 			k.log.Warn("sdk: connection lost, using autonomous mode", "err", err)
 		}
 	}
-	go func() { defer close(k.done); k.client.Run(ctx) }()
+	go func() {
+		defer close(k.done)
+		var wg sync.WaitGroup
+		wg.Go(func() { k.client.Run(ctx) })
+		wg.Go(func() { k.metrics.Run(ctx) })
+		wg.Wait()
+	}()
 	if k.modules["ready"] {
 		initial, stop := context.WithTimeout(ctx, k.connectTimeout)
 		if err := k.Wait(initial); err != nil {
@@ -180,6 +189,10 @@ func (k *Kit) register(c *wire.Conn) error {
 // Use announces a module loaded after New, for example sdk/db.
 func (k *Kit) Use(module string) error {
 	k.mu.Lock()
+	if k.modules[module] {
+		k.mu.Unlock()
+		return nil
+	}
 	k.modules[module] = true
 	c := k.conn
 	k.mu.Unlock()
@@ -260,12 +273,21 @@ func (k *Kit) Connection(ctx context.Context) (*wire.Conn, error) {
 func (k *Kit) Handle(method string, handler wire.Handler) { k.mux.Handle(method, handler) }
 
 func (k *Kit) Close() error {
+	ctx, stop := context.WithTimeout(context.Background(), 2*time.Second)
+	if err := k.metrics.Flush(ctx); err == nil {
+		k.metrics.Flush(ctx)
+	}
+	stop()
 	if k.cancel != nil {
 		k.cancel()
 	}
 	<-k.done
 	return nil
 }
+
+func (k *Kit) Counter(name string) *metrics.Counter   { return k.metrics.Counter(name) }
+func (k *Kit) Value(name string) *metrics.Value       { return k.metrics.Value(name) }
+func (k *Kit) FlushMetrics(ctx context.Context) error { return k.metrics.Flush(ctx) }
 
 var ErrNotConnected = wire.ErrNotConnected
 

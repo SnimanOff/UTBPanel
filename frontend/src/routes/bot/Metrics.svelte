@@ -15,6 +15,30 @@
   let data = $state<BotMetrics | undefined>()
   let day = $state<BotMetrics | undefined>() // for "revenue 24h" and DAU
   let error = $state('')
+	let sdkMetrics = $state<Schemas['SDKMetric'][]>([])
+	let sdkError = $state('')
+	let sdkSelectionBusy = $state(false)
+	const hasSDKMetrics = $derived(bot.sdk?.modules.includes('metrics') ?? false)
+	const selectedSDK = $derived(sdkMetrics.filter((m) => m.selected))
+	$effect(() => {
+		if (!hasSDKMetrics) { sdkMetrics = []; return }
+		let active = true
+		const id = bot.id
+		async function refresh() {
+			try { const metrics = await api.get<Schemas['SDKMetric'][]>(`/api/bots/${id}/sdk/metrics`); if (active && !sdkSelectionBusy) { sdkMetrics = metrics; sdkError = '' } }
+			catch (e) { if (active) sdkError = errorText(e) }
+		}
+		refresh()
+		const timer = setInterval(refresh, 10000)
+		return () => { active = false; clearInterval(timer) }
+	})
+	async function selectSDK(name: string, selected: boolean) {
+		sdkSelectionBusy = true
+		const names = sdkMetrics.filter((m) => m.name === name ? selected : m.selected).map((m) => m.name)
+		try { await api.put(`/api/bots/${bot.id}/sdk/metrics/selected`, { names }); sdkMetrics = sdkMetrics.map((m) => ({ ...m, selected: names.includes(m.name) })); sdkError = '' }
+		catch (e) { sdkError = errorText(e) }
+		finally { sdkSelectionBusy = false }
+	}
 
   async function load() {
     error = ''
@@ -81,7 +105,15 @@
   <Tile label="доход 24ч" value={revenue} />
   <Tile label="ошибки" value={errors} bad={errors > 0} />
   <Tile label="p95" value={s ? Math.round(s.p95) + ' мс' : '—'} />
+	{#each selectedSDK as m (m.name)}<Tile label={m.name} value={m.kind === 'counter' ? m.counter : m.value} />{/each}
 </div>
+
+{#if hasSDKMetrics}
+  <details class="sdk-selection"><summary>Метрики SDK · выбрать плитки и графики</summary>
+    {#each sdkMetrics as m (m.name)}<label><input type="checkbox" disabled={sdkSelectionBusy} checked={m.selected} onchange={(e) => selectSDK(m.name, e.currentTarget.checked)} /> {m.name} <span class="muted">{m.kind === 'counter' ? 'счётчик' : 'значение'}</span></label>{/each}
+    {#if sdkError}<p class="danger">{sdkError}</p>{/if}
+  </details>
+{/if}
 
 <div class="periods">
   {#each periods as p}
@@ -91,6 +123,11 @@
 </div>
 
 <div class="charts">
+	{#if s}
+		{#each selectedSDK as m (m.name)}
+			<div class="chart"><h2>{m.name}</h2><Chart {x} {marks} series={[{ label: m.name, values: s.points.map((p) => m.kind === 'counter' ? p.c?.['sdk_' + m.name] ?? 0 : p.g?.['sdk_' + m.name] ?? null) }]} /></div>
+		{/each}
+	{/if}
   {#if period === 'live'}
     <div class="chart"><h2>Апдейты в секунду</h2><Chart x={liveX} series={[{ label: 'апд/с', values: liveSeries }]} /></div>
   {:else if s}
@@ -128,6 +165,8 @@
 </div>
 
 <style>
+	.sdk-selection { margin-bottom: var(--s3); }
+	.sdk-selection label { display: inline-flex; align-items: center; gap: var(--s1); margin: var(--s2) var(--s3) 0 0; }
   .tiles {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));

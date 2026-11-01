@@ -45,3 +45,19 @@ other databases or export through VACUUM INTO. The query timeout is 30 seconds
 literals and comments removed. The Database tab shows counts, active queries,
 latency buckets and the last 20 slow queries. Each session allows up to 64 SQL
 connections, with 128 statements and 16 result cursors per connection.
+
+Custom metrics:
+
+```go
+orders := kit.Counter("orders_created")
+temperature := kit.Value("temperature")
+orders.Add(1)
+temperature.Set(-2.5)
+```
+
+Metrics are sent every 10 seconds. Names use letters, digits, underscores,
+dots, colons and hyphens (up to 64 characters, starting with a letter or
+underscore); there are at most 200 per bot. Counters accept nonnegative
+increments, values accept finite numbers. Retried batches are deduplicated.
+Without a connection these calls do nothing. Select visible metrics on the
+bot dashboard; values, including zero and negative values, go into history.

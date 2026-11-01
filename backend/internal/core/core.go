@@ -49,48 +49,49 @@ const (
 
 // Core is the running core process.
 type Core struct {
-	Cfg       config.Core
-	Log       *slog.Logger
-	DB        *store.DB
-	W         *store.Writer
-	Mux       *wire.Mux
-	Srv       *wire.Server
-	Ev        *events.Bus
-	Sec       *secrets.Store
-	TG        *telegram.Client
-	GH        *github.Client
-	Runner    *runner.Runner
-	SDK       *sdkhost.Host
-	Logs      *logs.Store
-	Journal   *journal.Journal
-	Releases  *deploy.Store
-	Pipe      *ingress.Pipeline
-	Users     *users.Tracker
-	Bans      *users.Bans
-	Closed    *users.Closed
-	Flood     *users.Antiflood
-	Maint     *maintenance.Service
-	Bcast     *broadcast.Service
-	watch     watches
-	canaries  canaryRoutes
-	parsers   panicParsers
-	crashSet  crashSetting
-	patterns  *logs.Matcher
-	rules     deploy.Rules // autorollback; zero means deploy.DefaultRules
-	warnHook  func(ctx context.Context, botID int64, text string) error
-	Count     *counters.Counters
-	Host      *counters.HostSampler
-	Live      *counters.Live
-	DBG       *dbgate.Browser
-	SQL       *dbgate.Gateway
-	DBBackups *dbgate.Backups
-	DBChecks  *dbgate.Checks
-	Proxy     *tgproxy.Proxy
-	bundle    string
-	apiW      apiWatch
-	svc       services
-	hostMu    sync.Mutex
-	hostLast  counters.Server
+	Cfg        config.Core
+	Log        *slog.Logger
+	DB         *store.DB
+	W          *store.Writer
+	Mux        *wire.Mux
+	Srv        *wire.Server
+	Ev         *events.Bus
+	Sec        *secrets.Store
+	TG         *telegram.Client
+	GH         *github.Client
+	Runner     *runner.Runner
+	SDK        *sdkhost.Host
+	SDKMetrics *sdkhost.Metrics
+	Logs       *logs.Store
+	Journal    *journal.Journal
+	Releases   *deploy.Store
+	Pipe       *ingress.Pipeline
+	Users      *users.Tracker
+	Bans       *users.Bans
+	Closed     *users.Closed
+	Flood      *users.Antiflood
+	Maint      *maintenance.Service
+	Bcast      *broadcast.Service
+	watch      watches
+	canaries   canaryRoutes
+	parsers    panicParsers
+	crashSet   crashSetting
+	patterns   *logs.Matcher
+	rules      deploy.Rules // autorollback; zero means deploy.DefaultRules
+	warnHook   func(ctx context.Context, botID int64, text string) error
+	Count      *counters.Counters
+	Host       *counters.HostSampler
+	Live       *counters.Live
+	DBG        *dbgate.Browser
+	SQL        *dbgate.Gateway
+	DBBackups  *dbgate.Backups
+	DBChecks   *dbgate.Checks
+	Proxy      *tgproxy.Proxy
+	bundle     string
+	apiW       apiWatch
+	svc        services
+	hostMu     sync.Mutex
+	hostLast   counters.Server
 
 	mu           sync.Mutex
 	procs        map[string]procstat.Stats
@@ -237,8 +238,9 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 			c.Count.Add(id, "db_errors", 1)
 		}
 	}}
-	c.SDK.Setup = func(id int64, _ string, mux *wire.Mux) func(*wire.Conn) {
+	c.SDK.Setup = func(id int64, instance string, mux *wire.Mux) func(*wire.Conn) {
 		c.SQL.Register(mux, id)
+		c.SDKMetrics.Register(mux, id, instance)
 		return c.SQL.Disconnect
 	}
 	c.Mux.Handle("db.metrics", wire.Func(func(ctx context.Context, _ *wire.Conn, id int64) (dbgate.QueryStats, error) {
@@ -247,6 +249,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		}
 		return c.SQL.Snapshot(id), nil
 	}))
+	c.registerSDKMetrics()
 	c.DBBackups = c.newBackups()
 	c.DBChecks = c.newChecks()
 	c.registerDBBackups()

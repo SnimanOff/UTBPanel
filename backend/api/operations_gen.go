@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "6a40da96aced78394f8efc94c13298bc2cf36ef64cfab1cb08c67b7a2768880f"
+const GeneratedHash = "e0f454e7aad11fc0d3dd892e6b3489eff95bd93a74d6de5a805667d6ee00f2a2"
 
 // Op is one operation of the API.
 type Op struct {
@@ -47,6 +47,7 @@ var Ops = []Op{
 	{"list_panics", "GET", "/api/bots/{id}/panics", "read", "Panic groups (kind + first frame of the bot's code), counts, versions, last stack, \"maybe fixed\""},
 	{"get_profile", "GET", "/api/bots/{id}/profile", "read", "Telegram profile for a language (empty = default) and the menu button"},
 	{"list_versions", "GET", "/api/bots/{id}/releases", "read", "Stored versions with build data"},
+	{"list_sdk_metrics", "GET", "/api/bots/{id}/sdk/metrics", "read", "Custom SDK metrics, current values and dashboard selection"},
 	{"list_secrets", "GET", "/api/bots/{id}/secrets", "read", "Names of the bot's secrets; values are never returned"},
 	{"get_services", "GET", "/api/bots/{id}/services", "read", "External services the bot connects to (through the proxy) with error rates and traffic"},
 	{"get_settings", "GET", "/api/bots/{id}/settings", "read", "Settings of the bot (env, renames, limits)"},
@@ -110,6 +111,7 @@ var Ops = []Op{
 	{"set_closed", "PUT", "/api/bots/{id}/closed", "confirm", "Turn closed mode on or off and set its text"},
 	{"set_github", "PUT", "/api/bots/{id}/github", "confirm", "Set repository (owner/repo, empty turns it off), asset mask, auto deploy and token; the webhook secret is returned once"},
 	{"set_bot_group", "PUT", "/api/bots/{id}/group", "never", "Move the bot to another group"},
+	{"select_sdk_metrics", "PUT", "/api/bots/{id}/sdk/metrics/selected", "write", "Select SDK metrics to show on the bot dashboard"},
 	{"set_secret", "PUT", "/api/bots/{id}/secrets/{name}", "never", "Set a secret (write-only). Neural networks use request_secret instead"},
 	{"put_settings_section", "PUT", "/api/bots/{id}/settings/{section}", "confirm", "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates)"},
 	{"set_token", "PUT", "/api/bots/{id}/token", "never", "Replace the token (checked with getMe). Neural networks use request_secret instead"},

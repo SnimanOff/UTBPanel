@@ -1,5 +1,7 @@
 package metrics
 
+import "strings"
+
 // Minute is everything counted for one bot in one minute. Names are open:
 // new metrics (Bot API, DB, services, SDK) add keys, not fields. BotID 0 is
 // the sum over all bots.
@@ -9,7 +11,7 @@ type Minute struct {
 	TS       int64              `cbor:"3,keyasint" json:"ts"` // unix seconds, start of the minute
 	Counters map[string]int64   `cbor:"4,keyasint,omitempty" json:"counters,omitempty"`
 	Hists    map[string]Hist    `cbor:"5,keyasint,omitempty" json:"hists,omitempty"`
-	Gauges   map[string]float64 `cbor:"6,keyasint,omitempty" json:"gauges,omitempty"` // max over the minute
+	Gauges   map[string]float64 `cbor:"6,keyasint,omitempty" json:"gauges,omitempty"` // max for system metrics, latest for SDK values
 	// Uniq holds HyperLogLog sketches of users and chats seen this minute.
 	Uniq map[string][]byte `cbor:"7,keyasint,omitempty" json:"-"`
 }
@@ -41,7 +43,8 @@ const (
 	CanaryPrefix   = "canary_" // canary_updates, canary_errors, canary_resp…
 )
 
-// Merge adds o into m (counters and histograms add, gauges take the max).
+// Merge adds counters and histograms; system gauges take the maximum,
+// while application gauges retain the latest value.
 func (m *Minute) Merge(o *Minute) {
 	if m.Counters == nil {
 		m.Counters = map[string]int64{}
@@ -59,7 +62,7 @@ func (m *Minute) Merge(o *Minute) {
 		m.Gauges = map[string]float64{}
 	}
 	for k, v := range o.Gauges {
-		if v > m.Gauges[k] {
+		if previous, ok := m.Gauges[k]; !ok || v > previous || strings.HasPrefix(k, "sdk_") {
 			m.Gauges[k] = v
 		}
 	}
