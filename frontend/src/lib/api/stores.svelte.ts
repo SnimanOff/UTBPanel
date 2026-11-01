@@ -4,6 +4,8 @@ import { api, errorText, type BotView, type Group } from './client'
 class BotsStore {
   bots = $state<BotView[]>([])
   groups = $state<Group[]>([])
+  /** Panics in the last 24 h by bot id (badges). */
+  panics = $state<Record<string, number>>({})
   loaded = $state(false)
   error = $state('')
   private loading?: Promise<void>
@@ -21,6 +23,7 @@ class BotsStore {
         ])
         this.bots = bots
         this.groups = groups
+        this.loadPanics()
         this.error = ''
       } catch (e) {
         this.error = errorText(e)
@@ -30,6 +33,10 @@ class BotsStore {
       }
     })()
     return this.loading
+  }
+
+  loadPanics() {
+    api.get<Record<string, number>>('/api/panics/summary').then((p) => (this.panics = p), () => {})
   }
 
   /** Replace one bot after an action. */

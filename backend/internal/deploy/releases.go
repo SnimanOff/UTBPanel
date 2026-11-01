@@ -204,6 +204,9 @@ func (s *Store) autoVersion(botID int64, bi BuildInfo, sum string) string {
 	return v
 }
 
+// Get returns a stored release.
+func (s *Store) Get(botID int64, version string) (Release, error) { return s.read(botID, version) }
+
 func (s *Store) read(botID int64, version string) (Release, error) {
 	var r Release
 	b, err := os.ReadFile(filepath.Join(s.Dir(botID), version, "release.json"))

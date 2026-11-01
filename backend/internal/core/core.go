@@ -69,6 +69,7 @@ type Core struct {
 	Bcast     *broadcast.Service
 	watch     watches
 	canaries  canaryRoutes
+	parsers   panicParsers
 	rules     deploy.Rules // autorollback; zero means deploy.DefaultRules
 	warnHook  func(ctx context.Context, botID int64, text string) error
 	Count     *counters.Counters

@@ -23,6 +23,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/livehub"
 	"github.com/SnimanOff/UTBPanel/backend/internal/metrics"
+	"github.com/SnimanOff/UTBPanel/backend/internal/panics"
 	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
 	"github.com/SnimanOff/UTBPanel/backend/internal/procstat"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
@@ -147,6 +148,19 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	(&metrics.API{S: p.Metrics, Core: p.Core}).Register(p.API.Mux)
 	(&metrics.ServicesAPI{S: p.Metrics}).Register(p.API.Mux)
 	(&metrics.ReportsAPI{S: p.Metrics}).Register(p.API.Mux)
+	panicStore := &panics.Store{DB: db}
+	panicStore.Register(p.API.Mux)
+	p.Events.Subscribe(panicStore.OnCoreEvent)
+	p.Go(func(ctx context.Context) {
+		for {
+			panicStore.Prune(ctx)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(6 * time.Hour):
+			}
+		}
+	})
 	p.Go(func(ctx context.Context) {
 		p.Metrics.RunReports(ctx, func(botID int64, data map[string]any) {
 			ev := events.Event{Type: "deploy_worse", BotID: botID, Severity: events.Warn, Data: data}

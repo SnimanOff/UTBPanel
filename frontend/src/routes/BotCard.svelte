@@ -73,6 +73,7 @@
     <span class="num">{bot.version || 'нет версии'}</span>
     {#if bot.maintenance}<span class="maint">{bot.maintenance}</span>{/if}
     {#if bot.canary}<span class="canary">{bot.canary}</span>{/if}
+    {#if store.panics[String(bot.id)]}<span class="panics" title="паник за сутки">⚠ {store.panics[String(bot.id)]}</span>{/if}
     {#if (bot.panics_24h ?? 0) > 0}<span class="panics" title="Паники за 24 ч">⚠ {bot.panics_24h}</span>{/if}
   </div>
   <div class="row small">
@@ -136,6 +137,9 @@
   .panics {
     color: var(--danger);
     margin-left: auto;
+  }
+  .panics {
+    color: var(--danger);
   }
   .canary {
     color: var(--accent-hi);

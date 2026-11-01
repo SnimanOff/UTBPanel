@@ -18,11 +18,13 @@
   import Profile from './bot/Profile.svelte'
   import Broadcast from './bot/Broadcast.svelte'
   import Deploy from './bot/Deploy.svelte'
+  import Panics from './bot/Panics.svelte'
 
   let { id, tab }: { id: number; tab: string } = $props()
-  const tabs = [
+  const panics = $derived(store.panics[String(id)] ?? 0)
+  const tabs = $derived([
     { id: 'logs', label: 'Логи' },
-    { id: 'panics', label: 'Паники' },
+    { id: 'panics', label: panics ? `Паники · ${panics}` : 'Паники' },
     { id: 'db', label: 'База данных' },
     { id: 'users', label: 'Пользователи' },
     { id: 'broadcast', label: 'Рассылка' },
@@ -30,14 +32,15 @@
     { id: 'network', label: 'Сеть' },
     { id: 'profile', label: 'Профиль' },
     { id: 'settings', label: 'Настройки' },
-  ]
+  ])
   let busy = $state(false)
   let error = $state('')
 
   $effect(() => {
     void id
     store.refresh(id)
-    const t = setInterval(() => store.refresh(id), 5000)
+    store.loadPanics()
+    const t = setInterval(() => (store.refresh(id), store.loadPanics()), 5000)
     return () => clearInterval(t)
   })
 
@@ -89,6 +92,8 @@
   <div class="tab">
     {#if tab === 'logs'}
       <Logs botId={id} />
+    {:else if tab === 'panics'}
+      <Panics botId={id} />
     {:else if tab === 'db'}
       <Database botId={id} />
     {:else if tab === 'network'}

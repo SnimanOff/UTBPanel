@@ -52,6 +52,9 @@ func (c *Core) newRunner() *runner.Runner {
 		},
 		Hooks: runner.Hooks{
 			Output: func(l runner.Line) {
+				if l.Stream != "core" {
+					c.panicParser(l.BotID, l.Instance).Line(l.BotID, l.Text, l.Time)
+				}
 				if l.Instance == "canary" {
 					l.Text = "[canary] " + l.Text
 				}
@@ -60,6 +63,7 @@ func (c *Core) newRunner() *runner.Runner {
 			Event: func(id int64, typ, sev string, data map[string]any) {
 				if typ == "bot_crashed" {
 					c.Count.Add(id, metrics.Crashes, 1)
+					c.panicParser(id, "").Flush()
 				}
 				if typ == "canary_crashed" {
 					go c.StopCanary(context.Background(), id, "канарейка упала")

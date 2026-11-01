@@ -480,6 +480,23 @@ paths:
       x-mcp: confirm
       responses:
         "204": { description: Done }
+  /api/bots/{id}/panics:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: list_panics
+      tags: [logs]
+      summary: Panic groups (kind + first frame of the bot's code), counts, versions, last stack, "maybe fixed"
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PanicGroup" } } } } }
+  /api/panics/summary:
+    get:
+      operationId: panics_summary
+      tags: [logs]
+      summary: Panics in the last 24 h per bot id
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: { type: integer } } } } }
   /api/bots/{id}/github:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -1407,6 +1424,21 @@ components:
         before: { $ref: "#/components/schemas/DeploySummary" }
         after: { $ref: "#/components/schemas/DeploySummary" }
         worse: { type: array, items: { type: string } }
+    PanicGroup:
+      type: object
+      required: [id, kind, frame, count, first_at, last_at, versions, last_version, last_stack, count_24h, maybe_fixed]
+      properties:
+        id: { type: integer }
+        kind: { type: string }
+        frame: { type: string }
+        count: { type: integer }
+        first_at: { type: string, format: date-time }
+        last_at: { type: string, format: date-time }
+        versions: { type: array, items: { type: string } }
+        last_version: { type: string }
+        last_stack: { type: string }
+        count_24h: { type: integer }
+        maybe_fixed: { type: boolean }
     BanRequest:
       type: object
       required: [reason]

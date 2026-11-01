@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "be41e66090f183444d9bdbefbec1209f61706ea67798d60de62190367be3783a"
+const GeneratedHash = "dc865518982dcf7d3ec3e0ed18a370adaffeee8c4f59e57d8253d1ea939c1ead"
 
 // Op is one operation of the API.
 type Op struct {
@@ -39,6 +39,7 @@ var Ops = []Op{
 	{"stream_logs", "GET", "/api/bots/{id}/logs/stream", "never", "Live log lines (Server-Sent Events)"},
 	{"get_maintenance", "GET", "/api/bots/{id}/maintenance", "read", "Pause or maintenance of the bot, if any"},
 	{"get_metrics", "GET", "/api/bots/{id}/metrics", "read", "Metrics of the bot for a period, with user numbers and deploy marks"},
+	{"list_panics", "GET", "/api/bots/{id}/panics", "read", "Panic groups (kind + first frame of the bot's code), counts, versions, last stack, \"maybe fixed\""},
 	{"get_profile", "GET", "/api/bots/{id}/profile", "read", "Telegram profile for a language (empty = default) and the menu button"},
 	{"list_versions", "GET", "/api/bots/{id}/releases", "read", "Stored versions with build data"},
 	{"list_secrets", "GET", "/api/bots/{id}/secrets", "read", "Names of the bot's secrets; values are never returned"},
@@ -49,6 +50,7 @@ var Ops = []Op{
 	{"list_groups", "GET", "/api/groups", "read", "Groups in order"},
 	{"list_keys", "GET", "/api/keys", "never", "Access keys"},
 	{"stream_live", "GET", "/api/live", "never", "Live metrics of the server and bots once a second (Server-Sent Events)"},
+	{"panics_summary", "GET", "/api/panics/summary", "read", "Panics in the last 24 h per bot id"},
 	{"ping", "GET", "/api/ping", "read", "Check the connection and see the key name"},
 	{"get_bots_load", "GET", "/api/server/bots", "read", "Load and revenue of every bot over 24 hours"},
 	{"get_db_checks", "GET", "/api/server/checks", "read", "Results of the weekly quick_check of core.db, panel.db and every bot.db"},
