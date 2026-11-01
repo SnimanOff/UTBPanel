@@ -237,6 +237,25 @@ func (k *Kit) Call(ctx context.Context, method string, in, out any) error {
 	return c.Call(ctx, method, in, out)
 }
 
+// Connection returns a registered transport session. Stateful modules keep
+// this exact session: a transaction must never move to a reconnected socket.
+func (k *Kit) Connection(ctx context.Context) (*wire.Conn, error) {
+	if !k.Configured() {
+		return nil, wire.ErrNotConnected
+	}
+	for {
+		if err := k.Wait(ctx); err != nil {
+			return nil, err
+		}
+		k.mu.Lock()
+		c := k.conn
+		k.mu.Unlock()
+		if c != nil {
+			return c, nil
+		}
+	}
+}
+
 // Handle registers a core-to-bot method (for example a scheduled task).
 func (k *Kit) Handle(method string, handler wire.Handler) { k.mux.Handle(method, handler) }
 

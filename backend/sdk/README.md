@@ -26,3 +26,15 @@ to `TGPANEL_SDK_READY_TIMEOUT` (default `60s`) for the explicit signal.
 Importing the root package does not link SQLite. The optional database
 module must distinguish `Configured()` from `Connected()`: when a configured
 core is unavailable it must fail, never open a local database as a fallback.
+
+```go
+import sdkdb "github.com/SnimanOff/UTBPanel/backend/sdk/db"
+
+db, err := sdkdb.Open(kit) // DATABASE_URL in both modes
+// Or import sdk/db and use sql.Open("tgpanel", os.Getenv("DATABASE_URL")).
+```
+
+The driver supports transactions, prepared statements, named parameters,
+context cancellation, and batched result rows. Each SQL connection is pinned
+to its original transport session. A lost write response is returned as an
+error and is never automatically retried by the driver.
