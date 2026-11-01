@@ -18,7 +18,9 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/bots"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
+	"github.com/SnimanOff/UTBPanel/backend/internal/counters"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
+	"github.com/SnimanOff/UTBPanel/backend/internal/metrics"
 	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
 	"github.com/SnimanOff/UTBPanel/backend/internal/sources"
@@ -48,6 +50,7 @@ type Panel struct {
 	API     *api.Server
 	Bots    *bots.Service
 	Audit   *audit.Log
+	Metrics *metrics.Storage
 
 	closers []func(context.Context) error
 	runners []func(context.Context)
@@ -132,6 +135,19 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		if err := p.Events.CatchUp(ctx, c); err != nil {
 			log.Warn("fetching missed core events failed", "err", err)
 		}
+	})
+	// Minutes of metrics: fetched from the core, written, then confirmed.
+	p.Metrics = &metrics.Storage{DB: db, W: p.W, Log: log}
+	p.Go(func(ctx context.Context) {
+		p.Metrics.Run(ctx,
+			func(ctx context.Context, after int64) ([]metrics.Minute, error) {
+				var ms []metrics.Minute
+				err := p.Core.Call(ctx, counters.MethodMinutes, after, &ms)
+				return ms, err
+			},
+			func(ctx context.Context, upTo int64) error {
+				return p.Core.Call(ctx, counters.MethodAck, upTo, nil)
+			})
 	})
 	// The core journal (SSH, autorollback, schedule) flows into the audit.
 	p.Go(func(ctx context.Context) {
