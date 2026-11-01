@@ -67,6 +67,7 @@ type Core struct {
 	Proxy     *tgproxy.Proxy
 	bundle    string
 	apiW      apiWatch
+	svc       services
 	hostMu    sync.Mutex
 	hostLast  counters.Server
 
@@ -190,6 +191,12 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.apiW = apiWatch{api: map[int64]time.Time{}, delivered: map[int64]time.Time{}, warned: map[int64]time.Time{}}
 	c.Proxy.Hooks.OnCall = c.onCall
 	c.Proxy.Hooks.Intercept = c.intercept
+	c.svc = services{perBot: map[int64]map[string]bool{}, window: map[string][]svcSample{}, down: map[string]bool{}, seen: map[int64]map[string]bool{}}
+	c.svc.onFirst = func(botID int64, host string) {
+		// The panel keeps the list of known addresses and decides if it is new.
+		c.Ev.Emit("service_seen", botID, events.Info, map[string]any{"host": host})
+	}
+	c.Proxy.Hooks.OnConn = c.onConn
 	c.Pipe.Account = append(c.Pipe.Account, c.Users.Account, c.Users.Payments)
 	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
@@ -244,6 +251,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "db backups", func() { c.dailyBackups(ctx) })
 	safe.Go(c.Log, "db checks", func() { c.DBChecks.Loop(ctx) })
 	safe.Go(c.Log, "proxy bypass check", func() { c.checkBypass(ctx) })
+	safe.Go(c.Log, "services", func() { c.watchServices(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)
