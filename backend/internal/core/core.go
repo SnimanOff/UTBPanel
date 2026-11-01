@@ -58,6 +58,7 @@ type Core struct {
 	Releases  *deploy.Store
 	Pipe      *ingress.Pipeline
 	Users     *users.Tracker
+	Bans      *users.Bans
 	Count     *counters.Counters
 	Host      *counters.HostSampler
 	Live      *counters.Live
@@ -167,6 +168,12 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.Users = &users.Tracker{DB: db, W: c.W, Log: log, OnNew: c.Count.NewUser, OnBlock: c.Count.Block, OnPayment: c.Count.Payment}
 	c.Pipe.Observe = append(c.Pipe.Observe, c.Count.Observe)
 	c.Users.Register(c.Mux)
+	c.Bans = &users.Bans{DB: db}
+	if err := c.Bans.Load(ctx); err != nil {
+		return nil, err
+	}
+	c.Pipe.Checks = append(c.Pipe.Checks, c.Bans.Check)
+	c.registerBans()
 	c.DBG = &dbgate.Browser{Path: func(id int64) string {
 		return filepath.Join(c.Cfg.DataDir, "bots", strconv.FormatInt(id, 10), "bot.db")
 	}}
@@ -255,6 +262,7 @@ func (c *Core) Run(ctx context.Context) error {
 	safe.Go(c.Log, "db checks", func() { c.DBChecks.Loop(ctx) })
 	safe.Go(c.Log, "proxy bypass check", func() { c.checkBypass(ctx) })
 	safe.Go(c.Log, "services", func() { c.watchServices(ctx) })
+	safe.Go(c.Log, "bans", func() { c.Bans.Run(ctx) })
 	safe.Go(c.Log, "self stats", func() {
 		var s procstat.Sampler
 		t := time.NewTicker(10 * time.Second)

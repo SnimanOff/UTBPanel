@@ -313,6 +313,48 @@ paths:
         - { name: offset, in: query, schema: { type: integer } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/UserList" } } } }
+  /api/bots/{id}/users/{uid}/ban:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: uid, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: ban_user
+      tags: [users]
+      summary: Ban a user in this bot (reason required; hours 0 = forever)
+      x-mcp: confirm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanRequest" }
+      responses:
+        "204": { description: Done }
+  /api/bots/{id}/users/{uid}/unban:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: uid, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: unban_user
+      tags: [users]
+      summary: Lift a ban
+      x-mcp: write
+      responses:
+        "204": { description: Done }
+  /api/users/{uid}/ban:
+    parameters:
+      - { name: uid, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: ban_user_everywhere
+      tags: [users]
+      summary: Ban a user in all bots at once
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BanRequest" }
+      responses:
+        "204": { description: Done }
   /api/bots/{id}/audience:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -835,6 +877,12 @@ components:
       properties:
         users: { type: array, items: { $ref: "#/components/schemas/BotUser" } }
         total: { type: integer }
+    BanRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string }
+        hours: { type: integer, description: "0 = forever" }
     Share:
       type: object
       required: [key, count]

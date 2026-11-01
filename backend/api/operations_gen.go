@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "0107a511817ada51fe2e09ca2e4c61cfc1b45c7a0df514f5b206db5d467cef1d"
+const GeneratedHash = "26f3ac6257e1989e8e81bd6339d68fcce34155af0edad9c42f3595c496f92e02"
 
 // Op is one operation of the API.
 type Op struct {
@@ -57,11 +57,14 @@ var Ops = []Op{
 	{"mark_service_known", "POST", "/api/bots/{id}/services/known", "write", "Mark an address as known (no more \"new address\" notifications)"},
 	{"start", "POST", "/api/bots/{id}/start", "write", "Start the bot"},
 	{"stop", "POST", "/api/bots/{id}/stop", "confirm", "Stop the bot; updates wait at Telegram"},
+	{"ban_user", "POST", "/api/bots/{id}/users/{uid}/ban", "confirm", "Ban a user in this bot (reason required; hours 0 = forever)"},
+	{"unban_user", "POST", "/api/bots/{id}/users/{uid}/unban", "write", "Lift a ban"},
 	{"approve_device", "POST", "/api/devices/{id}/approve", "never", "Approve a device after comparing the code (owner only)"},
 	{"reject_device", "POST", "/api/devices/{id}/reject", "never", "Reject a device (owner only)"},
 	{"create_group", "POST", "/api/groups", "never", "Create a group"},
 	{"issue_key", "POST", "/api/keys", "never", "Issue a child key; returns gate-<name>.exe (owner only)"},
 	{"revoke_key", "POST", "/api/keys/{serial}/revoke", "never", "Revoke a key (owner only; the owner key only over SSH)"},
+	{"ban_user_everywhere", "POST", "/api/users/{uid}/ban", "never", "Ban a user in all bots at once"},
 	{"enroll", "POST", "/enroll", "never", "Request a device certificate (gate.exe with its enrollment certificate)"},
 	{"order_bots", "PUT", "/api/bots/order", "never", "Put bots into a group in this order (0 = no group)"},
 	{"set_bot_group", "PUT", "/api/bots/{id}/group", "never", "Move the bot to another group"},
