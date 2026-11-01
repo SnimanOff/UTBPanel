@@ -94,3 +94,24 @@ func TestBlocksAndPayments(t *testing.T) {
 		t.Fatalf("payments = %d refunded=%v", n, refunded)
 	}
 }
+
+func TestListAndAudience(t *testing.T) {
+	ctx := context.Background()
+	tr := newTracker(t)
+	now := time.Now()
+	tr.Account(ctx, upd(5, "/start ads", now))
+	tr.Account(ctx, upd(6, "/start ads", now))
+	tr.Account(ctx, upd(7, "hi", now))
+	tr.Flush(ctx)
+	res, err := tr.List(ctx, ListQuery{BotID: 1, Query: "@u6"})
+	if err != nil || res.Total != 1 || res.Users[0].ID != 6 || res.Users[0].Source != "ads" {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if res, _ := tr.List(ctx, ListQuery{BotID: 1}); res.Total != 3 {
+		t.Fatalf("all = %d", res.Total)
+	}
+	a, err := tr.Audience(ctx, 1)
+	if err != nil || a.Total != 3 || len(a.Sources) != 1 || a.Sources[0].Count != 2 || a.Languages[0].Key != "ru" {
+		t.Fatalf("%+v %v", a, err)
+	}
+}

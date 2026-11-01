@@ -27,6 +27,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/sources"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store/migrations"
+	"github.com/SnimanOff/UTBPanel/backend/internal/users"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
 
@@ -140,6 +141,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	// Minutes of metrics: fetched from the core, written, then confirmed.
 	p.Metrics = &metrics.Storage{DB: db, W: p.W, Log: log}
 	(&metrics.API{S: p.Metrics, Core: p.Core}).Register(p.API.Mux)
+	(&users.API{Core: p.Core, WriteErr: bots.WriteCoreError}).Register(p.API.Mux)
 	hub := &livehub.LiveHub{Core: p.Core, Log: log}
 	hub.Register(p.API.Mux)
 	p.Go(hub.Run)

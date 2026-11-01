@@ -20,6 +20,7 @@ tags:
   - name: logs
   - name: releases
   - name: metrics
+  - name: users
   - name: groups
   - name: audit
   - name: keys
@@ -295,6 +296,30 @@ paths:
         - { name: period, in: query, schema: { type: string, enum: [1h, 24h, 7d, 30d, 90d, 1y, all] } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/BotMetrics" } } } }
+
+  /api/bots/{id}/users:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: list_users
+      tags: [users]
+      summary: Users of the bot; search by id or username, filter all | banned | blocked
+      x-mcp: read
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: filter, in: query, schema: { type: string, enum: [all, banned, blocked] } }
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: offset, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/UserList" } } } }
+  /api/bots/{id}/audience:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_audience
+      tags: [users]
+      summary: Languages, Premium share and sources of the bot's users
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Audience" } } } }
 
   /api/bots/{id}/releases:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
@@ -590,6 +615,41 @@ components:
         d1: { type: number }
         d7: { type: number }
         d30: { type: number }
+    BotUser:
+      type: object
+      required: [id, username, language, premium, source, first_seen, last_seen, updates, blocked, banned, active_days]
+      properties:
+        id: { type: integer }
+        username: { type: string, x-untrusted: true }
+        language: { type: string }
+        premium: { type: boolean }
+        source: { type: string, x-untrusted: true }
+        first_seen: { type: string, format: date-time }
+        last_seen: { type: string, format: date-time }
+        updates: { type: integer }
+        blocked: { type: boolean }
+        banned: { type: boolean }
+        ban_reason: { type: string }
+        ban_until: { type: string, format: date-time }
+        active_days: { type: integer }
+    UserList:
+      type: object
+      required: [users, total]
+      properties:
+        users: { type: array, items: { $ref: "#/components/schemas/BotUser" } }
+        total: { type: integer }
+    Share:
+      type: object
+      required: [key, count]
+      properties: { key: { type: string }, count: { type: integer } }
+    Audience:
+      type: object
+      required: [total, premium, languages, sources]
+      properties:
+        total: { type: integer }
+        premium: { type: integer }
+        languages: { type: array, items: { $ref: "#/components/schemas/Share" } }
+        sources: { type: array, items: { $ref: "#/components/schemas/Share" } }
     BotMetrics:
       type: object
       required: [series]

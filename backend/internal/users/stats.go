@@ -46,6 +46,7 @@ func (n nullZero) Scan(v any) error {
 
 // Register adds users.stats to the core socket.
 func (t *Tracker) Register(mux *wire.Mux) {
+	t.registerList(mux)
 	mux.Handle("users.stats", wire.Func(func(ctx context.Context, _ *wire.Conn, id int64) (Stats, error) {
 		return t.Stats(ctx, id)
 	}))

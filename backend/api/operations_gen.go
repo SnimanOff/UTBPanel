@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "910913270c24d4dc2eb06302a88714b848f420c939ec8f93ccc15fd16623b887"
+const GeneratedHash = "d40df7b4e52a48bf0110e8d524057c3a866d037d896a48049aca98a235fbe87e"
 
 // Op is one operation of the API.
 type Op struct {
@@ -18,6 +18,7 @@ var Ops = []Op{
 	{"get_audit", "GET", "/api/audit", "read", "Action log with filters"},
 	{"list_bots", "GET", "/api/bots", "read", "Bots with statuses, groups and versions"},
 	{"get_bot", "GET", "/api/bots/{id}", "read", "One bot"},
+	{"get_audience", "GET", "/api/bots/{id}/audience", "read", "Languages, Premium share and sources of the bot's users"},
 	{"get_logs", "GET", "/api/bots/{id}/logs", "read", "Last lines, or a search with from/to/search=1"},
 	{"download_logs", "GET", "/api/bots/{id}/logs/download", "never", "All log files as zip"},
 	{"stream_logs", "GET", "/api/bots/{id}/logs/stream", "never", "Live log lines (Server-Sent Events)"},
@@ -25,6 +26,7 @@ var Ops = []Op{
 	{"list_versions", "GET", "/api/bots/{id}/releases", "read", "Stored versions with build data"},
 	{"list_secrets", "GET", "/api/bots/{id}/secrets", "read", "Names of the bot's secrets; values are never returned"},
 	{"get_settings", "GET", "/api/bots/{id}/settings", "read", "Settings of the bot (env, renames, limits)"},
+	{"list_users", "GET", "/api/bots/{id}/users", "read", "Users of the bot; search by id or username, filter all | banned | blocked"},
 	{"list_devices", "GET", "/api/devices", "never", "Devices waiting for approval"},
 	{"list_groups", "GET", "/api/groups", "read", "Groups in order"},
 	{"list_keys", "GET", "/api/keys", "never", "Access keys"},
