@@ -32,6 +32,7 @@ func (u *Uploads) Register(mux *api.Mux) {
 	mux.HandleFunc("POST /api/bots/{id}/releases", u.upload)
 	mux.HandleFunc("GET /api/bots/{id}/releases", u.list)
 	mux.HandleFunc("POST /api/bots/{id}/releases/{version}/switch", u.switchVersion)
+	mux.HandleFunc("GET /api/bots/{id}/deploys", u.deploys)
 	u.registerGitHub(mux)
 }
 
@@ -119,4 +120,14 @@ func (u *Uploads) switchVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	audit.Annotate(r, "release.switch", in.Version, nil)
 	api.WriteJSON(w, http.StatusOK, map[string]string{"version": in.Version})
+}
+
+// deploys is the history: who switched to what, and how it ended.
+func (u *Uploads) deploys(w http.ResponseWriter, r *http.Request) {
+	var ds []core.DeployRecord
+	if err := u.Core.Call(r.Context(), "deploys.list", botID(r), &ds); err != nil {
+		bots.WriteCoreError(w, err)
+		return
+	}
+	api.WriteJSON(w, http.StatusOK, ds)
 }

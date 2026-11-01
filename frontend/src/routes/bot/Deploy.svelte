@@ -1,0 +1,263 @@
+<script lang="ts">
+  // Deploy: stored versions with their build data, upload, switch and
+  // rollback by holding (a database backup is made before each), GitHub
+  // Releases with autodeploy, and the deploy history.
+  import { api, errorText, type Release, type Schemas } from '../../lib/api/client'
+  import { store } from '../../lib/api/stores.svelte'
+  import { bytes, utc } from '../../lib/format'
+  import Box from '../../lib/ui/Box.svelte'
+  import HoldButton from '../../lib/ui/HoldButton.svelte'
+
+  let { botId }: { botId: number } = $props()
+  type GH = {
+    repo: string
+    asset_mask: string
+    auto_deploy: boolean
+    has_token: boolean
+    hook_url: string
+    last_tag?: string
+    checked_at?: string
+    last_error?: string
+  }
+  let releases = $state<Release[]>([])
+  let deploys = $state<Schemas['DeployRecord'][]>([])
+  let gh = $state<GH | null>(null)
+  let repo = $state('')
+  let mask = $state('*linux_amd64*')
+  let auto = $state(false)
+  let token = $state('')
+  let hookSecret = $state('')
+  let file = $state<HTMLInputElement>()
+  let version = $state('')
+  let busy = $state(false)
+  let error = $state('')
+  let info = $state('')
+
+  async function load() {
+    try {
+      ;[releases, deploys] = await Promise.all([
+        api.get<Release[]>(`/api/bots/${botId}/releases`),
+        api.get<Schemas['DeployRecord'][]>(`/api/bots/${botId}/deploys`),
+      ])
+      const g = await api.get<{ github: GH | null }>(`/api/bots/${botId}/github`)
+      gh = g.github
+      if (gh) {
+        repo = gh.repo
+        mask = gh.asset_mask
+        auto = gh.auto_deploy
+      }
+    } catch (e) {
+      error = errorText(e)
+    }
+  }
+  $effect(() => {
+    void botId
+    load()
+  })
+
+  async function run(fn: () => Promise<unknown>, msg: string) {
+    busy = true
+    error = ''
+    info = ''
+    try {
+      await fn()
+      info = msg
+      setTimeout(() => (info = ''), 4000)
+      store.refresh(botId)
+      await load()
+    } catch (e) {
+      error = errorText(e)
+    } finally {
+      busy = false
+    }
+  }
+
+  const switchTo = (v: string) =>
+    run(() => api.post(`/api/bots/${botId}/releases/${encodeURIComponent(v)}/switch`), `Переключено на ${v}`)
+
+  function upload(e: SubmitEvent) {
+    e.preventDefault()
+    const f = file?.files?.[0]
+    if (!f) return
+    const fd = new FormData()
+    if (version.trim()) fd.append('version', version.trim())
+    fd.append('file', f)
+    run(async () => {
+      const r = await api.post<Release>(`/api/bots/${botId}/releases`, fd)
+      version = ''
+      if (file) file.value = ''
+      info = `Загружена ${r.version}`
+    }, 'Версия загружена')
+  }
+
+  function saveGitHub(e: SubmitEvent) {
+    e.preventDefault()
+    run(async () => {
+      const body: Record<string, unknown> = { repo, asset_mask: mask, auto_deploy: auto }
+      if (token) body.token = token
+      const r = await api.put<{ hook_secret?: string }>(`/api/bots/${botId}/github`, body)
+      token = ''
+      if (r.hook_secret) hookSecret = r.hook_secret
+    }, repo ? 'GitHub сохранён' : 'GitHub отключён')
+  }
+  const dropToken = () => run(() => api.put(`/api/bots/${botId}/github`, { repo, asset_mask: mask, auto_deploy: auto, token: '' }), 'Токен удалён')
+  const check = () => run(() => api.post(`/api/bots/${botId}/github/check`), 'Проверено')
+
+  const results: Record<string, string> = { running: 'идёт', ok: 'готово', failed: 'ошибка', rolled_back: 'откачен' }
+</script>
+
+{#if error}<p class="danger pre">{error}</p>{/if}
+{#if info}<p class="ok">{info}</p>{/if}
+
+<Box title="Версии">
+  <table>
+    <thead><tr><th>Версия</th><th>Источник</th><th>Загружена</th><th>Сборка</th><th>Размер</th><th></th></tr></thead>
+    <tbody>
+      {#each releases as r (r.version)}
+        <tr class:cur={r.current}>
+          <td class="num">
+            {r.version}
+            {#if r.current}<span class="tag">текущая</span>{/if}
+            {#if r.previous}<span class="tag muted">предыдущая</span>{/if}
+          </td>
+          <td>{r.source}</td>
+          <td class="num muted">{utc(r.uploaded)}</td>
+          <td class="muted num" title={r.build.module}>
+            {r.build.go_version ?? ''}
+            {#if r.build.revision}· {r.build.revision.slice(0, 8)}{r.build.modified ? '+' : ''}{/if}
+            {#if r.build.vcs_time}· {utc(r.build.vcs_time)}{/if}
+          </td>
+          <td class="num muted">{bytes(r.size)}</td>
+          <td>
+            {#if !r.current}
+              <HoldButton danger={r.previous} disabled={busy} onconfirm={() => switchTo(r.version)}>
+                {r.previous ? '↶ Откатить' : 'Переключить'}
+              </HoldButton>
+            {/if}
+          </td>
+        </tr>
+      {:else}
+        <tr><td colspan="6" class="muted">Версий нет — загрузите бинарник или подключите GitHub.</td></tr>
+      {/each}
+    </tbody>
+  </table>
+  <p class="muted">Хранятся 5 последних версий. Перед каждым переключением делается бэкап базы бота.</p>
+  <form class="line" onsubmit={upload}>
+    <input type="file" bind:this={file} />
+    <input bind:value={version} placeholder="версия (необязательно)" />
+    <button disabled={busy}>Загрузить</button>
+  </form>
+</Box>
+
+<div class="cols">
+  <Box title="GitHub Releases">
+    <form onsubmit={saveGitHub}>
+      <label>Репозиторий <input bind:value={repo} placeholder="owner/repo" /></label>
+      <label>Файл релиза <input bind:value={mask} placeholder="*linux_amd64*" /></label>
+      <label>
+        Токен для приватного репозитория {#if gh?.has_token}<span class="muted">— сохранён</span>{/if}
+        <input type="password" bind:value={token} placeholder={gh?.has_token ? 'заменить' : 'ghp_…'} autocomplete="off" />
+      </label>
+      <label class="check"><input type="checkbox" bind:checked={auto} /> автодеплой нового релиза</label>
+      <div class="line">
+        <button class="primary" disabled={busy}>Сохранить</button>
+        {#if gh}<button type="button" disabled={busy} onclick={check}>Проверить сейчас</button>{/if}
+        {#if gh?.has_token}<button type="button" disabled={busy} onclick={dropToken}>Удалить токен</button>{/if}
+      </div>
+    </form>
+    {#if gh}
+      <p class="muted">
+        Опрос раз в 5 минут{#if gh.checked_at}, последний — <span class="num">{utc(gh.checked_at)}</span>{/if}{#if gh.last_tag}, последний релиз <span class="num">{gh.last_tag}</span>{/if}.
+      </p>
+      {#if gh.last_error}<p class="danger">{gh.last_error}</p>{/if}
+      <p class="muted">Вебхук (необязательно, быстрее опроса): Settings → Webhooks, событие Releases, тип application/json</p>
+      <code class="sel">{gh.hook_url}</code>
+      {#if hookSecret}
+        <p>Секрет вебхука — показывается один раз:</p>
+        <code class="sel">{hookSecret}</code>
+      {/if}
+    {/if}
+  </Box>
+
+  <Box title="История деплоев">
+    <table>
+      <thead><tr><th>Когда</th><th>Версия</th><th>Кто</th><th>Итог</th></tr></thead>
+      <tbody>
+        {#each deploys as d (d.id)}
+          <tr>
+            <td class="num muted">{utc(d.started_at)}</td>
+            <td class="num">{d.from || '—'} → {d.to}</td>
+            <td class="muted">{d.actor}</td>
+            <td class:danger={d.result === 'failed'} title={d.error ?? ''}>{results[d.result] ?? d.result}</td>
+          </tr>
+        {:else}
+          <tr><td colspan="4" class="muted">Деплоев ещё не было</td></tr>
+        {/each}
+      </tbody>
+    </table>
+  </Box>
+</div>
+
+<style>
+  table {
+    width: 100%;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: var(--s1) var(--s2);
+    border-bottom: var(--line);
+  }
+  th {
+    color: var(--muted);
+    font-weight: 400;
+    font-size: var(--fs-s);
+  }
+  .cur td {
+    background: var(--surface-2);
+  }
+  .tag {
+    font-size: var(--fs-xs);
+    border: var(--line);
+    padding: 0 var(--s1);
+    margin-left: var(--s1);
+  }
+  .cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--s3);
+    margin: var(--s3) 0;
+  }
+  form,
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s1);
+  }
+  form {
+    gap: var(--s2);
+  }
+  .check {
+    flex-direction: row;
+    align-items: center;
+  }
+  .line {
+    display: flex;
+    flex-direction: row;
+    gap: var(--s2);
+    align-items: center;
+    margin-top: var(--s2);
+  }
+  .sel {
+    user-select: all;
+    display: block;
+    word-break: break-all;
+    margin: var(--s1) 0;
+  }
+  .ok {
+    color: var(--accent-hi);
+  }
+  .pre {
+    white-space: pre-wrap;
+  }
+</style>

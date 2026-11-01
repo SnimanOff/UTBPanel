@@ -118,8 +118,17 @@ func (s *Storage) RememberHost(ctx context.Context, botID int64, host string) bo
 	return n > 0
 }
 
-// OnCoreEvent handles service_seen from the core.
+// OnCoreEvent handles service_seen and deploy from the core.
 func (s *Storage) OnCoreEvent(ev events.Event) {
+	if ev.Type == "deploy" {
+		// Marks on the charts.
+		version, _ := ev.Data["version"].(string)
+		result, _ := ev.Data["result"].(string)
+		if err := s.AddDeploy(context.Background(), ev.BotID, ev.Time, version, result); err != nil {
+			s.Log.Warn("deploy mark not stored", "bot", ev.BotID, "err", err)
+		}
+		return
+	}
 	if ev.Type != "service_seen" {
 		return
 	}

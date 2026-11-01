@@ -401,6 +401,15 @@ paths:
       responses:
         "204": { description: Done }
 
+  /api/bots/{id}/deploys:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: list_deploys
+      tags: [releases]
+      summary: Deploy history (from, to, backup, who, result), newest first
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/DeployRecord" } } } } }
   /api/bots/{id}/github:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -1292,6 +1301,19 @@ components:
         blocked: { type: integer }
         failed: { type: integer }
         errors: { type: object, additionalProperties: { type: integer } }
+    DeployRecord:
+      type: object
+      required: [id, from, to, actor, started_at, result]
+      properties:
+        id: { type: integer }
+        from: { type: string }
+        to: { type: string }
+        backup: { type: string }
+        actor: { type: string }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        result: { type: string, enum: [running, ok, failed, rolled_back] }
+        error: { type: string }
     BanRequest:
       type: object
       required: [reason]
@@ -1410,6 +1432,8 @@ components:
             go_version: { type: string }
             version: { type: string }
             revision: { type: string }
+            vcs_time: { type: string }
+            modified: { type: boolean }
     Group:
       type: object
       required: [id, name, position, mcp_mode]

@@ -17,6 +17,7 @@
   import Maintenance from './bot/Maintenance.svelte'
   import Profile from './bot/Profile.svelte'
   import Broadcast from './bot/Broadcast.svelte'
+  import Deploy from './bot/Deploy.svelte'
 
   let { id, tab }: { id: number; tab: string } = $props()
   const tabs = [
@@ -94,6 +95,7 @@
     {:else if tab === 'users'}
       <Users botId={id} />
     {:else if tab === 'deploy'}
+      <Deploy botId={id} />
       <h2 class="sub">Техработы</h2>
       <Maintenance botId={id} />
     {:else if tab === 'broadcast'}

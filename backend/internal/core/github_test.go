@@ -125,6 +125,14 @@ func TestGitHubRelease(t *testing.T) {
 		t.Fatalf("release: %d", st)
 	}
 
+	// A switch is recorded in the deploy history, whatever its outcome
+	// (the Linux binary may not start on the test machine).
+	c.Deploy(ctx, SwitchVersion{BotID: b.ID, Version: "v1.0.0", Actor: githubActor})
+	ds, _ := c.Deploys(ctx, b.ID, 10)
+	if len(ds) != 1 || ds[0].To != "v1.0.0" || ds[0].Result == "running" || ds[0].Actor != "github:github" {
+		t.Fatalf("deploys %+v", ds)
+	}
+
 	// An empty repository turns GitHub off and drops its secrets.
 	c.SetGitHub(ctx, GitHubSet{BotID: b.ID})
 	if g, _ := c.GitHub(ctx, b.ID); g != nil {
