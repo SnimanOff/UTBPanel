@@ -9,7 +9,7 @@ import (
 // MaxLine is the longest line kept; the rest of a longer line is cut.
 const MaxLine = 16 << 10
 
-func (r *Runner) pipe(id int64, stream string, rd io.Reader) {
+func (r *Runner) pipe(id int64, instance, stream string, rd io.Reader) {
 	br := bufio.NewReaderSize(rd, MaxLine)
 	for {
 		line, isPrefix, err := br.ReadLine()
@@ -23,7 +23,7 @@ func (r *Runner) pipe(id int64, stream string, rd io.Reader) {
 				}
 			}
 			if r.cfg.Hooks.Output != nil {
-				r.cfg.Hooks.Output(Line{BotID: id, Stream: stream, Text: text, Time: time.Now().UTC()})
+				r.cfg.Hooks.Output(Line{BotID: id, Stream: stream, Text: text, Time: time.Now().UTC(), Instance: instance})
 			}
 		}
 		if err != nil {

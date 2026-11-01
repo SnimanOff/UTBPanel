@@ -51,7 +51,12 @@ func (c *Core) newRunner() *runner.Runner {
 			OpenFiles: int64(l.OpenFiles), Threads: int64(l.Threads),
 		},
 		Hooks: runner.Hooks{
-			Output: func(l runner.Line) { c.Logs.Add(l.BotID, l.Stream, l.Text, l.Time) },
+			Output: func(l runner.Line) {
+				if l.Instance == "canary" {
+					l.Text = "[canary] " + l.Text
+				}
+				c.Logs.Add(l.BotID, l.Stream, l.Text, l.Time)
+			},
 			Event: func(id int64, typ, sev string, data map[string]any) {
 				if typ == "bot_crashed" {
 					c.Count.Add(id, metrics.Crashes, 1)
@@ -62,8 +67,11 @@ func (c *Core) newRunner() *runner.Runner {
 			// Every bot gets its own proxy port: the bot is known from the
 			// port, no guessing by token.
 			Env: func(b runner.Bot, env map[string]string) {
-				port := ProxyPort(b.Port)
-				if err := c.Proxy.Start(b.ID, "main", port); err != nil {
+				port, inst := ProxyPort(b.Port), "main"
+				if b.Instance == "canary" {
+					inst = "canary"
+				}
+				if err := c.Proxy.Start(b.ID, inst, port); err != nil {
 					c.Log.Error("bot proxy did not start", "bot", b.ID, "err", err)
 					return
 				}

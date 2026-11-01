@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "601d62dda8a5551a5e8fa7dbd9faf571b0bce488d63c2bd6edb7c70e4f555ee1"
+const GeneratedHash = "c1d98aeb0632100ed64e1ad984fc1039f75176b8d5c080fffabe2af44dac2020"
 
 // Op is one operation of the API.
 type Op struct {
@@ -13,6 +13,7 @@ type Op struct {
 // Ops lists all operations.
 var Ops = []Op{
 	{"delete_bot", "DELETE", "/api/bots/{id}", "never", "Stop the bot, remove its webhook and delete all its data"},
+	{"stop_canary", "DELETE", "/api/bots/{id}/canary", "write", "Cancel the canary; everyone goes back to the main version, the database is not touched"},
 	{"closed_remove", "DELETE", "/api/bots/{id}/closed/allow/{uid}", "write", "Remove a user from the closed mode list"},
 	{"delete_secret", "DELETE", "/api/bots/{id}/secrets/{name}", "confirm", "Delete a secret"},
 	{"delete_group", "DELETE", "/api/groups/{gid}", "never", "Delete a group; its bots move to \"No group\""},
@@ -23,6 +24,7 @@ var Ops = []Op{
 	{"list_broadcasts", "GET", "/api/bots/{id}/broadcasts", "read", "History of broadcasts with results, newest first"},
 	{"estimate_broadcast", "GET", "/api/bots/{id}/broadcasts/estimate", "read", "Number of recipients for an audience"},
 	{"get_broadcast", "GET", "/api/bots/{id}/broadcasts/{bid}", "read", "One broadcast with its progress"},
+	{"get_canary", "GET", "/api/bots/{id}/canary", "read", "The canary of the bot (second instance with a new version), or null"},
 	{"get_closed", "GET", "/api/bots/{id}/closed", "read", "Closed mode of the bot and its list"},
 	{"get_db_schema", "GET", "/api/bots/{id}/db", "read", "Tables of the bot database with schema, row counts and size"},
 	{"list_db_backups", "GET", "/api/bots/{id}/db/backups", "read", "Backups of the bot database (checked with integrity_check)"},
@@ -55,6 +57,7 @@ var Ops = []Op{
 	{"get_panel_settings", "GET", "/api/settings", "read", "Panel settings (Telegram ID of the owner)"},
 	{"enroll_status", "GET", "/enroll/{id}", "never", "State of an enrollment request (gate.exe polls it)"},
 	{"rename_bot", "PATCH", "/api/bots/{id}", "write", "Rename the bot in the panel (the Telegram name is in the profile)"},
+	{"set_canary", "PATCH", "/api/bots/{id}/canary", "write", "Change the share and users of the canary on the fly"},
 	{"update_profile", "PATCH", "/api/bots/{id}/profile", "confirm", "Send only changed fields (name, descriptions, commands, menu); errors come per field"},
 	{"update_settings", "PATCH", "/api/bots/{id}/settings", "confirm", "Change env, variable renames and limits; applies after a restart"},
 	{"rename_group", "PATCH", "/api/groups/{gid}", "never", "Rename a group"},
@@ -64,6 +67,7 @@ var Ops = []Op{
 	{"cancel_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/cancel", "confirm", "Stop a broadcast for good"},
 	{"pause_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/pause", "write", "Pause sending; progress is kept"},
 	{"resume_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/resume", "write", "Continue a paused broadcast"},
+	{"start_canary", "POST", "/api/bots/{id}/canary", "confirm", "Start a canary with a version for listed users and/or a share of users in private chats"},
 	{"closed_allow", "POST", "/api/bots/{id}/closed/allow", "write", "Add a user to the closed mode list by id, @username (known users only) or \"me\""},
 	{"backup_db", "POST", "/api/bots/{id}/db/backups", "write", "Make a backup now (VACUUM INTO, the bot keeps running)"},
 	{"restore_db", "POST", "/api/bots/{id}/db/backups/{name}/restore", "never", "Stop the bot, restore the database from a backup, start it again"},

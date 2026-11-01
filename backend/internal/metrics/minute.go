@@ -38,6 +38,7 @@ const (
 	RSS            = "rss"   // gauge, bytes
 	OpenFiles      = "fds"   // gauge
 	Threads        = "threads"
+	CanaryPrefix   = "canary_" // canary_updates, canary_errors, canary_resp…
 )
 
 // Merge adds o into m (counters and histograms add, gauges take the max).

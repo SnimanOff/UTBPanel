@@ -419,6 +419,58 @@ paths:
       x-mcp: read
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/DeployReport" } } } } }
+  /api/bots/{id}/canary:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_canary
+      tags: [releases]
+      summary: The canary of the bot (second instance with a new version), or null
+      x-mcp: read
+      responses:
+        "200": { description: OK }
+    post:
+      operationId: start_canary
+      tags: [releases]
+      summary: Start a canary with a version for listed users and/or a share of users in private chats
+      x-mcp: confirm
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version: { type: string }
+                share: { type: integer, description: "% of users by hash(user_id)" }
+                users: { type: array, items: { type: integer } }
+                me: { type: boolean, description: "add the owner's Telegram ID" }
+                auto_after: { type: integer, description: "minutes until auto promote, 0 = off" }
+      responses:
+        "204": { description: Done }
+    patch:
+      operationId: set_canary
+      tags: [releases]
+      summary: Change the share and users of the canary on the fly
+      x-mcp: write
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version: { type: string }
+                share: { type: integer, description: "% of users by hash(user_id)" }
+                users: { type: array, items: { type: integer } }
+                me: { type: boolean, description: "add the owner's Telegram ID" }
+                auto_after: { type: integer, description: "minutes until auto promote, 0 = off" }
+      responses:
+        "204": { description: Done }
+    delete:
+      operationId: stop_canary
+      tags: [releases]
+      summary: Cancel the canary; everyone goes back to the main version, the database is not touched
+      x-mcp: write
+      responses:
+        "204": { description: Done }
   /api/bots/{id}/github:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:

@@ -361,3 +361,48 @@ func TestIsolation(t *testing.T) {
 		t.Errorf("own file: %s", got)
 	}
 }
+
+func TestCanary(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t)
+	b := e.addBot(t, 1, Settings{})
+	if err := e.r.Start(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	cb := b
+	cb.Port = freePort(t)
+	if err := e.r.StartCanary(ctx, cb); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.r.StartCanary(ctx, cb); err != ErrCanaryRunning {
+		t.Fatalf("second canary: %v", err)
+	}
+	env := get(t, cb.Port, "/env")
+	if !strings.Contains(env, "TGPANEL_CANARY=1") || !strings.Contains(env, "PORT="+strconv.Itoa(cb.Port)) {
+		t.Fatalf("canary env:\n%s", env)
+	}
+	if strings.Contains(get(t, b.Port, "/env"), "TGPANEL_CANARY") {
+		t.Fatal("main instance marked as canary")
+	}
+	if _, _, ok := e.r.Canary(1); !ok {
+		t.Fatal("canary not listed")
+	}
+	e.r.StopCanary(1)
+	if _, _, ok := e.r.Canary(1); ok || !e.r.IsRunning(1) {
+		t.Fatal("stopping the canary must leave the main instance")
+	}
+	for _, ev := range e.eventList() {
+		if ev == "canary_crashed" {
+			t.Fatal("a stop is not a crash")
+		}
+	}
+	e.mu.Lock()
+	tagged := false
+	for _, l := range e.lines {
+		tagged = tagged || l.Instance == "canary"
+	}
+	e.mu.Unlock()
+	if !tagged {
+		t.Fatal("canary output not tagged")
+	}
+}

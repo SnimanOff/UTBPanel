@@ -54,14 +54,17 @@ type Bot struct {
 	Port     int
 	Version  string
 	Settings Settings
+	// Instance is "" for the main process and "canary" for the second one.
+	Instance string
 }
 
 // Line is one line of bot output.
 type Line struct {
-	BotID  int64
-	Stream string // stdout | stderr | core
-	Text   string
-	Time   time.Time
+	BotID    int64
+	Stream   string // stdout | stderr | core
+	Text     string
+	Time     time.Time
+	Instance string // "" or "canary"
 }
 
 // Hooks lets the core react to the life cycle.
@@ -103,10 +106,11 @@ type Runner struct {
 	cfg Config
 	log *slog.Logger
 
-	mu    sync.Mutex
-	procs map[int64]*proc
-	sups  map[int64]*supervisor
-	watch watchState
+	mu       sync.Mutex
+	procs    map[int64]*proc
+	canaries map[int64]*proc
+	sups     map[int64]*supervisor
+	watch    watchState
 }
 
 type proc struct {
@@ -306,8 +310,8 @@ func (r *Runner) Start(ctx context.Context, b Bot) error {
 	r.mu.Unlock()
 	var outWG sync.WaitGroup
 	outWG.Add(2)
-	go func() { defer outWG.Done(); r.pipe(b.ID, "stdout", stdout) }()
-	go func() { defer outWG.Done(); r.pipe(b.ID, "stderr", stderr) }()
+	go func() { defer outWG.Done(); r.pipe(b.ID, "", "stdout", stdout) }()
+	go func() { defer outWG.Done(); r.pipe(b.ID, "", "stderr", stderr) }()
 	go func() {
 		outWG.Wait() // read all output before Wait closes the pipes
 		p.exit = cmd.Wait()
@@ -401,6 +405,10 @@ func (r *Runner) Shutdown() {
 	r.mu.Lock()
 	ps := make([]*proc, 0, len(r.procs))
 	for _, p := range r.procs {
+		p.stopping = true
+		ps = append(ps, p)
+	}
+	for _, p := range r.canaries {
 		p.stopping = true
 		ps = append(ps, p)
 	}

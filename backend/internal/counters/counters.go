@@ -170,16 +170,34 @@ func (c *Counters) Observe(o ingress.Outcome) {
 	case strings.HasPrefix(o.Result, "dropped_"):
 		m[metrics.DropPrefix+strings.TrimPrefix(o.Result, "dropped_")]++
 	}
+	if u.Instance == "canary" {
+		// The canary's own numbers, next to the totals.
+		m[metrics.CanaryPrefix+metrics.Updates]++
+		switch o.Result {
+		case "delivered":
+			m[metrics.CanaryPrefix+metrics.Delivered]++
+		case "error":
+			m[metrics.CanaryPrefix+metrics.Errors]++
+		case "timeout":
+			m[metrics.CanaryPrefix+metrics.Timeouts]++
+		}
+	}
 	if o.Latency > 0 {
 		if a.m.Hists == nil {
 			a.m.Hists = map[string]metrics.Hist{}
 		}
-		h := a.m.Hists[metrics.RespTime]
-		if h == nil {
-			h = metrics.NewHist()
-			a.m.Hists[metrics.RespTime] = h
+		names := []string{metrics.RespTime}
+		if u.Instance == "canary" {
+			names = append(names, metrics.CanaryPrefix+metrics.RespTime)
 		}
-		h.Add(o.Latency)
+		for _, name := range names {
+			h := a.m.Hists[name]
+			if h == nil {
+				h = metrics.NewHist()
+				a.m.Hists[name] = h
+			}
+			h.Add(o.Latency)
+		}
 	}
 	if u.UserID != 0 {
 		if a.users == nil {

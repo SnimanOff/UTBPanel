@@ -8,9 +8,11 @@ package ingress
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"log/slog"
 	"net"
@@ -42,6 +44,8 @@ type Update struct {
 	Payment    *Payment
 	// MyChatMember status of the bot in a private chat: kicked / member.
 	MemberStatus string
+	// Instance that got the update: "" (main) or "canary".
+	Instance string
 }
 
 // Payment is a successful or refunded payment.
@@ -88,6 +92,8 @@ type Pipeline struct {
 	Log *slog.Logger
 	// Target returns the bot's port and webhook secret.
 	Target func(ctx context.Context, botID int64) (Target, error)
+	// Route sends some users to the canary: its port, ok=false for main.
+	Route func(u *Update) (port int, ok bool)
 	// Account records users, sources, blocks and payments (steps 5–6).
 	Account []func(ctx context.Context, u *Update)
 	// Checks are steps 7–10 in order.
@@ -333,6 +339,11 @@ func (p *Pipeline) forward(ctx context.Context, u *Update) (edge.Reply, string, 
 	if err != nil || !t.Running {
 		return edge.Reply{Status: http.StatusOK}, "unavailable", 0
 	}
+	if p.Route != nil {
+		if port, ok := p.Route(u); ok {
+			t.Port, u.Instance = port, "canary"
+		}
+	}
 	ctx, cancel := context.WithTimeout(ctx, p.BotTimeout)
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "http://127.0.0.1:"+strconv.Itoa(t.Port)+"/", bytes.NewReader(u.Body))
@@ -363,4 +374,25 @@ func (p *Pipeline) forward(ctx context.Context, u *Update) (edge.Reply, string, 
 		res = "error"
 	}
 	return edge.Reply{Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), Body: body}, res, lat
+}
+
+// ToCanary decides whether an update goes to the canary: only updates of a
+// user in a private chat (messages, buttons, payments, pre_checkout_query),
+// for users on the list or hash(user_id) % 100 < share. Groups, channels
+// and updates without a user stay on the main instance.
+func ToCanary(u *Update, share int, users map[int64]bool) bool {
+	if u.UserID == 0 || (u.ChatType != "" && u.ChatType != "private") {
+		return false
+	}
+	if users[u.UserID] {
+		return true
+	}
+	if share <= 0 {
+		return false
+	}
+	h := fnv.New32a()
+	var b [8]byte
+	binary.LittleEndian.PutUint64(b[:], uint64(u.UserID))
+	h.Write(b[:])
+	return int(h.Sum32()%100) < share
 }

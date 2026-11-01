@@ -123,3 +123,38 @@ func TestTimeoutAndPanic(t *testing.T) {
 		t.Fatalf("panic: %+v %s", rep, res)
 	}
 }
+
+func TestToCanary(t *testing.T) {
+	users := map[int64]bool{42: true}
+	priv := func(id int64) *Update {
+		u := &Update{ChatType: "private"}
+		u.UserID = id
+		return u
+	}
+	if !ToCanary(priv(42), 0, users) {
+		t.Fatal("listed user must go to the canary")
+	}
+	group := priv(42)
+	group.ChatType = "supergroup"
+	if ToCanary(group, 100, users) {
+		t.Fatal("groups stay on main")
+	}
+	if ToCanary(&Update{}, 100, nil) {
+		t.Fatal("updates without a user stay on main")
+	}
+	n := 0
+	for id := int64(1); id <= 10000; id++ {
+		if ToCanary(priv(id), 10, nil) {
+			n++
+		}
+	}
+	if n < 800 || n > 1200 {
+		t.Fatalf("10%% share sent %d of 10000", n)
+	}
+	// The same user always lands on the same side.
+	for id := int64(1); id < 100; id++ {
+		if ToCanary(priv(id), 10, nil) != ToCanary(priv(id), 10, nil) {
+			t.Fatal("unstable")
+		}
+	}
+}
