@@ -59,6 +59,7 @@ type Core struct {
 	Pipe      *ingress.Pipeline
 	Users     *users.Tracker
 	Bans      *users.Bans
+	Closed    *users.Closed
 	Count     *counters.Counters
 	Host      *counters.HostSampler
 	Live      *counters.Live
@@ -172,8 +173,10 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	if err := c.Bans.Load(ctx); err != nil {
 		return nil, err
 	}
-	c.Pipe.Checks = append(c.Pipe.Checks, c.Bans.Check)
+	c.Closed = &users.Closed{DB: db.R, W: db.W}
+	c.Pipe.Checks = append(c.Pipe.Checks, c.Bans.Check, c.Closed.Check)
 	c.registerBans()
+	c.registerClosed()
 	c.DBG = &dbgate.Browser{Path: func(id int64) string {
 		return filepath.Join(c.Cfg.DataDir, "bots", strconv.FormatInt(id, 10), "bot.db")
 	}}

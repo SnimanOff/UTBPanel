@@ -355,6 +355,52 @@ paths:
             schema: { $ref: "#/components/schemas/BanRequest" }
       responses:
         "204": { description: Done }
+  /api/bots/{id}/closed:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_closed
+      tags: [users]
+      summary: Closed mode of the bot and its list
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ClosedState" } } } }
+    put:
+      operationId: set_closed
+      tags: [users]
+      summary: Turn closed mode on or off and set its text
+      x-mcp: confirm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [enabled], properties: { enabled: { type: boolean }, text: { type: string } } }
+      responses:
+        "204": { description: Done }
+  /api/bots/{id}/closed/allow:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: closed_allow
+      tags: [users]
+      summary: Add a user to the closed mode list by id, @username (known users only) or "me"
+      x-mcp: write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [user], properties: { user: { type: string }, note: { type: string } } }
+      responses:
+        "200": { description: OK }
+  /api/bots/{id}/closed/allow/{uid}:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: uid, in: path, required: true, schema: { type: integer } }
+    delete:
+      operationId: closed_remove
+      tags: [users]
+      summary: Remove a user from the closed mode list
+      x-mcp: write
+      responses:
+        "204": { description: Done }
   /api/bots/{id}/audience:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -664,6 +710,27 @@ paths:
       responses:
         "200": { description: text/event-stream }
 
+  /api/settings:
+    get:
+      operationId: get_panel_settings
+      tags: [system]
+      summary: Panel settings (Telegram ID of the owner)
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PanelSettings" } } } }
+    put:
+      operationId: set_panel_settings
+      tags: [system]
+      summary: Change panel settings (owner only)
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PanelSettings" }
+      responses:
+        "200": { description: OK }
+
   /api/audit:
     get:
       operationId: get_audit
@@ -877,6 +944,22 @@ components:
       properties:
         users: { type: array, items: { $ref: "#/components/schemas/BotUser" } }
         total: { type: integer }
+    PanelSettings:
+      type: object
+      required: [owner_tg_id]
+      properties: { owner_tg_id: { type: integer } }
+    ClosedState:
+      type: object
+      required: [enabled, text, allow]
+      properties:
+        enabled: { type: boolean }
+        text: { type: string }
+        allow:
+          type: array
+          items:
+            type: object
+            required: [user_id]
+            properties: { user_id: { type: integer }, username: { type: string }, note: { type: string } }
     BanRequest:
       type: object
       required: [reason]

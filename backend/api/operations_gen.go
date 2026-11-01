@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "26f3ac6257e1989e8e81bd6339d68fcce34155af0edad9c42f3595c496f92e02"
+const GeneratedHash = "c49aff4ff602f0723b319dd20b8f37f48ab63c8b5f1180a2ea5dd65373455491"
 
 // Op is one operation of the API.
 type Op struct {
@@ -13,12 +13,14 @@ type Op struct {
 // Ops lists all operations.
 var Ops = []Op{
 	{"delete_bot", "DELETE", "/api/bots/{id}", "never", "Stop the bot, remove its webhook and delete all its data"},
+	{"closed_remove", "DELETE", "/api/bots/{id}/closed/allow/{uid}", "write", "Remove a user from the closed mode list"},
 	{"delete_secret", "DELETE", "/api/bots/{id}/secrets/{name}", "confirm", "Delete a secret"},
 	{"delete_group", "DELETE", "/api/groups/{gid}", "never", "Delete a group; its bots move to \"No group\""},
 	{"get_audit", "GET", "/api/audit", "read", "Action log with filters"},
 	{"list_bots", "GET", "/api/bots", "read", "Bots with statuses, groups and versions"},
 	{"get_bot", "GET", "/api/bots/{id}", "read", "One bot"},
 	{"get_audience", "GET", "/api/bots/{id}/audience", "read", "Languages, Premium share and sources of the bot's users"},
+	{"get_closed", "GET", "/api/bots/{id}/closed", "read", "Closed mode of the bot and its list"},
 	{"get_db_schema", "GET", "/api/bots/{id}/db", "read", "Tables of the bot database with schema, row counts and size"},
 	{"list_db_backups", "GET", "/api/bots/{id}/db/backups", "read", "Backups of the bot database (checked with integrity_check)"},
 	{"download_db_backup", "GET", "/api/bots/{id}/db/backups/{name}", "never", "Download a backup file"},
@@ -42,11 +44,13 @@ var Ops = []Op{
 	{"get_db_checks", "GET", "/api/server/checks", "read", "Results of the weekly quick_check of core.db, panel.db and every bot.db"},
 	{"get_server_metrics", "GET", "/api/server/metrics", "read", "Server metrics (CPU, RAM, disk, network), processes and the sum over all bots"},
 	{"get_server_services", "GET", "/api/server/services", "read", "External addresses across all bots over the last 10 minutes"},
+	{"get_panel_settings", "GET", "/api/settings", "read", "Panel settings (Telegram ID of the owner)"},
 	{"enroll_status", "GET", "/enroll/{id}", "never", "State of an enrollment request (gate.exe polls it)"},
 	{"rename_bot", "PATCH", "/api/bots/{id}", "write", "Rename the bot in the panel (the Telegram name is in the profile)"},
 	{"update_settings", "PATCH", "/api/bots/{id}/settings", "confirm", "Change env, variable renames and limits; applies after a restart"},
 	{"rename_group", "PATCH", "/api/groups/{gid}", "never", "Rename a group"},
 	{"create_bot", "POST", "/api/bots", "write", "Add a bot; the token is checked with getMe and never returned"},
+	{"closed_allow", "POST", "/api/bots/{id}/closed/allow", "write", "Add a user to the closed mode list by id, @username (known users only) or \"me\""},
 	{"backup_db", "POST", "/api/bots/{id}/db/backups", "write", "Make a backup now (VACUUM INTO, the bot keeps running)"},
 	{"restore_db", "POST", "/api/bots/{id}/db/backups/{name}/restore", "never", "Stop the bot, restore the database from a backup, start it again"},
 	{"exec_db", "POST", "/api/bots/{id}/db/exec", "never", "SQL that writes to the bot database (held button in the panel; the text goes to the audit)"},
@@ -67,8 +71,10 @@ var Ops = []Op{
 	{"ban_user_everywhere", "POST", "/api/users/{uid}/ban", "never", "Ban a user in all bots at once"},
 	{"enroll", "POST", "/enroll", "never", "Request a device certificate (gate.exe with its enrollment certificate)"},
 	{"order_bots", "PUT", "/api/bots/order", "never", "Put bots into a group in this order (0 = no group)"},
+	{"set_closed", "PUT", "/api/bots/{id}/closed", "confirm", "Turn closed mode on or off and set its text"},
 	{"set_bot_group", "PUT", "/api/bots/{id}/group", "never", "Move the bot to another group"},
 	{"set_secret", "PUT", "/api/bots/{id}/secrets/{name}", "never", "Set a secret (write-only). Neural networks use request_secret instead"},
 	{"set_token", "PUT", "/api/bots/{id}/token", "never", "Replace the token (checked with getMe). Neural networks use request_secret instead"},
 	{"order_groups", "PUT", "/api/groups/order", "never", "Reorder groups"},
+	{"set_panel_settings", "PUT", "/api/settings", "never", "Change panel settings (owner only)"},
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
 	"github.com/SnimanOff/UTBPanel/backend/internal/procstat"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
+	"github.com/SnimanOff/UTBPanel/backend/internal/settings"
 	"github.com/SnimanOff/UTBPanel/backend/internal/sources"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store/migrations"
@@ -41,20 +42,21 @@ const (
 
 // Panel is the running panel process.
 type Panel struct {
-	Cfg     config.Panel
-	Log     *slog.Logger
-	DB      *store.DB
-	W       *store.Writer
-	CoreMux *wire.Mux
-	Core    *wire.Client
-	EdgeMux *wire.Mux
-	EdgeSrv *wire.Server
-	Events  *events.Sink
-	CA      *pki.CA
-	API     *api.Server
-	Bots    *bots.Service
-	Audit   *audit.Log
-	Metrics *metrics.Storage
+	Cfg      config.Panel
+	Log      *slog.Logger
+	DB       *store.DB
+	W        *store.Writer
+	CoreMux  *wire.Mux
+	Core     *wire.Client
+	EdgeMux  *wire.Mux
+	EdgeSrv  *wire.Server
+	Events   *events.Sink
+	CA       *pki.CA
+	API      *api.Server
+	Bots     *bots.Service
+	Audit    *audit.Log
+	Metrics  *metrics.Storage
+	Settings *settings.Store
 
 	closers []func(context.Context) error
 	runners []func(context.Context)
@@ -145,7 +147,11 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	(&metrics.API{S: p.Metrics, Core: p.Core}).Register(p.API.Mux)
 	(&metrics.ServicesAPI{S: p.Metrics}).Register(p.API.Mux)
 	p.Events.Subscribe(p.Metrics.OnCoreEvent)
-	(&users.API{Core: p.Core, WriteErr: bots.WriteCoreError}).Register(p.API.Mux)
+	usersAPI := &users.API{Core: p.Core, WriteErr: bots.WriteCoreError}
+	usersAPI.Register(p.API.Mux)
+	p.Settings = &settings.Store{DB: db}
+	p.Settings.Register(p.API.Mux)
+	usersAPI.RegisterClosed(p.API.Mux, func(r *http.Request) int64 { return p.Settings.Get(r.Context()).OwnerTgID })
 	dbAPI := &dbgate.API{Core: p.Core, WriteErr: bots.WriteCoreError}
 	dbAPI.RegisterAPI(p.API.Mux)
 	dbAPI.RegisterBackups(p.API.Mux)
