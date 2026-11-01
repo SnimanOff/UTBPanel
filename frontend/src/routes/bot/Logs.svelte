@@ -16,6 +16,14 @@
   let searching = $state(false)
   let error = $state('')
   let box: HTMLDivElement
+  // Counters of the bot's log patterns for the last 24 h.
+  let patterns = $state<[string, number][]>([])
+  $effect(() => {
+    void botId
+    api
+      .get<{ series: { totals: Record<string, number> } }>(`/api/bots/${botId}/metrics?period=24h`)
+      .then((m) => (patterns = Object.entries(m.series.totals).filter(([k]) => k.startsWith('log_')).map(([k, v]) => [k.slice(4), v])), () => {})
+  })
   let stop: (() => void) | undefined
 
   function connect() {
@@ -93,6 +101,11 @@
   >
   <a class="button" href="/api/bots/{botId}/logs/download" download>Скачать</a>
 </div>
+{#if patterns.length}
+  <div class="patterns muted small">
+    за сутки: {#each patterns as [name, n]}<span class="pat"><span>{name}</span> <span class="num">{n}</span></span>{/each}
+  </div>
+{/if}
 {#if error}<p class="danger">{error}</p>{/if}
 <div class="log mono" bind:this={box} {onscroll}>
   {#each shown as l (l.seq + l.t)}
@@ -107,6 +120,14 @@
 </div>
 
 <style>
+  .patterns {
+    display: flex;
+    gap: var(--s3);
+    margin-bottom: var(--s1);
+  }
+  .pat .num {
+    color: var(--text);
+  }
   .bar {
     display: flex;
     gap: var(--s2);

@@ -54,6 +54,9 @@ func (c *Core) newRunner() *runner.Runner {
 			Output: func(l runner.Line) {
 				if l.Stream != "core" {
 					c.panicParser(l.BotID, l.Instance).Line(l.BotID, l.Text, l.Time)
+					if c.patterns != nil {
+						c.patterns.Line(l.BotID, l.Text)
+					}
 				}
 				if l.Instance == "canary" {
 					l.Text = "[canary] " + l.Text

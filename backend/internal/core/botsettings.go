@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
+	"github.com/SnimanOff/UTBPanel/backend/internal/logs"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
 
@@ -58,6 +59,16 @@ var sections = map[string]func(json.RawMessage) error{
 			DropPending bool `json:"drop_pending"`
 		}
 		return json.Unmarshal(b, &v)
+	},
+	"log_patterns": func(b json.RawMessage) error {
+		var v []logs.Pattern
+		if err := json.Unmarshal(b, &v); err != nil {
+			return err
+		}
+		if err := logs.Validate(v); err != nil {
+			return wire.Errorf(wire.CodeBadRequest, "%v", err)
+		}
+		return nil
 	},
 	"crash_updates": func(b json.RawMessage) error {
 		var v bool

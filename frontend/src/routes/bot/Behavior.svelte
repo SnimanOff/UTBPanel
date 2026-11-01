@@ -23,6 +23,8 @@
   let flood = $state<Flood>({ ...floodDefault })
   let closed = $state<Schemas['ClosedState']>({ enabled: false, text: '', allow: [] })
   let unavailable = $state('')
+  type Pat = { name: string; pattern: string; regexp?: boolean }
+  let patterns = $state<Pat[]>([])
   let tz = $state(defaultTZ)
   let crashUpdates = $state(false)
   let who = $state('')
@@ -35,6 +37,7 @@
       const s = await api.get<Record<string, any>>(`/api/bots/${botId}/settings`)
       flood = { ...floodDefault, ...(s.antiflood ?? {}) }
       unavailable = s.texts?.unavailable ?? ''
+      patterns = s.log_patterns ?? []
       tz = s.tz || defaultTZ
       crashUpdates = !!s.crash_updates
       closed = await api.get<Schemas['ClosedState']>(`/api/bots/${botId}/closed`)
@@ -130,6 +133,22 @@
 
   <AlertRules {botId} />
 
+  <Box title="Шаблоны логов">
+    {#each patterns as p, i}
+      <div class="line">
+        <input class="n2" bind:value={p.name} placeholder="имя" />
+        <input class="grow" bind:value={p.pattern} placeholder="подстрока или regexp" />
+        <label class="check"><input type="checkbox" bind:checked={p.regexp} /> regexp</label>
+        <button class="x" onclick={() => (patterns = patterns.filter((_, j) => j !== i))}>×</button>
+      </div>
+    {/each}
+    <div class="line">
+      <button onclick={() => (patterns = [...patterns, { name: '', pattern: '' }])}>+ шаблон</button>
+      <button onclick={() => section('log_patterns', patterns, 'Шаблоны сохранены')}>Сохранить</button>
+    </div>
+    <p class="muted">Совпадения считаются по минутам — счётчики видны во вкладке «Логи» и в порогах. Сообщения о лимитах (too many open files и т. п.) отслеживаются всегда.</p>
+  </Box>
+
   <Box title="Апдейты при падениях">
     <label class="check">
       <input
@@ -179,6 +198,12 @@
   }
   .n {
     width: 5em;
+  }
+  .n2 {
+    width: 8em;
+  }
+  .grow {
+    flex: 1;
   }
   ul {
     list-style: none;
