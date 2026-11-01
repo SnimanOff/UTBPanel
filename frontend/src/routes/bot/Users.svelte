@@ -1,9 +1,10 @@
 <script lang="ts">
   // Users: search by id or username, filter, pages; audience breakdown.
-  // Ban buttons come with bans.
+  // A ban needs a reason; "во всех ботах" is confirmed by holding.
   import { api, errorText, type Schemas } from '../../lib/api/client'
   import { utc } from '../../lib/format'
   import Box from '../../lib/ui/Box.svelte'
+  import HoldButton from '../../lib/ui/HoldButton.svelte'
 
   let { botId }: { botId: number } = $props()
   type List = Schemas['UserList']
@@ -33,6 +34,38 @@
   $effect(() => {
     api.get<Audience>(`/api/bots/${botId}/audience`).then((a) => (aud = a), () => {})
   })
+
+  let banFor = $state<number | null>(null)
+  let reason = $state('')
+  let hours = $state(0)
+  let everywhere = $state(false)
+
+  function openBan(id: number) {
+    banFor = id
+    reason = ''
+    hours = 0
+    everywhere = false
+  }
+  async function ban() {
+    if (banFor === null || !reason.trim()) return
+    error = ''
+    try {
+      const url = everywhere ? `/api/users/${banFor}/ban` : `/api/bots/${botId}/users/${banFor}/ban`
+      await api.post(url, { reason: reason.trim(), hours })
+      banFor = null
+      load()
+    } catch (e) {
+      error = errorText(e)
+    }
+  }
+  async function unban(id: number) {
+    try {
+      await api.post(`/api/bots/${botId}/users/${id}/unban`)
+      load()
+    } catch (e) {
+      error = errorText(e)
+    }
+  }
 
   const pages = $derived(Math.max(1, Math.ceil(list.total / PAGE)))
   const pct = (n: number, of: number) => (of ? Math.round((n / of) * 100) : 0) + '%'
@@ -68,11 +101,39 @@
             <td class="num muted">{utc(u.first_seen)}</td>
             <td class="num">{utc(u.last_seen)}</td>
             <td class="num">{u.updates}</td>
-            <td>
-              {#if u.banned}<span class="danger" title={u.ban_reason}>бан</span>{/if}
+            <td class="acts">
+              {#if u.banned}
+                <span class="danger" title={u.ban_reason}>бан</span>
+                <button onclick={() => unban(u.id)}>разбанить</button>
+              {:else}
+                <button onclick={() => openBan(u.id)}>бан</button>
+              {/if}
               {#if u.blocked}<span class="muted">заблокировал</span>{/if}
             </td>
           </tr>
+          {#if banFor === u.id}
+            <tr class="banrow">
+              <td colspan="9">
+                <form onsubmit={(e) => (e.preventDefault(), !everywhere && ban())}>
+                  <input bind:value={reason} placeholder="причина (обязательно)" required />
+                  <select bind:value={hours}>
+                    <option value={0}>навсегда</option>
+                    <option value={1}>1 час</option>
+                    <option value={24}>сутки</option>
+                    <option value={168}>неделя</option>
+                    <option value={720}>30 дней</option>
+                  </select>
+                  <label><input type="checkbox" bind:checked={everywhere} /> во всех ботах</label>
+                  {#if everywhere}
+                    <HoldButton disabled={!reason.trim()} onconfirm={ban}>Забанить везде</HoldButton>
+                  {:else}
+                    <button class="primary" disabled={!reason.trim()}>Забанить</button>
+                  {/if}
+                  <button type="button" onclick={() => (banFor = null)}>Отмена</button>
+                </form>
+              </td>
+            </tr>
+          {/if}
         {:else}
           <tr><td colspan="9" class="muted">Пользователей нет</td></tr>
         {/each}
@@ -134,6 +195,22 @@
     color: var(--muted);
     font-weight: 400;
     font-size: var(--fs-s);
+  }
+  .acts {
+    display: flex;
+    gap: var(--s2);
+    align-items: center;
+  }
+  .acts button {
+    padding: 0 var(--s2);
+  }
+  .banrow form {
+    display: flex;
+    gap: var(--s2);
+    align-items: center;
+  }
+  .banrow input:first-child {
+    flex: 1;
   }
   .pager {
     display: flex;

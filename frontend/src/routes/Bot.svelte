@@ -14,6 +14,7 @@
   import Users from './bot/Users.svelte'
   import Database from './bot/Database.svelte'
   import Network from './bot/Network.svelte'
+  import Maintenance from './bot/Maintenance.svelte'
 
   let { id, tab }: { id: number; tab: string } = $props()
   const tabs = [
@@ -90,6 +91,9 @@
       <Network botId={id} />
     {:else if tab === 'users'}
       <Users botId={id} />
+    {:else if tab === 'deploy'}
+      <h2 class="sub">Техработы</h2>
+      <Maintenance botId={id} />
     {:else if tab === 'settings'}
       <Settings {bot} />
     {:else}
@@ -114,6 +118,10 @@
   }
   .tab {
     padding-top: var(--s3);
+  }
+  .sub {
+    font-size: var(--fs-m);
+    margin-bottom: var(--s2);
   }
   .err {
     white-space: pre-wrap;

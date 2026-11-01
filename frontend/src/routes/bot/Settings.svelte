@@ -9,6 +9,7 @@
   import Box from '../../lib/ui/Box.svelte'
   import HoldButton from '../../lib/ui/HoldButton.svelte'
   import SecretField from '../../lib/ui/SecretField.svelte'
+  import Behavior from './Behavior.svelte'
 
   let { bot }: { bot: BotView } = $props()
   let secrets = $state<SecretInfo[]>([])
@@ -152,6 +153,8 @@
 {/if}
 {#if saved}<p class="ok">{saved}</p>{/if}
 {#if error}<p class="danger pre">{error}</p>{/if}
+
+<Behavior botId={bot.id} />
 
 <div class="grid">
   <Box title="Токен">

@@ -21,8 +21,10 @@ type SettingPut struct {
 var sections = map[string]func(json.RawMessage) error{
 	"antiflood": func(b json.RawMessage) error {
 		var v struct {
-			Limit, Strikes, BanHours int
-			Window                   string
+			Limit    int    `json:"limit"`
+			Strikes  int    `json:"strikes"`
+			BanHours int    `json:"ban_hours"`
+			Window   string `json:"window"`
 		}
 		if err := json.Unmarshal(b, &v); err != nil {
 			return err
