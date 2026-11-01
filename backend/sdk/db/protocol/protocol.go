@@ -48,6 +48,15 @@ func Encode(v any) (Value, error) {
 	}
 }
 
+// EncodeResult distinguishes a zero-length BLOB returned as []byte(nil) by
+// SQLite from SQL NULL (an untyped nil). Bound []byte(nil) still means NULL.
+func EncodeResult(v driver.Value) (Value, error) {
+	if blob, ok := v.([]byte); ok {
+		return Value{Kind: "blob", Blob: blob}, nil
+	}
+	return Encode(v)
+}
+
 func (v Value) Decode() (driver.Value, error) {
 	switch v.Kind {
 	case "null":

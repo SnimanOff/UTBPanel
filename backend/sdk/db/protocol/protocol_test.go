@@ -27,3 +27,19 @@ func TestStorageClasses(t *testing.T) {
 		}
 	}
 }
+
+func TestEmptyBlobResultIsNotNull(t *testing.T) {
+	encoded, err := EncodeResult([]byte(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := wire.Marshal(encoded)
+	var decoded Value
+	if err := wire.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	value, err := decoded.Decode()
+	if blob, ok := value.([]byte); !ok || blob == nil || err != nil {
+		t.Fatalf("%#v %v", value, err)
+	}
+}

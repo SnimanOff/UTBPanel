@@ -51,6 +51,7 @@ type sqlConn struct {
 	stmts    map[string]preparedSQL
 	cursors  map[string]*sqlCursor
 	tx       driver.Tx
+	txCancel context.CancelFunc
 	readOnly bool
 }
 
@@ -122,6 +123,10 @@ func (e *sqlConn) close() {
 	}
 	if e.tx != nil {
 		e.tx.Rollback()
+	}
+	if e.txCancel != nil {
+		e.txCancel()
+		e.txCancel = nil
 	}
 	e.conn.Close()
 }
@@ -277,9 +282,20 @@ func (g *Gateway) execute(ctx context.Context, s *dbSession, e *sqlConn, botID i
 		if e.tx != nil {
 			return nil, fmt.Errorf("dbgate: transaction already active")
 		}
-		tx, err := e.conn.(driver.ConnBeginTx).BeginTx(ctx, driver.TxOptions{Isolation: driver.IsolationLevel(in.Isolation), ReadOnly: in.ReadOnly})
+		// The driver retains BeginTx's context until Commit. An RPC handler
+		// context ends as soon as its response is sent, not at transaction end.
+		txCtx, cancel := context.WithCancel(s.ctx)
+		stop := context.AfterFunc(ctx, cancel)
+		defer stop()
+		tx, err := e.conn.(driver.ConnBeginTx).BeginTx(txCtx, driver.TxOptions{Isolation: driver.IsolationLevel(in.Isolation), ReadOnly: in.ReadOnly})
+		if err == nil && ctx.Err() != nil {
+			tx.Rollback()
+			cancel()
+			return nil, ctx.Err()
+		}
 		if err == nil {
 			e.tx = tx
+			e.txCancel = cancel
 			e.readOnly = in.ReadOnly
 			err = e.conn.(sqlite.AuthorizerRegisterer).RegisterAuthorizer(sqlPolicy(e))
 			if err != nil {
@@ -287,6 +303,9 @@ func (g *Gateway) execute(ctx context.Context, s *dbSession, e *sqlConn, botID i
 				e.tx = nil
 				e.readOnly = false
 			}
+		}
+		if err != nil {
+			cancel()
 		}
 		return nil, err
 	case "commit", "rollback":
@@ -296,16 +315,19 @@ func (g *Gateway) execute(ctx context.Context, s *dbSession, e *sqlConn, botID i
 		var err error
 		if method == "commit" {
 			err = e.tx.Commit()
-			if err != nil {
-				if rollbackErr := e.tx.Rollback(); rollbackErr != nil {
-					e.close()
-				}
-			}
 		} else {
 			err = e.tx.Rollback()
 		}
 		e.tx = nil
+		if e.txCancel != nil {
+			e.txCancel()
+			e.txCancel = nil
+		}
 		e.readOnly = false
+		if err != nil {
+			e.close()
+			return nil, err
+		}
 		if policyErr := e.conn.(sqlite.AuthorizerRegisterer).RegisterAuthorizer(sqlPolicy(e)); err == nil {
 			err = policyErr
 		}
@@ -426,7 +448,7 @@ func (g *Gateway) batch(e *sqlConn, id string) (protocol.Batch, error) {
 		row := make([]protocol.Value, len(values))
 		rowSize := 0
 		for i, v := range values {
-			encoded, err := protocol.Encode(v)
+			encoded, err := protocol.EncodeResult(v)
 			if err != nil {
 				g.closeCursor(e, id, err)
 				return protocol.Batch{}, err
