@@ -498,6 +498,44 @@ paths:
       x-mcp: never
       responses:
         "200": { description: OK }
+  /api/notifications:
+    get:
+      operationId: list_notifications
+      tags: [system]
+      summary: The notification feed, newest first (repeats glued with a count)
+      x-mcp: read
+      parameters:
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Notification" } } } } }
+  /api/notifications/read:
+    post:
+      operationId: read_notifications
+      tags: [system]
+      summary: Mark notifications read (all when ids is empty)
+      x-mcp: write
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { ids: { type: array, items: { type: integer } } } }
+      responses:
+        "204": { description: Done }
+  /api/notifications/problems:
+    get:
+      operationId: problem_bots
+      tags: [system]
+      summary: Bots with an unread, unresolved error of the last day
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: integer } } } } }
+  /api/notifications/stream:
+    get:
+      operationId: notifications_stream
+      tags: [system]
+      summary: Server-Sent Events of new notifications (interface and gate.exe)
+      x-mcp: never
+      responses:
+        "200": { description: text/event-stream }
   /api/panics/summary:
     get:
       operationId: panics_summary
@@ -1448,6 +1486,21 @@ components:
         last_stack: { type: string }
         count_24h: { type: integer }
         maybe_fixed: { type: boolean }
+    Notification:
+      type: object
+      required: [id, ts, last_ts, kind, severity, text, count, read, resolved]
+      properties:
+        id: { type: integer }
+        ts: { type: string, format: date-time }
+        last_ts: { type: string, format: date-time }
+        bot_id: { type: integer }
+        kind: { type: string }
+        severity: { type: string, enum: [error, warn, info, ok] }
+        text: { type: string }
+        href: { type: string }
+        count: { type: integer }
+        read: { type: boolean }
+        resolved: { type: boolean }
     BanRequest:
       type: object
       required: [reason]

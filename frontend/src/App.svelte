@@ -1,6 +1,7 @@
 <script lang="ts">
   import { router } from './lib/router.svelte'
   import { live } from './lib/live.svelte'
+  import { notifications } from './lib/notifications.svelte'
   import Header from './routes/Header.svelte'
   import Placeholder from './routes/Placeholder.svelte'
   import Home from './routes/Home.svelte'
@@ -20,6 +21,7 @@
   }
   const r = $derived(router.route)
   $effect(() => live.use())
+  notifications.start()
 </script>
 
 {#if r.name === 'mini'}

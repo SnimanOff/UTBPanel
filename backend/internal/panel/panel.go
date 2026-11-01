@@ -12,12 +12,14 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/alerts"
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
 	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
 	"github.com/SnimanOff/UTBPanel/backend/internal/bots"
 	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
+	"github.com/SnimanOff/UTBPanel/backend/internal/core"
 	"github.com/SnimanOff/UTBPanel/backend/internal/counters"
 	"github.com/SnimanOff/UTBPanel/backend/internal/dbgate"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
@@ -148,6 +150,27 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	(&metrics.API{S: p.Metrics, Core: p.Core}).Register(p.API.Mux)
 	(&metrics.ServicesAPI{S: p.Metrics}).Register(p.API.Mux)
 	(&metrics.ReportsAPI{S: p.Metrics}).Register(p.API.Mux)
+	notes := &alerts.Service{DB: db, Name: func(id int64) string {
+		var b core.Bot
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if p.Core.Call(ctx, "bots.get", id, &b) != nil {
+			return ""
+		}
+		return b.Name
+	}}
+	notes.Register(p.API.Mux)
+	p.Events.Subscribe(notes.OnCoreEvent)
+	p.Go(func(ctx context.Context) {
+		for {
+			notes.Prune(ctx)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(6 * time.Hour):
+			}
+		}
+	})
 	panicStore := &panics.Store{DB: db}
 	panicStore.Register(p.API.Mux)
 	p.Events.Subscribe(panicStore.OnCoreEvent)

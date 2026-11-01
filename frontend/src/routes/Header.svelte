@@ -39,6 +39,7 @@
   </div>
   {#if feedOpen}
     <div class="feed">
+      {#if notifications.unread}<button class="readall" onclick={() => notifications.readAll()}>прочитать все</button>{/if}
       <Feed
         items={notifications.items}
         onopen={(i) => {
@@ -101,6 +102,12 @@
   }
   .bell.has {
     border-color: var(--danger);
+  }
+  .readall {
+    width: 100%;
+    border: none;
+    border-bottom: var(--line);
+    font-size: var(--fs-s);
   }
   .feed {
     position: absolute;

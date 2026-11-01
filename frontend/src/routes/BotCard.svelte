@@ -4,6 +4,7 @@
   // status (stop by holding), ↻ restart, ⏸ pause. Red border on a problem.
   import { api, errorText, type BotView } from '../lib/api/client'
   import { store } from '../lib/api/stores.svelte'
+  import { notifications } from '../lib/notifications.svelte'
   import { compact, uptime } from '../lib/format'
   import { live } from '../lib/live.svelte'
   import { router } from '../lib/router.svelte'
@@ -18,7 +19,7 @@
   let error = $state('')
 
   const running = $derived(bot.state === 'running' || bot.state === 'paused')
-  const problem = $derived(bot.state === 'crashed' || bot.state === 'error' || !!error)
+  const problem = $derived(bot.state === 'crashed' || bot.state === 'error' || !!error || notifications.hasProblem(bot.id))
   const l = $derived(live.bots[bot.id])
 
   async function act(op: string) {

@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "a331d79ccea22b8e90afdb9845c8fae67ee6e5ad01c1f4cd4c570c0828f6dee3"
+const GeneratedHash = "78752c1f9c7cd57aefd19c162c8578450c0fa78c7fc2f229adbd1ac7d5fb4c4e"
 
 // Op is one operation of the API.
 type Op struct {
@@ -51,6 +51,9 @@ var Ops = []Op{
 	{"list_groups", "GET", "/api/groups", "read", "Groups in order"},
 	{"list_keys", "GET", "/api/keys", "never", "Access keys"},
 	{"stream_live", "GET", "/api/live", "never", "Live metrics of the server and bots once a second (Server-Sent Events)"},
+	{"list_notifications", "GET", "/api/notifications", "read", "The notification feed, newest first (repeats glued with a count)"},
+	{"problem_bots", "GET", "/api/notifications/problems", "read", "Bots with an unread, unresolved error of the last day"},
+	{"notifications_stream", "GET", "/api/notifications/stream", "never", "Server-Sent Events of new notifications (interface and gate.exe)"},
 	{"panics_summary", "GET", "/api/panics/summary", "read", "Panics in the last 24 h per bot id"},
 	{"ping", "GET", "/api/ping", "read", "Check the connection and see the key name"},
 	{"get_bots_load", "GET", "/api/server/bots", "read", "Load and revenue of every bot over 24 hours"},
@@ -95,6 +98,7 @@ var Ops = []Op{
 	{"create_group", "POST", "/api/groups", "never", "Create a group"},
 	{"issue_key", "POST", "/api/keys", "never", "Issue a child key; returns gate-<name>.exe (owner only)"},
 	{"revoke_key", "POST", "/api/keys/{serial}/revoke", "never", "Revoke a key (owner only; the owner key only over SSH)"},
+	{"read_notifications", "POST", "/api/notifications/read", "write", "Mark notifications read (all when ids is empty)"},
 	{"ban_user_everywhere", "POST", "/api/users/{uid}/ban", "never", "Ban a user in all bots at once"},
 	{"enroll", "POST", "/enroll", "never", "Request a device certificate (gate.exe with its enrollment certificate)"},
 	{"order_bots", "PUT", "/api/bots/order", "never", "Put bots into a group in this order (0 = no group)"},

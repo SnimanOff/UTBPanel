@@ -37,6 +37,9 @@
   li.error {
     border-left-color: var(--danger);
   }
+  li.ok {
+    border-left: 2px solid var(--accent-hi);
+  }
   li.warn {
     border-left-color: var(--warn);
   }
