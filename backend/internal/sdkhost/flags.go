@@ -25,11 +25,13 @@ type Flag struct {
 }
 type FlagMark = metrics.FlagMark
 type Flags struct {
-	Lock    func(context.Context) (context.Context, func(), error)
-	DB      *store.DB
-	Changed func(int64, string)
-	mu      sync.Mutex
-	peers   map[key]*wire.Conn
+	Restore  func(context.Context, int64) (map[string]flags.Value, error)
+	Consumed func(context.Context, int64, []string) error
+	Lock     func(context.Context) (context.Context, func(), error)
+	DB       *store.DB
+	Changed  func(int64, string)
+	mu       sync.Mutex
+	peers    map[key]*wire.Conn
 }
 
 func parseFlag(kind, raw string) (flags.Value, error) {
@@ -75,6 +77,15 @@ func (f *Flags) RegisterDefinitions(ctx context.Context, id int64, instance stri
 		}
 		wanted[d.Name] = true
 	}
+	restored := map[string]flags.Value{}
+	if f.Restore != nil {
+		var err error
+		restored, err = f.Restore(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	consumed := []string{}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := map[string]flags.State{}
@@ -146,6 +157,22 @@ func (f *Flags) RegisterDefinitions(ctx context.Context, id int64, instance stri
 			if err != nil {
 				return err
 			}
+			if value, ok := restored[d.Name]; ok {
+				value, err = flags.Normalize(d.Kind, value)
+				if err != nil {
+					return fmt.Errorf("restored flag %s: %w", d.Name, err)
+				}
+				raw, err := json.Marshal(value)
+				if err != nil {
+					return err
+				}
+				version++
+				override = sql.NullString{String: string(raw), Valid: true}
+				if _, err := tx.ExecContext(ctx, `UPDATE sdk_flags SET override_json=?,version=? WHERE bot_id=? AND name=?`, override.String, version, id, d.Name); err != nil {
+					return err
+				}
+				consumed = append(consumed, d.Name)
+			}
 			state := flags.State{Value: d.Default, Version: version, Reset: true}
 			if override.Valid && kind == d.Kind {
 				v, err := parseFlag(kind, override.String)
@@ -162,6 +189,11 @@ func (f *Flags) RegisterDefinitions(ctx context.Context, id int64, instance stri
 	})
 	if err != nil {
 		return nil, err
+	}
+	if len(consumed) > 0 && f.Consumed != nil {
+		if err := f.Consumed(ctx, id, consumed); err != nil {
+			return nil, err
+		}
 	}
 	if c == nil {
 		return out, nil

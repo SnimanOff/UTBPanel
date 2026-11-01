@@ -21,6 +21,7 @@ import (
 )
 
 type Exports struct {
+	Groups    *bots.Groups
 	Core      *wire.Client
 	Documents *botconfig.Service
 	Metrics   *metrics.Storage
@@ -187,6 +188,7 @@ func (e *Exports) download(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (e *Exports) Register(mux *api.Mux, coreMux *wire.Mux) {
+	e.registerImports(mux)
 	mux.HandleFunc("POST /api/exports/bots", e.make)
 	mux.HandleFunc("GET /api/bots/{id}/exports/{export}", e.download)
 	coreMux.Handle("exports.metrics.read", wire.Func(func(_ context.Context, _ *wire.Conn, ref backup.FileRef) ([]byte, error) { return e.Extras.Read(ref) }))

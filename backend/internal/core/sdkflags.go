@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
@@ -27,6 +28,27 @@ func (c *Core) registerSDKFlags(ctx context.Context) error {
 	c.SDKFlags = &sdkhost.Flags{DB: c.DB, Lock: c.ConfigGuard.Lock, Changed: func(id int64, name string) {
 		c.Ev.Emit("sdk_flag_changed", id, events.Info, map[string]any{"name": name})
 	}}
+	c.SDKFlags.Restore = func(ctx context.Context, id int64) (map[string]flags.Value, error) {
+		m, err := c.Settings(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		out := map[string]flags.Value{}
+		if raw := m["pending_flags"]; len(raw) > 0 {
+			err = json.Unmarshal(raw, &out)
+		}
+		return out, err
+	}
+	c.SDKFlags.Consumed = func(ctx context.Context, id int64, names []string) error {
+		m, err := c.SDKFlags.Restore(ctx, id)
+		if err != nil {
+			return err
+		}
+		for _, name := range names {
+			delete(m, name)
+		}
+		return c.SetSetting(ctx, id, "pending_flags", m)
+	}
 	c.Mux.Handle("sdk.flags.list", wire.Func(func(ctx context.Context, _ *wire.Conn, id int64) ([]sdkhost.Flag, error) {
 		if err := c.botExists(ctx, id); err != nil {
 			return nil, err

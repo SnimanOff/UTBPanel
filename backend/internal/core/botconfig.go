@@ -68,12 +68,19 @@ func (c *Core) ConfigSnapshot(ctx context.Context, id int64) (botconfig.Snapshot
 	for name := range names {
 		d.Secrets = append(d.Secrets, name)
 	}
+	if raw := m["pending_flags"]; len(raw) > 0 {
+		if err := json.Unmarshal(raw, &d.Flags); err != nil {
+			return botconfig.Snapshot{}, err
+		}
+	}
+	if d.Flags == nil {
+		d.Flags = map[string]botconfig.FlagValue{}
+	}
 	if c.SDKFlags != nil {
 		list, err := c.SDKFlags.List(ctx, id)
 		if err != nil {
 			return botconfig.Snapshot{}, err
 		}
-		d.Flags = map[string]botconfig.FlagValue{}
 		for _, f := range list {
 			if f.Overridden {
 				d.Flags[f.Name] = botconfig.FlagValue(f.Value)
@@ -140,12 +147,26 @@ func (c *Core) ApplyConfig(ctx context.Context, in botconfig.ApplyRequest) (botc
 		return out, err
 	}
 	kinds := map[string]string{}
+	pending := map[string]botconfig.FlagValue{}
+	stored, err := c.Settings(ctx, in.BotID)
+	if err != nil {
+		return out, err
+	}
+	if raw := stored["pending_flags"]; len(raw) > 0 {
+		if err := json.Unmarshal(raw, &pending); err != nil {
+			return out, err
+		}
+	}
 	for _, f := range registered {
 		kinds[f.Name] = f.Kind
 	}
 	for name, value := range d.Flags {
 		kind, ok := kinds[name]
 		if !ok {
+			if _, waiting := pending[name]; waiting {
+				pending[name] = value
+				continue
+			}
 			return out, wire.Errorf(wire.CodeBadRequest, "flag %q is not registered", name)
 		}
 		normalized, err := flags.Normalize(kind, flags.Value(value))
@@ -153,6 +174,12 @@ func (c *Core) ApplyConfig(ctx context.Context, in botconfig.ApplyRequest) (botc
 			return out, wire.Errorf(wire.CodeBadRequest, "flag %s: %v", name, err)
 		}
 		d.Flags[name] = botconfig.FlagValue(normalized)
+		delete(pending, name)
+	}
+	for name := range pending {
+		if _, keep := d.Flags[name]; !keep {
+			delete(pending, name)
+		}
 	}
 	before := current.Document
 	out.ProfileErrors = map[string]string{}
@@ -230,6 +257,9 @@ func (c *Core) ApplyConfig(ctx context.Context, in botconfig.ApplyRequest) (botc
 		}
 	}
 	for name, value := range d.Flags {
+		if kinds[name] == "" {
+			continue
+		}
 		if old, ok := before.Flags[name]; !ok || old != value {
 			if err := c.SDKFlags.Set(ctx, in.BotID, name, flags.Value(value), false); err != nil {
 				return out, err
@@ -237,6 +267,9 @@ func (c *Core) ApplyConfig(ctx context.Context, in botconfig.ApplyRequest) (botc
 		}
 	}
 	for name := range before.Flags {
+		if kinds[name] == "" {
+			continue
+		}
 		if _, ok := d.Flags[name]; !ok {
 			if err := c.SDKFlags.Set(ctx, in.BotID, name, flags.Value{}, true); err != nil {
 				return out, err
@@ -254,7 +287,8 @@ func (c *Core) ApplyConfig(ctx context.Context, in botconfig.ApplyRequest) (botc
 			}
 		}
 	}
-	settings := map[string]any{"env": d.Env, "rename": d.Rename, "required_secrets": d.Secrets, "antiflood": d.Antiflood, "closed": d.Closed, "texts": d.Texts, "tz": d.TZ, "profile_cache": d.Profile, "limits": d.Limits, "stop": d.Stop, "log_patterns": d.LogPatterns, "crash_updates": d.CrashUpdates}
+	settings := documentSettings(d)
+	settings["pending_flags"] = pending
 	// Merge only represented keys, retaining internal deploy/maintenance state.
 	query := `UPDATE bots SET settings=json_set(settings,`
 	args := []any{}
@@ -300,6 +334,10 @@ func (c *Core) ApplyConfig(ctx context.Context, in botconfig.ApplyRequest) (botc
 	sort.Strings(out.MissingSecrets)
 	out.Snapshot, err = c.ConfigSnapshot(ctx, in.BotID)
 	return out, err
+}
+
+func documentSettings(d botconfig.Document) map[string]any {
+	return map[string]any{"env": d.Env, "rename": d.Rename, "required_secrets": d.Secrets, "antiflood": d.Antiflood, "closed": d.Closed, "texts": d.Texts, "tz": d.TZ, "profile_cache": d.Profile, "limits": d.Limits, "stop": d.Stop, "log_patterns": d.LogPatterns, "crash_updates": d.CrashUpdates}
 }
 
 func (c *Core) registerConfig() {

@@ -645,6 +645,63 @@ paths:
       responses:
         "200": { description: OK }
 
+  /api/imports/bots:
+    post:
+      operationId: inspect_bot_import
+      tags: [settings]
+      summary: Upload and decrypt a portable bot archive, validate it and show secret names
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, password]
+              properties:
+                file: { type: string, format: binary }
+                password: { type: string, writeOnly: true }
+      responses:
+        "200": { description: Archive validated, content: { application/json: { schema: { $ref: "#/components/schemas/BotImportPreview" } } } }
+  /api/imports/bots/{import}:
+    parameters: [{ name: import, in: path, required: true, schema: { type: string } }]
+    delete:
+      operationId: discard_bot_import
+      tags: [settings]
+      summary: Remove temporary import files; an already imported bot stays
+      x-mcp: never
+      responses:
+        "204": { description: Discarded }
+  /api/imports/bots/{import}/apply:
+    parameters: [{ name: import, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: apply_bot_import
+      tags: [settings]
+      summary: Restore a validated archive under a new local ID and optionally start it
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, token, secrets]
+              properties:
+                name: { type: string }
+                token: { type: string, writeOnly: true }
+                start: { type: boolean, default: false }
+                secrets:
+                  type: object
+                  additionalProperties:
+                    type: object
+                    required: [kind, value]
+                    properties:
+                      kind: { type: string, enum: [value, file] }
+                      value: { type: string, writeOnly: true, description: Plain text for value; base64 for file }
+      responses:
+        "201": { description: Imported; warnings identify any remaining panel or start steps, content: { application/json: { schema: { $ref: "#/components/schemas/BotImportResult" } } } }
+
   /api/exports/bots:
     post:
       operationId: export_bots
@@ -1435,6 +1492,41 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
   schemas:
+    BotImportPreview:
+      type: object
+      required: [id, manifest, document, expires, metrics]
+      properties:
+        id: { type: string }
+        bot_id: { type: integer, description: Local bot ID if a previous commit succeeded }
+        expires: { type: string, format: date-time }
+        metrics: { type: boolean }
+        document: { $ref: "#/components/schemas/BotConfigDocument" }
+        manifest:
+          type: object
+          required: [format, version, created, name, username, telegram_id, current_version, releases, entries]
+          properties:
+            format: { type: string, const: utbpanel.bot }
+            version: { type: integer, const: 1 }
+            created: { type: string, format: date-time }
+            name: { type: string }
+            username: { type: string }
+            telegram_id: { type: integer }
+            current_version: { type: string }
+            group: { type: object, properties: { id: { type: integer }, name: { type: string } } }
+            releases: { type: array, items: { $ref: "#/components/schemas/Release" } }
+            entries:
+              type: object
+              additionalProperties:
+                type: object
+                required: [size, sha256]
+                properties: { size: { type: integer }, sha256: { type: string } }
+    BotImportResult:
+      type: object
+      required: [bot, started, warnings]
+      properties:
+        bot: { $ref: "#/components/schemas/Bot" }
+        started: { type: boolean }
+        warnings: { type: array, items: { type: string } }
     ExportFile:
       type: object
       required: [id, bot_id, name, size, expires]
@@ -1487,16 +1579,16 @@ components:
             text: { type: string, x-mcp: write }
         texts: { type: object, additionalProperties: { type: string }, x-mcp: write }
         tz: { type: string, x-mcp: write }
-        flags: { type: object, additionalProperties: { $ref: "#/components/schemas/SDKFlagValue" }, description: Explicit overrides only; remove a key to reset its code default, x-mcp: write }
+        flags: { type: object, maxProperties: 100, propertyNames: { pattern: "^[A-Za-z_][A-Za-z0-9_]{0,63}$" }, additionalProperties: { $ref: "#/components/schemas/SDKFlagValue" }, description: Explicit overrides only; remove a key to reset its code default, x-mcp: write }
         profile:
           type: object
           x-mcp: write
           additionalProperties: false
           properties:
-            name: { type: object, additionalProperties: { type: string } }
-            description: { type: object, additionalProperties: { type: string } }
-            short_description: { type: object, additionalProperties: { type: string } }
-            commands: { type: object, additionalProperties: { type: array, items: { $ref: "#/components/schemas/BotCommand" } } }
+            name: { type: object, propertyNames: { pattern: "^(default|[a-z]{2})$" }, additionalProperties: { type: string } }
+            description: { type: object, propertyNames: { pattern: "^(default|[a-z]{2})$" }, additionalProperties: { type: string } }
+            short_description: { type: object, propertyNames: { pattern: "^(default|[a-z]{2})$" }, additionalProperties: { type: string } }
+            commands: { type: object, propertyNames: { pattern: "^(default|[a-z]{2})$" }, additionalProperties: { type: array, items: { $ref: "#/components/schemas/BotCommand" } } }
             menu: { $ref: "#/components/schemas/MenuButton" }
         limits: { $ref: "#/components/schemas/Limits", x-mcp: confirm }
         stop:

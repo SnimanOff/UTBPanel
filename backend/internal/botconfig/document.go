@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/SnimanOff/UTBPanel/backend/internal/alerts"
 	"io"
 	"net/url"
 	"path/filepath"
@@ -213,6 +214,11 @@ func Normalize(d *Document) {
 	if d.Profile.Commands == nil {
 		d.Profile.Commands = map[string][]telegram.BotCommand{}
 	}
+	for lang, commands := range d.Profile.Commands {
+		if commands == nil {
+			d.Profile.Commands[lang] = []telegram.BotCommand{}
+		}
+	}
 	if d.TZ == "" {
 		d.TZ = "Europe/Moscow"
 	}
@@ -263,6 +269,19 @@ func Decode(raw []byte) (Document, error) {
 }
 
 func Validate(d Document) error {
+	for _, r := range d.Alerts {
+		if err := (alerts.Rule{Metric: r.Metric, Op: r.Op, Value: r.Value, Minutes: r.Minutes, Enabled: r.Enabled}).Validate(); err != nil {
+			return err
+		}
+	}
+	if len(d.Flags) > flags.MaxFlags {
+		return fmt.Errorf("too many flags")
+	}
+	for name, value := range d.Flags {
+		if err := flags.Validate(flags.Definition{Name: name, Kind: value.Kind, Default: flags.Value(value)}); err != nil {
+			return fmt.Errorf("flag %s: %w", name, err)
+		}
+	}
 	for name := range d.Env {
 		if !secrets.ValidName(name) || ReservedSecret(name) {
 			return fmt.Errorf("invalid environment name %q", name)
@@ -302,6 +321,24 @@ func Validate(d Document) error {
 	}
 	if err := logs.Validate(d.LogPatterns); err != nil {
 		return err
+	}
+	languages := map[string]bool{}
+	for key := range d.Profile.Name {
+		languages[key] = true
+	}
+	for key := range d.Profile.Description {
+		languages[key] = true
+	}
+	for key := range d.Profile.ShortDescription {
+		languages[key] = true
+	}
+	for key := range d.Profile.Commands {
+		languages[key] = true
+	}
+	for lang := range languages {
+		if lang != "default" && (len(lang) != 2 || strings.Trim(lang, "abcdefghijklmnopqrstuvwxyz") != "") {
+			return fmt.Errorf("invalid profile language %q", lang)
+		}
 	}
 	for _, commands := range d.Profile.Commands {
 		for _, cmd := range commands {

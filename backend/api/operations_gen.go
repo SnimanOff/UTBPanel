@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "d1681e4d4bb88ebdb8f0b2d257ee4aebaec35da0b10dee10bfda6f1a183cf68f"
+const GeneratedHash = "3ad02eb3e02a4133b6b9ffddcaa3f3039d4b5a4bb9d98846559bdf2de44d4e93"
 
 // Op is one operation of the API.
 type Op struct {
@@ -19,6 +19,7 @@ var Ops = []Op{
 	{"reset_flag", "DELETE", "/api/bots/{id}/sdk/flags/{name}", "write", "Restore a flag default from the bot code"},
 	{"delete_secret", "DELETE", "/api/bots/{id}/secrets/{name}", "confirm", "Delete a secret"},
 	{"delete_group", "DELETE", "/api/groups/{gid}", "never", "Delete a group; its bots move to \"No group\""},
+	{"discard_bot_import", "DELETE", "/api/imports/bots/{import}", "never", "Remove temporary import files; an already imported bot stays"},
 	{"list_alert_rules", "GET", "/api/alert-rules", "read", "Threshold rules; ?bot=id for one bot (0 = rules for all bots)"},
 	{"alerts_log", "GET", "/api/alerts/log", "read", "Firings and recoveries of rules, newest first"},
 	{"get_audit", "GET", "/api/audit", "read", "Action log with filters"},
@@ -112,6 +113,8 @@ var Ops = []Op{
 	{"reject_device", "POST", "/api/devices/{id}/reject", "never", "Reject a device (owner only)"},
 	{"export_bots", "POST", "/api/exports/bots", "never", "Create encrypted portable archives; the same password is returned once for the batch"},
 	{"create_group", "POST", "/api/groups", "never", "Create a group"},
+	{"inspect_bot_import", "POST", "/api/imports/bots", "never", "Upload and decrypt a portable bot archive, validate it and show secret names"},
+	{"apply_bot_import", "POST", "/api/imports/bots/{import}/apply", "never", "Restore a validated archive under a new local ID and optionally start it"},
 	{"issue_key", "POST", "/api/keys", "never", "Issue a child key; returns gate-<name>.exe (owner only)"},
 	{"revoke_key", "POST", "/api/keys/{serial}/revoke", "never", "Revoke a key (owner only; the owner key only over SSH)"},
 	{"read_notifications", "POST", "/api/notifications/read", "write", "Mark notifications read (all when ids is empty)"},

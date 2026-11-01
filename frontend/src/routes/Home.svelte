@@ -8,6 +8,7 @@
   import HoldButton from '../lib/ui/HoldButton.svelte'
   import BotCard from './BotCard.svelte'
   import Export from './bot/Export.svelte'
+  import ImportBot from './ImportBot.svelte'
 
   type Filter = 'all' | 'running' | 'paused' | 'stopped' | 'error'
   const filters: { id: Filter; label: string }[] = [
@@ -121,6 +122,7 @@
 
 {#if error}<p class="danger">{error}</p>{/if}
 {#if store.bots.length}<Export all />{/if}
+<ImportBot />
 {#if store.error}<p class="danger">{store.error}</p>{/if}
 
 {#each sections as s (s.group.id)}

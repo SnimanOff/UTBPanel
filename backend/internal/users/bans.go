@@ -59,6 +59,34 @@ func (b *Bans) Banned(bot, user int64) bool {
 	return ok && (end.IsZero() || time.Now().Before(end))
 }
 
+// LoadBot refreshes only a newly imported bot, leaving live bans of others.
+func (b *Bans) LoadBot(ctx context.Context, id int64) error {
+	rows, err := b.DB.R.QueryContext(ctx, `SELECT user_id,ban_until FROM bot_users WHERE bot_id=? AND banned`, id)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	m := map[int64]time.Time{}
+	for rows.Next() {
+		var user int64
+		var until sql.NullString
+		if err := rows.Scan(&user, &until); err != nil {
+			return err
+		}
+		m[user] = timeOrZero(until)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	b.mu.Lock()
+	if b.until == nil {
+		b.until = map[int64]map[int64]time.Time{}
+	}
+	b.until[id] = m
+	b.mu.Unlock()
+	return nil
+}
+
 // Ban bans a user; for 0 duration forever. by is the key name or "антифлуд".
 func (b *Bans) Ban(ctx context.Context, bot, user int64, reason string, d time.Duration, by string) error {
 	if strings.TrimSpace(reason) == "" {

@@ -144,6 +144,23 @@ func TestConfigValidationBeforeMutation(t *testing.T) {
 	}
 }
 
+func TestConfigCanRemoveUnregisteredImportedFlag(t *testing.T) {
+	c := configCore(t)
+	ctx := context.Background()
+	if err := c.SetSetting(ctx, 1, "pending_flags", map[string]bool{"removed_from_code": true}); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := c.ConfigSnapshot(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(snap.Document.Flags, "removed_from_code")
+	out, err := c.ApplyConfig(ctx, botconfig.ApplyRequest{BotID: 1, Version: snap.Version, Document: snap.Document})
+	if err != nil || len(out.Snapshot.Document.Flags) != 0 {
+		t.Fatal(out, err)
+	}
+}
+
 func TestConfigProfilePartialFailure(t *testing.T) {
 	ctx := context.Background()
 	c := configCore(t)

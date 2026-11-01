@@ -136,6 +136,18 @@ func (f *Files) Info(ref FileRef) (File, error) {
 	defer f.mu.Unlock()
 	return f.info(ref)
 }
+
+func (f *Files) Open(ref FileRef) (*os.File, error) {
+	if !validID(ref.ID) {
+		return nil, ErrExpired
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, err := f.info(ref); err != nil {
+		return nil, err
+	}
+	return os.Open(filepath.Join(f.Dir, ref.ID))
+}
 func (f *Files) info(ref FileRef) (File, error) {
 	raw, err := os.ReadFile(filepath.Join(f.Dir, ref.ID+".json"))
 	if err != nil {
