@@ -141,11 +141,11 @@ func (r *Runner) watchOnce() {
 	pr := r.procReader()
 	now := time.Now()
 	for _, p := range ps {
-		if p.cmd.Process == nil {
+		if p.pid == 0 {
 			continue
 		}
 		id := p.bot.ID
-		u, err := pr.Usage(p.cmd.Process.Pid)
+		u, err := pr.Usage(p.pid)
 		if err != nil {
 			continue
 		}

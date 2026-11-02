@@ -119,13 +119,19 @@ type Runner struct {
 }
 
 type proc struct {
-	bot     Bot
-	cmd     *exec.Cmd
-	started time.Time
-	done    chan struct{}
-	exit    error
+	bot Bot
+	// cmd is nil for a process handed over by the previous core.
+	cmd *exec.Cmd
+	pid int
+	// out and errOut are the read ends of the bot's stdout and stderr.
+	out, errOut *os.File
+	started     time.Time
+	done        chan struct{}
+	exit        error
 	// stopping is set when the owner stops the bot: its exit is not a crash.
 	stopping bool
+	// detached: handed over to the next core, this one no longer watches it.
+	detached bool
 }
 
 // New returns a runner.
@@ -176,10 +182,10 @@ func (r *Runner) Info(id int64) (Info, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	p, ok := r.procs[id]
-	if !ok || p.cmd.Process == nil {
+	if !ok || p.pid == 0 {
 		return Info{}, false
 	}
-	return Info{PID: p.cmd.Process.Pid, Started: p.started}, true
+	return Info{PID: p.pid, Started: p.started}, true
 }
 
 // CurrentLimits returns the limits of the process that is running now;
@@ -326,7 +332,7 @@ func (r *Runner) Start(ctx context.Context, b Bot) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("runner: start: %w", err)
 	}
-	p := &proc{bot: b, cmd: cmd, started: time.Now(), done: make(chan struct{})}
+	p := &proc{bot: b, cmd: cmd, pid: cmd.Process.Pid, out: pipeFile(stdout), errOut: pipeFile(stderr), started: time.Now(), done: make(chan struct{})}
 	r.mu.Lock()
 	r.procs[b.ID] = p
 	r.mu.Unlock()
@@ -443,7 +449,7 @@ func (r *Runner) Shutdown() {
 }
 
 func (r *Runner) terminate(p *proc) {
-	signalTerm(p.cmd)
+	signalTerm(p)
 	select {
 	case <-p.done:
 		r.coreLine(p.bot.ID, "stopped")
@@ -454,7 +460,7 @@ func (r *Runner) terminate(p *proc) {
 }
 
 func (r *Runner) kill(p *proc) {
-	signalKill(p.cmd)
+	signalKill(p)
 	<-p.done
 }
 
@@ -463,9 +469,9 @@ func (r *Runner) exited(p *proc) {
 	if r.procs[p.bot.ID] == p {
 		delete(r.procs, p.bot.ID)
 	}
-	stopping := p.stopping
+	stopping, detached := p.stopping, p.detached
 	r.mu.Unlock()
-	if stopping {
+	if stopping || detached {
 		return
 	}
 	code := exitCode(p.exit)

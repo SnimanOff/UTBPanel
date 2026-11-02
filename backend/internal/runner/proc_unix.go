@@ -23,15 +23,17 @@ func (r *Runner) command(b Bot, bin string) *exec.Cmd {
 	return cmd
 }
 
-// signalTerm sends SIGTERM to the bot's whole process group.
-func signalTerm(cmd *exec.Cmd) {
-	if cmd.Process != nil {
-		syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+// signalTerm sends SIGTERM to the bot's whole process group. The group id
+// is the pid (Setpgid), which also works for a process handed over by the
+// previous core.
+func signalTerm(p *proc) {
+	if p.pid > 0 {
+		syscall.Kill(-p.pid, syscall.SIGTERM)
 	}
 }
 
-func signalKill(cmd *exec.Cmd) {
-	if cmd.Process != nil {
-		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+func signalKill(p *proc) {
+	if p.pid > 0 {
+		syscall.Kill(-p.pid, syscall.SIGKILL)
 	}
 }

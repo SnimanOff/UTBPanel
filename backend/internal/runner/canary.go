@@ -49,7 +49,7 @@ func (r *Runner) StartCanary(ctx context.Context, b Bot) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("runner: start canary: %w", err)
 	}
-	p := &proc{bot: b, cmd: cmd, started: time.Now(), done: make(chan struct{})}
+	p := &proc{bot: b, cmd: cmd, pid: cmd.Process.Pid, out: pipeFile(stdout), errOut: pipeFile(stderr), started: time.Now(), done: make(chan struct{})}
 	r.mu.Lock()
 	if r.canaries == nil {
 		r.canaries = map[int64]*proc{}
@@ -68,7 +68,7 @@ func (r *Runner) StartCanary(ctx context.Context, b Bot) error {
 		if r.canaries[b.ID] == p {
 			delete(r.canaries, b.ID)
 		}
-		stopping := p.stopping
+		stopping := p.stopping || p.detached
 		r.mu.Unlock()
 		if !stopping {
 			r.coreLine(b.ID, "canary %s exited: %v", b.Version, p.exit)
@@ -109,8 +109,8 @@ func (r *Runner) Canary(id int64) (Bot, Info, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	p, ok := r.canaries[id]
-	if !ok || p.cmd.Process == nil {
+	if !ok || p.pid == 0 {
 		return Bot{}, Info{}, false
 	}
-	return p.bot, Info{PID: p.cmd.Process.Pid, Started: p.started}, true
+	return p.bot, Info{PID: p.pid, Started: p.started}, true
 }
