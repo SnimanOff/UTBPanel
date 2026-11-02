@@ -18,7 +18,8 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // ErrNoDB means the bot has not created its database yet.
@@ -43,7 +44,22 @@ func dsn(path string, write bool) string {
 		q.Set("mode", "ro")
 		q.Add("_pragma", "query_only(1)")
 	}
-	return sqliteURI(path,q)
+	return sqliteURI(path, q)
+}
+
+// readOnly takes a connection that cannot reach past the bot's database:
+// query_only stops writes to it, but ATTACH and VACUUM INTO would still
+// create files anywhere the process may write. No attached databases at all.
+func readOnly(ctx context.Context, db *sql.DB) (*sql.Conn, error) {
+	c, err := db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := sqlite.Limit(c, sqlite3.SQLITE_LIMIT_ATTACHED, 0); err != nil {
+		c.Close()
+		return nil, err
+	}
+	return c, nil
 }
 
 func (b *Browser) open(botID int64, write bool) (*sql.DB, error) {
@@ -241,7 +257,18 @@ func (b *Browser) Query(ctx context.Context, botID int64, query string, write bo
 		n, _ := res.RowsAffected()
 		return Result{Columns: []string{}, Rows: [][]any{}, Affected: n, Millis: ms(start)}, nil
 	}
-	rows, err := db.QueryContext(ctx, q)
+	var querier interface {
+		QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	} = db
+	if !write {
+		c, err := readOnly(ctx, db)
+		if err != nil {
+			return Result{}, err
+		}
+		defer c.Close()
+		querier = c
+	}
+	rows, err := querier.QueryContext(ctx, q)
 	if err != nil {
 		return Result{}, err
 	}
@@ -264,7 +291,12 @@ func (b *Browser) CSV(ctx context.Context, botID int64, table, query string, w i
 	if table != "" {
 		q = `SELECT * FROM ` + quoteIdent(table)
 	}
-	rows, err := db.QueryContext(ctx, q)
+	c, err := readOnly(ctx, db)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	rows, err := c.QueryContext(ctx, q)
 	if err != nil {
 		return err
 	}

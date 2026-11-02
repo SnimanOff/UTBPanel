@@ -22,6 +22,11 @@ type operation struct {
 	Schema     map[string]any
 	Validator  *jsonschema.Resolved
 	MediaType  string
+	// Response is the JSON schema of the success answer (refs unresolved),
+	// used to wrap x-untrusted values.
+	Response  map[string]any
+	Untrusted bool
+	defs      schemas
 }
 
 func operations() ([]operation, error) {
@@ -46,7 +51,26 @@ func operations() ([]operation, error) {
 		if op.MCP != spec.Read && op.MCP != spec.Write && op.MCP != spec.Confirm {
 			return nil, fmt.Errorf("%s: missing MCP level", op.ID)
 		}
-		current := operation{Operation: op}
+		current := operation{Operation: op, defs: doc.Components.Schemas}
+		for _, code := range []string{"200", "201"} {
+			node, ok := op.Responses[code]
+			if !ok {
+				continue
+			}
+			var resp struct {
+				Content map[string]struct {
+					Schema map[string]any `yaml:"schema"`
+				} `yaml:"content"`
+			}
+			if err := node.Decode(&resp); err != nil {
+				return nil, fmt.Errorf("%s response: %w", op.ID, err)
+			}
+			if c, ok := resp.Content["application/json"]; ok && c.Schema != nil {
+				current.Response = c.Schema
+				current.Untrusted = current.defs.hasUntrusted(c.Schema)
+				break
+			}
+		}
 		properties := map[string]any{}
 		var required []string
 		positions := map[string]int{}

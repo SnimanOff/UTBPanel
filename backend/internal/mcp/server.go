@@ -56,7 +56,11 @@ func New(handler http.Handler, auditLog *audit.Log, log *slog.Logger) (*Service,
 	})
 	for _, op := range ops {
 		s.ops[op.ID] = op
-		server.AddTool(&sdk.Tool{Name: op.ID, Description: op.Summary, InputSchema: op.Schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: op.MCP == spec.Read}}, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+		description := op.Summary
+		if op.Untrusted {
+			description += UntrustedNote
+		}
+		server.AddTool(&sdk.Tool{Name: op.ID, Description: description, InputSchema: op.Schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: op.MCP == spec.Read}}, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
 			return s.call(ctx, op, req.Params.Arguments), nil
 		})
 	}
@@ -208,6 +212,9 @@ func (s *Service) execute(ctx context.Context, op operation, args map[string]any
 	value, err = s.filter(ctx, op, value)
 	if err != nil {
 		return s.denied(ctx, op, args, "unavailable: permissions could not be checked")
+	}
+	if status < 400 {
+		value = op.defs.mark(value, op.Response, 0)
 	}
 	structured["result"] = value
 	text, err := json.Marshal(structured)

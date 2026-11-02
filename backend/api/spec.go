@@ -32,8 +32,9 @@ type Operation struct {
 	Summary     string `yaml:"summary"`
 	MCP         string `yaml:"x-mcp"`
 	Tags        []string
-	Parameters  []yaml.Node `yaml:"parameters"`
-	RequestBody yaml.Node   `yaml:"requestBody"`
+	Parameters  []yaml.Node          `yaml:"parameters"`
+	RequestBody yaml.Node            `yaml:"requestBody"`
+	Responses   map[string]yaml.Node `yaml:"responses"`
 }
 
 // Pattern is the route as registered in the Go mux: "GET /api/bots/{id}".

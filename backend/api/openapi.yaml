@@ -2265,7 +2265,7 @@ components:
         last_at: { type: string, format: date-time }
         versions: { type: array, items: { type: string } }
         last_version: { type: string }
-        last_stack: { type: string }
+        last_stack: { type: string, x-untrusted: true }
         count_24h: { type: integer }
         maybe_fixed: { type: boolean }
     Notification:
@@ -2278,7 +2278,7 @@ components:
         bot_id: { type: integer }
         kind: { type: string }
         severity: { type: string, enum: [error, warn, info, ok] }
-        text: { type: string }
+        text: { type: string, x-untrusted: true }
         href: { type: string }
         count: { type: integer }
         read: { type: boolean }
@@ -2537,8 +2537,8 @@ components:
         source: { type: string }
         action: { type: string }
         bot_id: { type: integer }
-        object: { type: string }
-        details: { type: object }
+        object: { type: string, x-untrusted: true }
+        details: { type: object, x-untrusted: true }
         result: { type: string }
     EnrollRequest:
       type: object
