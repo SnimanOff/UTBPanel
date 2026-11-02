@@ -2,11 +2,9 @@ package tgproxy
 
 import (
 	"net"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Listener is a bot proxy port handed to the next core.
@@ -24,6 +22,9 @@ func (p *Proxy) Handover() ([]Listener, []*os.File, error) {
 	var out []Listener
 	var files []*os.File
 	for k, ln := range p.lns {
+		if o, ok := ln.(*ownerListener); ok {
+			ln = o.Listener
+		}
 		tl, ok := ln.(*net.TCPListener)
 		if !ok {
 			continue
@@ -51,14 +52,7 @@ func (p *Proxy) Adopt(ls []Listener, files []*os.File) error {
 		if err != nil {
 			return err
 		}
-		p.mu.Lock()
-		if p.lns == nil {
-			p.lns = map[string]net.Listener{}
-		}
-		p.lns[key(l.BotID, l.Instance)] = ln
-		p.mu.Unlock()
-		srv := &http.Server{Handler: &handler{p: p, bot: l.BotID, inst: l.Instance}, ReadHeaderTimeout: 30 * time.Second}
-		go srv.Serve(ln)
+		p.serve(l.BotID, l.Instance, ln)
 	}
 	return nil
 }

@@ -63,6 +63,11 @@ type Proxy struct {
 	Log      *slog.Logger
 	// UpstreamTLS trusts the fake Telegram in tests.
 	UpstreamTLS *tls.Config
+	// UID returns the uid a bot runs under; when set, a connection to a
+	// bot's port from another uid is closed. Ports are on 127.0.0.1, which
+	// every bot can reach: without this one bot could make calls on behalf
+	// of another and get its interceptions and metrics.
+	UID func(botID int64) int
 
 	client *http.Client
 	mu     sync.Mutex
@@ -103,12 +108,23 @@ func (p *Proxy) Start(botID int64, instance string, port int) error {
 	if err != nil {
 		return err
 	}
+	p.serve(botID, instance, ln)
+	return nil
+}
+
+// serve answers on a bot instance's port, only to that bot when UID is set.
+func (p *Proxy) serve(botID int64, instance string, ln net.Listener) {
+	if p.UID != nil {
+		ln = &ownerListener{Listener: ln, uid: p.UID(botID), bot: botID, log: p.Log}
+	}
 	p.mu.Lock()
-	p.lns[k] = ln
+	if p.lns == nil {
+		p.lns = map[string]net.Listener{}
+	}
+	p.lns[key(botID, instance)] = ln
 	p.mu.Unlock()
 	srv := &http.Server{Handler: &handler{p: p, bot: botID, inst: instance}, ReadHeaderTimeout: 30 * time.Second}
 	go srv.Serve(ln)
-	return nil
 }
 
 // Stop closes the listener of an instance.
@@ -119,6 +135,30 @@ func (p *Proxy) Stop(botID int64, instance string) {
 	p.mu.Unlock()
 	if ln != nil {
 		ln.Close()
+	}
+}
+
+// ownerListener accepts only connections of one uid.
+type ownerListener struct {
+	net.Listener
+	uid int
+	bot int64
+	log *slog.Logger
+}
+
+func (l *ownerListener) Accept() (net.Conn, error) {
+	for {
+		c, err := l.Listener.Accept()
+		if err != nil {
+			return nil, err
+		}
+		if uid, ok := peerUID(c); ok && uid == l.uid {
+			return c, nil
+		}
+		if l.log != nil {
+			l.log.Warn("tgproxy: connection from another uid refused", "bot", l.bot)
+		}
+		c.Close()
 	}
 }
 

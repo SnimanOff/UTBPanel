@@ -205,6 +205,10 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	}
 	os.Chmod(filepath.Dir(c.bundle), 0o755)
 	c.Proxy = &tgproxy.Proxy{CA: ca, Upstream: cfg.TelegramAPI, Log: log}
+	if runtime.GOOS == "linux" && os.Geteuid() == 0 {
+		// Bots run under their own uids: each proxy port serves only its bot.
+		c.Proxy.UID = func(id int64) int { return runner.UID(id) }
+	}
 	c.Count = counters.New()
 	c.Count.Register(c.Mux)
 	c.Host = &counters.HostSampler{Proc: counters.Root(cfg.HostProc), DataDir: cfg.DataDir}
