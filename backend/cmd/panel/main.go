@@ -18,6 +18,8 @@ func main() {
 		{Name: "keys issue", Usage: "--owner|--child --name <name> > gate-<name>.exe", Run: keysIssue},
 		{Name: "keys revoke", Usage: "<name|serial>", Run: keysRevoke},
 		{Name: "keys list", Usage: "list access keys", Run: keysList},
+		{Name: "devices list", Usage: "list devices waiting for approval", Run: devicesList},
+		{Name: "devices approve", Usage: "<id>: approve after comparing the code", Run: devicesApprove},
 	})
 }
 
