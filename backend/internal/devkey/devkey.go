@@ -1,7 +1,9 @@
 // Package devkey keeps the device key of gate.exe: an ECDSA
 // P-256 key created on this computer that never leaves it. On Windows it
 // lives in the TPM (Microsoft Platform Crypto Provider); without a TPM it
-// is a software key encrypted with DPAPI for the current Windows user.
+// is a software key encrypted with DPAPI for the current Windows user. On
+// Linux it lives in the TPM 2.0; without one, and on macOS, the key file is
+// sealed with a secret from the system store (Secret Service, Keychain).
 //
 // The state directory holds only a reference to the key, so a copied
 // directory is useless on another computer.
@@ -24,7 +26,7 @@ import (
 // Key is a device key.
 type Key interface {
 	crypto.Signer
-	// Kind is "tpm", "dpapi" or "file".
+	// Kind is "tpm", "dpapi", "keyring" or "file".
 	Kind() string
 }
 
@@ -64,7 +66,7 @@ func Create(dir, name string, noTPM bool) (Key, error) {
 }
 
 // fileKey is a plain PEM key file, used where neither TPM nor DPAPI exist
-// (tests, and other systems until the gate supports them).
+// (other systems).
 type fileKey struct{ *ecdsa.PrivateKey }
 
 func (fileKey) Kind() string { return "file" }

@@ -19,7 +19,7 @@ import (
 
 func main() {
 	version := flag.Bool("version", false, "print version")
-	noTPM := flag.Bool("no-tpm", false, "keep the device key under DPAPI instead of the TPM")
+	noTPM := flag.Bool("no-tpm", false, "keep the device key without the TPM (DPAPI on Windows, system secret store elsewhere)")
 	listen := flag.String("listen", gate.DefaultListen, "local address")
 	flag.Parse()
 	if *version {
