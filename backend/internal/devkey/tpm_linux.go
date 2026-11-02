@@ -20,7 +20,8 @@ import (
 
 // The kernel resource manager: every open file has its own handles, so
 // several programs can use the TPM at once.
-var tpmDevice = "/dev/tpmrm0"
+// Tests replace it with a simulator.
+var openTPM = func() (transport.TPMCloser, error) { return linuxtpm.Open("/dev/tpmrm0") }
 
 // tpmKey is an ECDSA P-256 key created inside the TPM 2.0 under the
 // standard ECC storage key. The file holds only its blob, encrypted by
@@ -100,7 +101,7 @@ func flush(tpm transport.TPM, h tpm2.NamedHandle) {
 type tpmBlob struct{ Public, Private []byte }
 
 func createTPMKey(path string) (Key, error) {
-	tpm, err := linuxtpm.Open(tpmDevice)
+	tpm, err := openTPM()
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +147,7 @@ func openTPMKey(path string) (Key, error) {
 	if err != nil {
 		return nil, fmt.Errorf("devkey: %s is damaged", path)
 	}
-	tpm, err := linuxtpm.Open(tpmDevice)
+	tpm, err := openTPM()
 	if err != nil {
 		return nil, fmt.Errorf("devkey: TPM: %w", err)
 	}
