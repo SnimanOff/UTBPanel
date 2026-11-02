@@ -40,6 +40,20 @@ const CookieName = "tgpanel_gate"
 
 const loginTTL = 60 * time.Second
 
+// A browser session ends after SessionIdle without requests or SessionMax
+// in total; the tray link opens a new one. A stolen cookie does not work
+// for as long as gate runs (often weeks).
+var (
+	SessionIdle = 12 * time.Hour
+	SessionMax  = 7 * 24 * time.Hour
+)
+
+type session struct{ created, seen time.Time }
+
+func (s session) expired(now time.Time) bool {
+	return now.Sub(s.seen) > SessionIdle || now.Sub(s.created) > SessionMax
+}
+
 // Config configures a gate.
 type Config struct {
 	Block    *gatefile.Block
@@ -64,7 +78,7 @@ type Gate struct {
 	key      devkey.Key
 	device   *tls.Certificate
 	server   string
-	sessions map[string]time.Time
+	sessions map[string]*session
 	logins   map[string]time.Time
 	mcpToken string
 	enroll   EnrollState
@@ -112,7 +126,7 @@ func New(cfg Config) (*Gate, error) {
 	g := &Gate{
 		cfg: cfg, log: cfg.Log, dir: dir, port: port,
 		server:   cfg.Block.Servers[0],
-		sessions: map[string]time.Time{},
+		sessions: map[string]*session{},
 		logins:   map[string]time.Time{},
 		enroll:   EnrollState{State: "starting", Name: cfg.Block.KeyName},
 	}
@@ -358,7 +372,13 @@ func (g *Gate) auth(r *http.Request) authKind {
 		return authNone
 	}
 	if c, err := r.Cookie(CookieName); err == nil {
-		if _, ok := g.sessions[c.Value]; ok {
+		if s, ok := g.sessions[c.Value]; ok {
+			now := time.Now()
+			if s.expired(now) {
+				delete(g.sessions, c.Value)
+				return authNone
+			}
+			s.seen = now
 			return authSession
 		}
 	}
@@ -423,7 +443,13 @@ func (g *Gate) login(w http.ResponseWriter, r *http.Request) {
 	var sid string
 	if ok && time.Now().Before(exp) {
 		sid = randomToken()
-		g.sessions[sid] = time.Now()
+		now := time.Now()
+		for k, s := range g.sessions {
+			if s.expired(now) {
+				delete(g.sessions, k)
+			}
+		}
+		g.sessions[sid] = &session{created: now, seen: now}
 	}
 	g.mu.Unlock()
 	if sid == "" {
