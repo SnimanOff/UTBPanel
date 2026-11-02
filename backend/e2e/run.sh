@@ -28,5 +28,6 @@ phase TestBotCrash
 
 phase TestDeployRollback
 phase TestCanary
+phase TestBackupAndTransfer
 
 echo "e2e: all phases passed"
