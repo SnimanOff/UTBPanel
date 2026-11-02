@@ -182,6 +182,18 @@ func (r *Runner) Info(id int64) (Info, bool) {
 	return Info{PID: p.cmd.Process.Pid, Started: p.started}, true
 }
 
+// CurrentLimits returns the limits of the process that is running now;
+// settings edited since its start may require a restart to take effect.
+func (r *Runner) CurrentLimits(id int64) (Limits, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.procs[id]
+	if !ok {
+		return Limits{}, false
+	}
+	return p.bot.Settings.Limits.Or(r.cfg.DefaultLimits), true
+}
+
 func (r *Runner) emit(id int64, typ, sev string, data map[string]any) {
 	if r.cfg.Hooks.Event != nil {
 		r.cfg.Hooks.Event(id, typ, sev, data)

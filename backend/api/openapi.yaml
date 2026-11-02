@@ -138,6 +138,18 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /api/bots/{id}/overview:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_bot_overview
+      tags: [bots]
+      summary: Diagnose a bot in one read-only snapshot (process, errors, webhook, deploy, thresholds, limits and queue)
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/BotOverview" } } } }
+        "404": { description: Bot not found }
+        "503": { description: Core unavailable }
+
   /api/bots/{id}/token:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     put:
@@ -1822,6 +1834,67 @@ components:
             group_id: { type: integer }
             position: { type: integer }
             status: { $ref: "#/components/schemas/Status" }
+    BotOverview:
+      type: object
+      required: [at, bot, process, uptime_seconds, errors, webhook, webhook_live, last_deploy, limits, usage, resources, deferred, canary, maintenance, panics, last_report, report_pending, rules, alerts]
+      properties:
+        at: { type: string, format: date-time }
+        bot: { $ref: "#/components/schemas/Bot" }
+        group_id: { type: integer }
+        process: { $ref: "#/components/schemas/Status" }
+        uptime_seconds: { type: integer, minimum: 0 }
+        errors: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/LogLine" } }
+        webhook:
+          type: object
+          properties:
+            url: { type: string }
+            set_at: { type: string, format: date-time }
+            checked_at: { type: string, format: date-time }
+            last_error: { type: string, x-untrusted: true }
+            hijacked_url: { type: string, x-untrusted: true }
+            pending: { type: integer }
+        webhook_live: { type: boolean, description: Fresh getWebhookInfo succeeded; otherwise the last cached state is returned }
+        webhook_error: { type: string }
+        last_deploy: { anyOf: [{ $ref: "#/components/schemas/DeployRecord" }, { type: "null" }] }
+        last_report: { anyOf: [{ $ref: "#/components/schemas/DeployReport" }, { type: "null" }] }
+        report_pending: { type: boolean }
+        limits: { $ref: "#/components/schemas/Limits" }
+        usage:
+          type: [object, "null"]
+          properties:
+            rss: { type: integer }
+            open_files: { type: integer }
+            threads: { type: integer }
+            files_total: { type: integer }
+            biggest_file: { type: integer }
+            cpu_ticks: { type: integer }
+        resources:
+          type: object
+          additionalProperties:
+            type: object
+            required: [used, limit, ratio, near, reached]
+            properties:
+              used: { type: integer }
+              limit: { type: integer }
+              ratio: { type: number }
+              near: { type: boolean, description: At least 80 percent of the limit }
+              reached: { type: boolean }
+        deferred: { type: integer }
+        canary: { type: [object, "null"] }
+        maintenance: { type: [object, "null"] }
+        panics: { type: array, maxItems: 10, items: { $ref: "#/components/schemas/PanicGroup" } }
+        rules: { type: array, items: { $ref: "#/components/schemas/AlertRule" } }
+        alerts:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [rule_id, time, value, text]
+            properties:
+              rule_id: { type: integer }
+              time: { type: string, format: date-time }
+              value: { type: number }
+              text: { type: string }
     Limits:
       type: object
       properties:

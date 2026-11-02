@@ -185,6 +185,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.Journal = journal.New(db, c.Mux, log)
 	c.registerSecrets()
 	c.registerBots()
+	c.registerOverview()
 	ca, err := tgproxy.LoadCA(filepath.Join(cfg.DataDir, "tgproxy-ca"))
 	if err != nil {
 		return nil, err

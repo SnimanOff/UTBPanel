@@ -64,6 +64,7 @@ func (c *Core) newRunner() *runner.Runner {
 				return c.SDK.Start(b.ID, b.Instance, uid)
 			},
 			Output: func(l runner.Line) {
+				l.Text = c.Sec.Redact.Redact(l.Text)
 				if l.Stream != "core" {
 					c.panicParser(l.BotID, l.Instance).Line(l.BotID, l.Text, l.Time)
 					if c.patterns != nil {

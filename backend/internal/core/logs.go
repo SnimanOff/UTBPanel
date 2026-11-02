@@ -23,9 +23,11 @@ type LogsQuery struct {
 }
 
 func (c *Core) newLogs() *logs.Store {
-	return logs.New(func(id int64) string {
+	store := logs.New(func(id int64) string {
 		return filepath.Join(c.Cfg.DataDir, "bots", strconv.FormatInt(id, 10), "logs")
 	}, c.Log)
+	store.Redact = c.Sec.Redact.Redact
+	return store
 }
 
 // chunkWriter sends written bytes as stream frames.

@@ -177,6 +177,10 @@ func checkMCPModes(t *testing.T, ctx context.Context, installation *backupInstal
 	}
 	args := map[string]any{"id": 7, "body": map[string]string{"name": "MCP renamed"}}
 	invoke("get_bot", map[string]any{"id": 7}, false)
+	overview := invoke("get_bot_overview", map[string]any{"id": 7}, false)
+	if !strings.Contains(overview.Content[0].(*mcpsdk.TextContent).Text, `"webhook_live":true`) {
+		t.Fatal("overview did not read the live webhook state")
+	}
 	invoke("rename_bot", args, true)
 	setMode := func(mode string) {
 		t.Helper()

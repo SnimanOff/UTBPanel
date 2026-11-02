@@ -140,8 +140,9 @@ type Sub struct {
 
 // Store holds logs of all bots.
 type Store struct {
-	root func(botID int64) string
-	log  *slog.Logger
+	Redact func(string) string
+	root   func(botID int64) string
+	log    *slog.Logger
 
 	mu   sync.Mutex
 	bots map[int64]*botLog
@@ -170,6 +171,9 @@ func (s *Store) bot(id int64) *botLog {
 
 // Add stores a line of bot output.
 func (s *Store) Add(botID int64, stream, text string, t time.Time) {
+	if s.Redact != nil {
+		text = s.Redact(text)
+	}
 	l := Line{Time: t.UTC(), Stream: stream, Text: text, Level: DetectLevel(text, stream)}
 	if stream == "core" {
 		l.Level = LevelInfo

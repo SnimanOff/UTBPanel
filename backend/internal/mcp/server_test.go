@@ -96,7 +96,7 @@ func TestStreamableToolsValidateInputsBindDevicesAndAuditReads(t *testing.T) {
 			t.Fatal("unresolved OpenAPI reference", tool.Name)
 		}
 	}
-	if listed["get_bot"] == nil || listed["set_flag"] == nil || listed["delete_bot"] != nil || listed["create_full_backup"] != nil || listed["set_secret"] != nil {
+	if listed["get_bot"] == nil || listed["get_bot_overview"] == nil || listed["set_flag"] == nil || listed["delete_bot"] != nil || listed["create_full_backup"] != nil || listed["set_secret"] != nil {
 		t.Fatal("tool levels are not respected")
 	}
 	invoke := func(session *sdk.ClientSession, name string, args any, wantError bool) *sdk.CallToolResult {

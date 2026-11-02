@@ -311,6 +311,15 @@ func TestLimitsApplied(t *testing.T) {
 		t.Fatal(err)
 	}
 	limits := get(t, b.Port, "/limits")
+	if current, ok := e.r.CurrentLimits(b.ID); !ok || current.OpenFiles != 777 || current.Threads != 1024 {
+		t.Fatal("diagnostics differ from enforced limits", current, ok)
+	}
+	if _, err := e.db.W.Exec(`UPDATE bots SET settings='{"limits":{"open_files":999}}' WHERE id=?`, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if current, ok := e.r.CurrentLimits(b.ID); !ok || current.OpenFiles != 777 {
+		t.Fatal("pending settings changed the reported running limits", current, ok)
+	}
 	for _, want := range []string{"Max open files            777", "Max core file size        0", "Max processes             1024", "Max file size             1073741824"} {
 		if !strings.Contains(strings.Join(strings.Fields(limits), " "), strings.Join(strings.Fields(want), " ")) {
 			t.Errorf("limit missing: %s\n%s", want, limits)

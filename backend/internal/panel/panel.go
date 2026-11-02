@@ -228,6 +228,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	})
 	panicStore := &panics.Store{DB: db}
 	panicStore.Register(p.API.Mux)
+	(&bots.OverviewAPI{Bots: p.Bots, Metrics: p.Metrics, Panics: panicStore, Rules: rules}).Register(p.API.Mux)
 	p.Events.Subscribe(panicStore.OnCoreEvent)
 	p.Go(func(ctx context.Context) {
 		for {

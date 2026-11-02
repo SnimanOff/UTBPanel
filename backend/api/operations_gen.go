@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "898c9aa907c0ed4d8ccd169057b147ea8e47f7648d742c747077f5885677967d"
+const GeneratedHash = "319501ac398658c342bf1db007bcb4719768340bc8d5e2b53e335b101698d8d7"
 
 // Op is one operation of the API.
 type Op struct {
@@ -51,6 +51,7 @@ var Ops = []Op{
 	{"stream_logs", "GET", "/api/bots/{id}/logs/stream", "never", "Live log lines (Server-Sent Events)"},
 	{"get_maintenance", "GET", "/api/bots/{id}/maintenance", "read", "Pause or maintenance of the bot, if any"},
 	{"get_metrics", "GET", "/api/bots/{id}/metrics", "read", "Metrics of the bot for a period, with user numbers and deploy marks"},
+	{"get_bot_overview", "GET", "/api/bots/{id}/overview", "read", "Diagnose a bot in one read-only snapshot (process, errors, webhook, deploy, thresholds, limits and queue)"},
 	{"list_panics", "GET", "/api/bots/{id}/panics", "read", "Panic groups (kind + first frame of the bot's code), counts, versions, last stack, \"maybe fixed\""},
 	{"get_profile", "GET", "/api/bots/{id}/profile", "read", "Telegram profile for a language (empty = default) and the menu button"},
 	{"list_versions", "GET", "/api/bots/{id}/releases", "read", "Stored versions with build data"},
