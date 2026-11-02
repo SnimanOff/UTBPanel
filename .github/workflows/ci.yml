@@ -63,6 +63,8 @@ jobs:
         with:
           version: latest
           working-directory: backend
+          # The code base predates the linter; new code must be clean.
+          only-new-issues: true
 
   frontend:
     runs-on: ubuntu-latest

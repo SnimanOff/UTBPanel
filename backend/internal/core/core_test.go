@@ -34,6 +34,7 @@ func TestNoKeysVolume(t *testing.T) {
 	cfg := config.DefaultCore()
 	cfg.DataDir = t.TempDir()
 	cfg.KeysDir = filepath.Join(t.TempDir(), "missing")
+	cfg.RunDir = t.TempDir()
 	if _, err := New(context.Background(), cfg, slog.Default()); !errors.Is(err, secrets.ErrNoKeysDir) {
 		t.Fatalf("got %v", err)
 	}

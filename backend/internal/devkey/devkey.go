@@ -55,7 +55,15 @@ func Create(dir, name string, noTPM bool) (Key, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	k, ref, err := create(dir, name, noTPM)
+	var k Key
+	var ref string
+	var err error
+	if fileKeysOnly {
+		k, err = createFileKey(filepath.Join(dir, "key.pem"))
+		ref = "file:key.pem"
+	} else {
+		k, ref, err = create(dir, name, noTPM)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +72,12 @@ func Create(dir, name string, noTPM bool) (Key, error) {
 	}
 	return k, nil
 }
+
+var fileKeysOnly bool
+
+// FileKeysOnly makes Create use plain key files, for tests of packages that
+// run gate where neither a TPM nor a system secret store exists.
+func FileKeysOnly() { fileKeysOnly = true }
 
 // fileKey is a plain PEM key file, used where neither TPM nor DPAPI exist
 // (other systems).

@@ -11,17 +11,25 @@ import (
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
+	"github.com/SnimanOff/UTBPanel/backend/internal/devkey"
 	"github.com/SnimanOff/UTBPanel/backend/internal/gatefile"
 	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store/migrations"
 )
+
+// No TPM, Keychain or Secret Service on test machines.
+func TestMain(m *testing.M) {
+	devkey.FileKeysOnly()
+	os.Exit(m.Run())
+}
 
 // fakePanel is the panel side of the tunnel: the real API server with the
 // device routes plus a few test routes.
