@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "e3c560b28d4c1e996738ae7845ae55b06264186eb55e179fad9ca60e7ae2a184"
+const GeneratedHash = "3c04c00619429a8c50598677c359198bc2242a8ee9c834b561193d50b90f6bd0"
 
 // Op is one operation of the API.
 type Op struct {
@@ -127,7 +127,7 @@ var Ops = []Op{
 	{"create_group", "POST", "/api/groups", "never", "Create a group"},
 	{"inspect_bot_import", "POST", "/api/imports/bots", "never", "Upload and decrypt a portable bot archive, validate it and show secret names"},
 	{"apply_bot_import", "POST", "/api/imports/bots/{import}/apply", "never", "Restore a validated archive under a new local ID and optionally start it"},
-	{"issue_key", "POST", "/api/keys", "never", "Issue a child key; returns gate-<name>.exe (owner only)"},
+	{"issue_key", "POST", "/api/keys", "never", "Issue a child key; returns gate-<name>.exe, or gate-<name> for Linux and macOS (owner only)"},
 	{"revoke_key", "POST", "/api/keys/{serial}/revoke", "never", "Revoke a key (owner only; the owner key only over SSH)"},
 	{"confirm_mcp_action", "POST", "/api/mcp/actions/{aid}/confirm", "never", "Confirm and run a pending AI action as the device that asked (owner only)"},
 	{"reject_mcp_action", "POST", "/api/mcp/actions/{aid}/reject", "never", "Reject a pending AI action (owner only)"},

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
 )
@@ -52,8 +53,14 @@ func (k *Keys) issue(w http.ResponseWriter, r *http.Request) {
 	}
 	var in struct {
 		Name string `json:"name"`
+		OS   string `json:"os"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	exe, file, err := pki.GateFile(k.GateExe, in.OS, in.Name)
+	if err != nil {
 		WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
@@ -62,10 +69,14 @@ func (k *Keys) issue(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	k.audit(r, "key.issue", in.Name, map[string]any{"kind": "child"})
-	w.Header().Set("Content-Type", "application/vnd.microsoft.portable-executable")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="gate-%s.exe"`, in.Name))
-	if err := pki.WriteGate(w, k.GateExe, b); err != nil {
+	k.audit(r, "key.issue", in.Name, map[string]any{"kind": "child", "os": in.OS})
+	if strings.HasSuffix(file, ".exe") {
+		w.Header().Set("Content-Type", "application/vnd.microsoft.portable-executable")
+	} else {
+		w.Header().Set("Content-Type", "application/octet-stream")
+	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, file))
+	if err := pki.WriteGate(w, exe, b); err != nil {
 		// Headers are already sent; the download will be cut short.
 		CallerLog(r).Error("writing gate.exe failed", "err", err)
 	}

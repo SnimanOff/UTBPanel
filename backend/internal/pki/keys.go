@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -194,4 +195,31 @@ func FormatList(keys []Key) string {
 		fmt.Fprintf(&b, "%-20s %-10s %-8s %-20s %-15s %s\n", k.Name, kind, state, seen, k.LastIP, k.Serial)
 	}
 	return b.String()
+}
+
+// GateSystems are the systems gate is issued for, by the files built next
+// to gate.exe in the image.
+var GateSystems = []string{"windows", "linux", "macos", "macos-intel"}
+
+var gateFiles = map[string]string{
+	"windows":     "gate.exe",
+	"linux":       "gate-linux-amd64",
+	"macos":       "gate-darwin-arm64",
+	"macos-intel": "gate-darwin-amd64",
+}
+
+// GateFile returns the gate binary for a system ("" is Windows) and the
+// name of the issued file.
+func GateFile(gateExe, system, name string) (path, filename string, err error) {
+	if system == "" {
+		system = "windows"
+	}
+	file, ok := gateFiles[system]
+	if !ok {
+		return "", "", fmt.Errorf("unknown system %q: one of %v", system, GateSystems)
+	}
+	if system == "windows" {
+		return gateExe, "gate-" + name + ".exe", nil
+	}
+	return filepath.Join(filepath.Dir(gateExe), file), "gate-" + name, nil
 }

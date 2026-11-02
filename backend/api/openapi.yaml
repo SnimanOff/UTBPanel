@@ -1717,13 +1717,13 @@ paths:
     post:
       operationId: issue_key
       tags: [keys]
-      summary: Issue a child key; returns gate-<name>.exe (owner only)
+      summary: Issue a child key; returns gate-<name>.exe, or gate-<name> for Linux and macOS (owner only)
       x-mcp: never
       requestBody:
         required: true
         content:
           application/json:
-            schema: { type: object, required: [name], properties: { name: { type: string } } }
+            schema: { type: object, required: [name], properties: { name: { type: string }, os: { type: string, enum: [windows, linux, macos, macos-intel], default: windows } } }
       responses:
         "200": { description: application/vnd.microsoft.portable-executable }
   /api/keys/{serial}/revoke:

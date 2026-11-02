@@ -9,6 +9,8 @@ LDFLAGS := -s -w -X $(PKG).Version=$(VERSION) -X $(PKG).Commit=$(COMMIT) -X $(PK
 build:
 	cd backend && CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o ../bin/ ./cmd/edge ./cmd/core ./cmd/panel
 	cd backend && CGO_ENABLED=0 GOOS=windows go build -trimpath -ldflags "$(LDFLAGS)" -o ../bin/gate.exe ./cmd/gate
+	cd backend && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o ../bin/gate-linux-amd64 ./cmd/gate
+	cd backend && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o ../bin/gate-darwin-arm64 ./cmd/gate
 
 test:
 	cd backend && go test ./...

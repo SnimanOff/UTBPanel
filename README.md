@@ -53,6 +53,31 @@ docker compose exec -T panel panel devices approve <id>
 на странице «Ключи». Ключ отзывается сразу: `panel keys revoke <имя>`;
 потерянный ключ владельца заменяется новым `keys issue --owner`.
 
+### Gate на Linux и macOS
+
+`keys issue` и страница «Ключи» выдают gate и для других систем:
+`--os linux` (amd64), `--os macos` (Apple Silicon) или `--os macos-intel`.
+
+```sh
+docker compose exec -T panel panel keys issue --owner --name laptop --os linux > gate-laptop
+chmod +x gate-laptop && ./gate-laptop
+```
+
+- Linux: ключ устройства создаётся в TPM 2.0 (`/dev/tpmrm0`, пользователь
+  должен быть в группе `tss`). Без TPM ключ лежит в файле, зашифрованном
+  секретом из GNOME Keyring или KWallet. Значок в трее — через
+  StatusNotifierItem (KDE, GNOME с расширением AppIndicator), уведомления —
+  `notify-send`, автозапуск — `~/.config/autostart`. Мини-окно открывается в
+  браузере.
+- macOS: ключ лежит в файле, зашифрованном секретом из связки ключей
+  (Keychain). Secure Enclave и значок в строке меню требуют сборки с cgo и
+  подписанного бинарника; выдаваемый gate работает без значка, панель
+  открывается в браузере. Скачанный файл снимите с карантина:
+  `xattr -d com.apple.quarantine gate-laptop`.
+
+Состояние gate хранится в `~/.config/tgpanel` (Linux) и
+`~/Library/Application Support/tgpanel` (macOS).
+
 ### Мастер-ключ
 
 Ядро шифрует токены и секреты мастер-ключом из тома `keys`. Сразу после

@@ -57,6 +57,7 @@ func keysIssue(ctx context.Context, args []string) error {
 	owner := fs.Bool("owner", false, "owner key")
 	child := fs.Bool("child", false, "child key")
 	name := fs.String("name", "", "key name, e.g. home-pc")
+	system := fs.String("os", "windows", "system of the device: windows, linux, macos or macos-intel")
 	ca, db, cfg, err := openCA(ctx, fs, args)
 	if err != nil {
 		return err
@@ -68,8 +69,12 @@ func keysIssue(ctx context.Context, args []string) error {
 	if cfg.PublicAddr == "" {
 		return errors.New("TGPANEL_PUBLIC_ADDR is not set: gate.exe would not know the server address")
 	}
+	exe, file, err := pki.GateFile(cfg.GateExe, *system, *name)
+	if err != nil {
+		return err
+	}
 	if fi, err := os.Stdout.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
-		return errors.New("refusing to write gate.exe to a terminal; redirect it: > gate-" + *name + ".exe")
+		return errors.New("refusing to write gate to a terminal; redirect it: > " + file)
 	}
 	kind := pki.Child
 	if *owner {
@@ -79,10 +84,10 @@ func keysIssue(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := pki.WriteGate(os.Stdout, cfg.GateExe, b); err != nil {
+	if err := pki.WriteGate(os.Stdout, exe, b); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "gate-%s.exe: %s key, enroll within 24 hours\n", *name, kind)
+	fmt.Fprintf(os.Stderr, "%s: %s key, enroll within 24 hours\n", file, kind)
 	notifyPanel(ctx, cfg)
 	return nil
 }

@@ -18,7 +18,10 @@ RUN LDFLAGS="-s -w -X github.com/SnimanOff/UTBPanel/backend/internal/buildinfo.V
       -X github.com/SnimanOff/UTBPanel/backend/internal/buildinfo.Commit=${COMMIT} \
       -X github.com/SnimanOff/UTBPanel/backend/internal/buildinfo.Date=${DATE}" && \
     GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o /out/ ./cmd/edge ./cmd/core ./cmd/panel && \
-    GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS -H windowsgui" -o /out/gate.exe ./cmd/gate
+    GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS -H windowsgui" -o /out/gate/gate.exe ./cmd/gate && \
+    GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o /out/gate/gate-linux-amd64 ./cmd/gate && \
+    GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o /out/gate/gate-darwin-arm64 ./cmd/gate && \
+    GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o /out/gate/gate-darwin-amd64 ./cmd/gate
 
 FROM alpine
 RUN apk add --no-cache ca-certificates tzdata tini && \
@@ -30,7 +33,7 @@ RUN apk add --no-cache ca-certificates tzdata tini && \
     chmod 0700 /data/edge /data/panel /keys && chmod 0711 /data/core && \
     chown root:tgpanel /run/tgpanel && chmod 2775 /run/tgpanel
 COPY --from=go /out/edge /out/core /out/panel /usr/local/bin/
-COPY --from=go /out/gate.exe /srv/gate/gate.exe
+COPY --from=go /out/gate/ /srv/gate/
 COPY --from=web /web/dist /srv/web
 ENV TGPANEL_SOCKET_GID=1000 TGPANEL_IN_IMAGE=1
 ENTRYPOINT ["/sbin/tini", "--"]

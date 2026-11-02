@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Keys: issue child keys (gate-<name>.exe), approve new devices by code,
+  // Keys: issue child keys (gate for Windows, Linux or macOS), approve new devices by code,
   // list with last seen and IP, revoke. A child key only sees the list.
   import { api, errorText } from '../lib/api/client'
   import { utc } from '../lib/format'
@@ -25,6 +25,13 @@
   let devices = $state<Device[]>([])
   let me = $state<{ pong: string; kind: string }>()
   let name = $state('')
+  let os = $state('windows')
+  const systems = [
+    ['windows', 'Windows'],
+    ['linux', 'Linux'],
+    ['macos', 'macOS (Apple)'],
+    ['macos-intel', 'macOS (Intel)'],
+  ]
   let error = $state('')
   let issuing = $state(false)
 
@@ -58,7 +65,7 @@
       const resp = await fetch('/api/keys', {
         method: 'POST',
         headers: { 'X-Panel': '1', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, os }),
       })
       if (!resp.ok) {
         const b = await resp.json().catch(() => ({ message: resp.statusText }))
@@ -67,7 +74,7 @@
       const blob = await resp.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `gate-${name}.exe`
+      a.download = os === 'windows' ? `gate-${name}.exe` : `gate-${name}`
       a.click()
       URL.revokeObjectURL(a.href)
       name = ''
@@ -117,6 +124,9 @@
   {#if owner}
     <form onsubmit={issue}>
       <input bind:value={name} placeholder="имя устройства, например laptop" pattern="[A-Za-z0-9][A-Za-z0-9_.\-]*" maxlength="40" required />
+      <select bind:value={os} title="Система устройства">
+        {#each systems as [value, label] (value)}<option {value}>{label}</option>{/each}
+      </select>
       <button class="primary" disabled={issuing || !name}>Новый ключ</button>
     </form>
   {:else}
