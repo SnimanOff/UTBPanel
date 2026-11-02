@@ -23,6 +23,45 @@ func (s *Service) Register(mux *api.Mux) {
 			next(w, r)
 		}
 	}
+	mux.HandleFunc("GET /api/mcp/actions", owner(func(w http.ResponseWriter, r *http.Request) {
+		if s.DB == nil {
+			api.WriteJSON(w, 200, []Action{})
+			return
+		}
+		list, err := s.Actions(r.Context())
+		if err != nil {
+			api.WriteError(w, 500, "internal", err.Error())
+			return
+		}
+		api.WriteJSON(w, 200, list)
+	}))
+	for _, confirm := range []bool{true, false} {
+		name := "reject"
+		if confirm {
+			name = "confirm"
+		}
+		mux.HandleFunc("POST /api/mcp/actions/{aid}/"+name, owner(func(w http.ResponseWriter, r *http.Request) {
+			id := r.PathValue("aid")
+			if s.DB == nil || !actionID(id) {
+				api.WriteError(w, 404, "not_found", "запрос не найден")
+				return
+			}
+			a, err := s.Decide(r.Context(), id, confirm, api.CallerFrom(r.Context()).Name)
+			switch {
+			case errors.Is(err, sql.ErrNoRows):
+				api.WriteError(w, 404, "not_found", "запрос не найден")
+				return
+			case errors.Is(err, errDecided):
+				api.WriteError(w, 409, "conflict", err.Error())
+				return
+			case err != nil:
+				api.WriteError(w, 500, "internal", err.Error())
+				return
+			}
+			audit.Annotate(r, "mcp."+name, id, map[string]any{"op": a.Op, "state": a.State})
+			api.WriteJSON(w, 200, a)
+		}))
+	}
 	mux.HandleFunc("GET /api/mcp/groups", owner(func(w http.ResponseWriter, r *http.Request) {
 		groups, err := s.Groups.List(r.Context())
 		if err != nil {

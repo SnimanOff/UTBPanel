@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "b7cb11184d392f03c327fa36264d53808822913ed9f0323fdd380f59d02b4e3a"
+const GeneratedHash = "cfadcebc0db9516ddec61b013ba0e42e8011900f7d7f96e4c687e64fc3db9253"
 
 // Op is one operation of the API.
 type Op struct {
@@ -67,6 +67,7 @@ var Ops = []Op{
 	{"list_groups", "GET", "/api/groups", "read", "Groups in order"},
 	{"list_keys", "GET", "/api/keys", "never", "Access keys"},
 	{"stream_live", "GET", "/api/live", "never", "Live metrics of the server and bots once a second (Server-Sent Events)"},
+	{"list_mcp_actions", "GET", "/api/mcp/actions", "never", "Actions an AI asked to confirm, open and decided within the last hour (owner only)"},
 	{"get_mcp_modes", "GET", "/api/mcp/groups", "never", "Get group MCP modes (owner only)"},
 	{"list_notifications", "GET", "/api/notifications", "read", "The notification feed, newest first (repeats glued with a count)"},
 	{"problem_bots", "GET", "/api/notifications/problems", "read", "Bots with an unread, unresolved error of the last day"},
@@ -123,6 +124,8 @@ var Ops = []Op{
 	{"apply_bot_import", "POST", "/api/imports/bots/{import}/apply", "never", "Restore a validated archive under a new local ID and optionally start it"},
 	{"issue_key", "POST", "/api/keys", "never", "Issue a child key; returns gate-<name>.exe (owner only)"},
 	{"revoke_key", "POST", "/api/keys/{serial}/revoke", "never", "Revoke a key (owner only; the owner key only over SSH)"},
+	{"confirm_mcp_action", "POST", "/api/mcp/actions/{aid}/confirm", "never", "Confirm and run a pending AI action as the device that asked (owner only)"},
+	{"reject_mcp_action", "POST", "/api/mcp/actions/{aid}/reject", "never", "Reject a pending AI action (owner only)"},
 	{"read_notifications", "POST", "/api/notifications/read", "write", "Mark notifications read (all when ids is empty)"},
 	{"ban_user_everywhere", "POST", "/api/users/{uid}/ban", "never", "Ban a user in all bots at once"},
 	{"enroll", "POST", "/enroll", "never", "Request a device certificate (gate.exe with its enrollment certificate)"},

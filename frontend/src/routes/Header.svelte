@@ -3,6 +3,8 @@
   import { live } from '../lib/live.svelte'
   import Feed from '../lib/ui/Feed.svelte'
   import { notifications } from '../lib/notifications.svelte'
+  import { actions } from '../lib/actions.svelte'
+  import PendingActions from '../lib/ui/PendingActions.svelte'
   import NewBot from './NewBot.svelte'
 
   const nav = [
@@ -17,6 +19,8 @@
   const s = $derived(live.server)
   const pct = (v?: number) => (v === undefined ? '—' : Math.round(v) + '%')
   const mbs = (v?: number) => (v === undefined ? '—' : (v / 1048576).toFixed(1))
+  // The bell shows how many AI requests wait for the owner.
+  $effect(() => actions.start())
 </script>
 
 <header>
@@ -34,11 +38,13 @@
   <div class="right">
     <button class="bell" class:has={notifications.unread > 0} onclick={() => (feedOpen = !feedOpen)} title="Уведомления">
       🔔 <span class="num">{notifications.unread}</span>
+      {#if actions.pending.length}<span class="num ask" title="Нейросеть ждёт подтверждения">· {actions.pending.length}?</span>{/if}
     </button>
     <button class="primary" onclick={() => (adding = true)}>+ Бот</button>
   </div>
   {#if feedOpen}
     <div class="feed">
+      <PendingActions />
       {#if notifications.unread}<button class="readall" onclick={() => notifications.readAll()}>прочитать все</button>{/if}
       <Feed
         items={notifications.items}
@@ -55,6 +61,9 @@
 {#if adding}<NewBot onclose={() => (adding = false)} />{/if}
 
 <style>
+  .ask {
+    color: var(--warn);
+  }
   header {
     position: relative;
     display: flex;

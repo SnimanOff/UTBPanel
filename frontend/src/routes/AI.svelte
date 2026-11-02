@@ -2,6 +2,7 @@
   import { api, errorText, type Group } from '../lib/api/client'
   import Box from '../lib/ui/Box.svelte'
   import HoldButton from '../lib/ui/HoldButton.svelte'
+  import PendingActions from '../lib/ui/PendingActions.svelte'
 
   type Mode = 'off' | 'read' | 'full'
   let groups = $state<Group[]>([])
@@ -37,6 +38,12 @@
 </script>
 
 <h1>Нейросети</h1>
+{#if owner}
+  <Box title="Подтверждения">
+    <p class="muted">Опасные действия нейросеть только запрашивает: запрос ждёт здесь, в ленте уведомлений и в окне gate 15 минут. Подтверждение — удержанием кнопки.</p>
+    <PendingActions history />
+  </Box>
+{/if}
 <Box title="Подключение MCP">
   <p>Запустите gate и скопируйте токен MCP в его меню. Вставьте токен в команду:</p>
   <pre>{command}</pre>

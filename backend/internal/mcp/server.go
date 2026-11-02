@@ -16,20 +16,30 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	spec "github.com/SnimanOff/UTBPanel/backend/api"
+	"github.com/SnimanOff/UTBPanel/backend/internal/alerts"
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
 	"github.com/SnimanOff/UTBPanel/backend/internal/bots"
+	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type Service struct {
-	API     http.Handler
-	Audit   *audit.Log
-	Groups  *bots.Groups
+	API    http.Handler
+	Audit  *audit.Log
+	Groups *bots.Groups
+	// DB keeps pending actions; without it confirm-level calls are refused.
+	DB      *store.DB
+	Notes   *alerts.Service
 	handler http.Handler
+	ops     map[string]operation
+
+	mu      sync.Mutex
+	changed chan struct{}
 }
 
 func New(handler http.Handler, auditLog *audit.Log, log *slog.Logger) (*Service, error) {
@@ -37,9 +47,13 @@ func New(handler http.Handler, auditLog *audit.Log, log *slog.Logger) (*Service,
 	if err != nil {
 		return nil, err
 	}
-	s := &Service{API: handler, Audit: auditLog}
+	s := &Service{API: handler, Audit: auditLog, ops: map[string]operation{}}
 	server := sdk.NewServer(&sdk.Implementation{Name: "utbpanel", Version: "1"}, &sdk.ServerOptions{Logger: log})
+	server.AddTool(waitTool(), func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+		return s.wait(ctx, req.Params.Arguments), nil
+	})
 	for _, op := range ops {
+		s.ops[op.ID] = op
 		server.AddTool(&sdk.Tool{Name: op.ID, Description: op.Summary, InputSchema: op.Schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: op.MCP == spec.Read}}, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
 			return s.call(ctx, op, req.Params.Arguments), nil
 		})
@@ -112,11 +126,17 @@ func (s *Service) call(ctx context.Context, op operation, raw json.RawMessage) *
 		return s.denied(ctx, op, args, err.Error())
 	}
 	if op.MCP == spec.Confirm {
-		return s.denied(ctx, op, args, "confirmation_required: требуется подтверждение владельца")
+		return s.request(ctx, op, args)
 	}
 	if op.ID == "create_bot" {
 		return s.denied(ctx, op, args, "secret_required: BOT_TOKEN должен ввести владелец через запрос секрета")
 	}
+	return s.execute(ctx, op, args)
+}
+
+// execute performs an authorized operation as the caller in ctx.
+func (s *Service) execute(ctx context.Context, op operation, args map[string]any) *sdk.CallToolResult {
+	caller := api.CallerFrom(ctx)
 	path := op.Path
 	query := url.Values{}
 	for _, p := range op.Parameters {
@@ -178,29 +198,9 @@ func (s *Service) call(ctx context.Context, op operation, raw json.RawMessage) *
 			body = bytes.NewReader(data)
 		}
 	}
-	r, err := http.NewRequestWithContext(ctx, op.Method, "http://127.0.0.1:47100"+path, body)
+	status, value, err := s.internal(ctx, op.Method, path, query, contentType, body, caller.IP)
 	if err != nil {
-		return s.denied(ctx, op, args, "invalid_arguments: invalid request")
-	}
-	r.URL.RawQuery = query.Encode()
-	r.Header.Set("X-Panel", "1")
-	r.Header.Set("Content-Type", contentType)
-	r.RemoteAddr = netAddress(caller.IP)
-	response := &responseBuffer{header: make(http.Header)}
-	s.API.ServeHTTP(response, r)
-	if response.err != nil {
-		return toolError("response_too_large: narrow the query or request a smaller page")
-	}
-	if response.status == 0 {
-		response.status = http.StatusOK
-	}
-	var value any = map[string]string{"status": "ok"}
-	if response.body.Len() > 0 {
-		decoder := json.NewDecoder(&response.body)
-		decoder.UseNumber()
-		if err := decoder.Decode(&value); err != nil {
-			return toolError("invalid_response: the API did not return JSON")
-		}
+		return toolError(err.Error())
 	}
 	structured := map[string]any{"result": value}
 	value, err = s.filter(ctx, op, value)
@@ -212,7 +212,36 @@ func (s *Service) call(ctx context.Context, op operation, raw json.RawMessage) *
 	if err != nil {
 		return toolError("invalid_response")
 	}
-	return &sdk.CallToolResult{IsError: response.status >= 400, StructuredContent: structured, Content: []sdk.Content{&sdk.TextContent{Text: string(text)}}}
+	return &sdk.CallToolResult{IsError: status >= 400, StructuredContent: structured, Content: []sdk.Content{&sdk.TextContent{Text: string(text)}}}
+}
+
+// internal sends one request to the panel API and decodes its JSON answer.
+func (s *Service) internal(ctx context.Context, method, path string, query url.Values, contentType string, body io.Reader, ip string) (int, any, error) {
+	r, err := http.NewRequestWithContext(ctx, method, "http://127.0.0.1:47100"+path, body)
+	if err != nil {
+		return 0, nil, errors.New("invalid_arguments: invalid request")
+	}
+	r.URL.RawQuery = query.Encode()
+	r.Header.Set("X-Panel", "1")
+	r.Header.Set("Content-Type", contentType)
+	r.RemoteAddr = netAddress(ip)
+	response := &responseBuffer{header: make(http.Header)}
+	s.API.ServeHTTP(response, r)
+	if response.err != nil {
+		return 0, nil, errors.New("response_too_large: narrow the query or request a smaller page")
+	}
+	if response.status == 0 {
+		response.status = http.StatusOK
+	}
+	var value any = map[string]string{"status": "ok"}
+	if response.body.Len() > 0 {
+		decoder := json.NewDecoder(&response.body)
+		decoder.UseNumber()
+		if err := decoder.Decode(&value); err != nil {
+			return 0, nil, errors.New("invalid_response: the API did not return JSON")
+		}
+	}
+	return response.status, value, nil
 }
 
 // Keep json.Number for forwarding to the API so int64s never pass through

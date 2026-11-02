@@ -314,6 +314,9 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		return nil, err
 	}
 	mcpServer.Groups = p.Bots.Groups
+	mcpServer.DB = p.DB
+	mcpServer.Notes = notes
+	p.Go(mcpServer.RunExpiry)
 	mcpServer.Register(p.API.Mux)
 	p.API.Mux.ServeMux.Handle("/mcp", mcpServer)
 	return p, nil

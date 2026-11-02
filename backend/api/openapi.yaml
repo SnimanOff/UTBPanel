@@ -1428,6 +1428,36 @@ paths:
         "204": { description: Saved }
         "403": { description: Owner UI only }
         "404": { description: Group not found }
+  /api/mcp/actions:
+    get:
+      operationId: list_mcp_actions
+      tags: [groups]
+      summary: Actions an AI asked to confirm, open and decided within the last hour (owner only)
+      x-mcp: never
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/MCPAction" } } } } }
+  /api/mcp/actions/{aid}/confirm:
+    parameters: [{ name: aid, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: confirm_mcp_action
+      tags: [groups]
+      summary: Confirm and run a pending AI action as the device that asked (owner only)
+      x-mcp: never
+      responses:
+        "200": { description: The action with its result, content: { application/json: { schema: { $ref: "#/components/schemas/MCPAction" } } } }
+        "404": { description: No such action }
+        "409": { description: Already decided or expired }
+  /api/mcp/actions/{aid}/reject:
+    parameters: [{ name: aid, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: reject_mcp_action
+      tags: [groups]
+      summary: Reject a pending AI action (owner only)
+      x-mcp: never
+      responses:
+        "200": { description: The rejected action, content: { application/json: { schema: { $ref: "#/components/schemas/MCPAction" } } } }
+        "404": { description: No such action }
+        "409": { description: Already decided or expired }
 
   /api/server/metrics:
     get:
@@ -2389,6 +2419,25 @@ components:
             revision: { type: string }
             vcs_time: { type: string }
             modified: { type: boolean }
+    MCPAction:
+      type: object
+      required: [id, op, summary, detail, requested_by, created_at, expires_at, state]
+      properties:
+        id: { type: string }
+        op: { type: string, description: operationId of the confirm-level tool }
+        bot_id: { type: integer }
+        summary: { type: string }
+        detail:
+          type: object
+          description: what will be done — diff for apply_config, version and tgpanel.yaml diff for deploy_release, arguments otherwise
+          additionalProperties: true
+        requested_by: { type: string, description: the MCP device }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        state: { type: string, enum: [pending, running, done, failed, rejected, expired] }
+        result: { type: object, additionalProperties: true }
+        decided_by: { type: string }
+        decided_at: { type: string, format: date-time }
     Group:
       type: object
       required: [id, name, position, mcp_mode]

@@ -1,4 +1,5 @@
 import { api, type Schemas } from './api/client'
+import { actions } from './actions.svelte'
 import type { Item } from './ui/Feed.svelte'
 
 type N = Schemas['Notification']
@@ -43,6 +44,7 @@ class Notifications {
       this.items = [this.toItem(n), ...this.items].slice(0, 200)
       if (n.severity === 'error' && n.bot_id && !this.problems.includes(n.bot_id)) this.problems = [...this.problems, n.bot_id]
       if (n.severity === 'ok') this.load()
+      if (n.kind === 'mcp_confirm') actions.load()
     })
     // Repeats are glued on the server: refresh counts now and then.
     setInterval(() => this.load(), 60000)

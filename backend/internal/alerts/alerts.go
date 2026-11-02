@@ -133,6 +133,12 @@ func (s *Service) Notify(ctx context.Context, botID int64, n Note) {
 	s.insert(ctx, botID, n, now)
 }
 
+// Close resolves a note quietly: a request that was answered is not a
+// recovery worth a notification of its own.
+func (s *Service) Close(ctx context.Context, key string) {
+	s.DB.W.ExecContext(ctx, `UPDATE notifications SET resolved = 1, read = 1 WHERE key = ? AND resolved = 0`, key)
+}
+
 func (s *Service) text(botID int64, t string) string {
 	return s.name(botID) + ": " + t
 }

@@ -1,12 +1,13 @@
 <script lang="ts">
   // The small window of gate.exe (and /mini in a browser): bots with their
   // status and buttons — stop by holding — and the latest notifications.
-  // Requests to the AI come here later.
+  // Requests of the AI wait here for the owner as well.
   import { api, errorText } from '../lib/api/client'
   import { pollBots, store } from '../lib/api/stores.svelte'
   import { notifications } from '../lib/notifications.svelte'
   import { live } from '../lib/live.svelte'
   import HoldButton from '../lib/ui/HoldButton.svelte'
+  import PendingActions from '../lib/ui/PendingActions.svelte'
   import StatusSquare from '../lib/ui/StatusSquare.svelte'
 
   let busy = $state<number | null>(null)
@@ -36,6 +37,7 @@
     <button onclick={() => full()}>Открыть панель</button>
   </header>
   {#if error}<p class="danger">{error}</p>{/if}
+  <PendingActions />
   <ul class="bots">
     {#each store.bots as b (b.id)}
       {@const running = b.state === 'running' || b.state === 'paused'}
