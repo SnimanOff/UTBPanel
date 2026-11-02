@@ -1,0 +1,102 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            backend/sdk/go.sum
+            examples/*/go.sum
+      - name: vet
+        working-directory: backend
+        run: go vet ./...
+      - name: test
+        working-directory: backend
+        run: go test -race ./...
+      # uids and rlimits of bots need root.
+      - name: runner as root
+        working-directory: backend
+        run: sudo -E env "PATH=$PATH" RUNNER_AS_ROOT=1 go test -count=1 ./internal/runner/...
+      - name: sdk
+        working-directory: backend/sdk
+        run: go vet ./... && go test -race ./...
+      - name: examples
+        run: |
+          for d in examples/*/; do
+            (cd "$d" && go vet ./... && go test ./... && CGO_ENABLED=0 go build -o /dev/null .)
+          done
+      - name: gate for every system
+        working-directory: backend
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/gate
+          GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/gate
+          GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/gate
+          GOOS=darwin GOARCH=amd64 go build -o /dev/null ./cmd/gate
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          working-directory: backend
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: npm ci && npm run check && npm run build
+      # The types are generated from openapi.yaml.
+      - name: schema.d.ts is fresh
+        working-directory: backend/api
+        run: |
+          npx -y openapi-typescript@7 openapi.yaml -o /tmp/schema.d.ts
+          tail -n +2 ../../frontend/src/lib/api/schema.d.ts | diff -u - /tmp/schema.d.ts
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: gate with tray (cgo)
+        working-directory: backend
+        run: |
+          CGO_ENABLED=1 go build -o /tmp/gate ./cmd/gate
+          go test ./internal/devkey/ ./internal/gate/ ./cmd/gate/
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: go
+    steps:
+      - uses: actions/checkout@v4
+      - name: update pipeline in docker compose
+        run: sh backend/e2e/run.sh
