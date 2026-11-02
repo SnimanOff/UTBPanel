@@ -5,6 +5,7 @@ package sources
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"mime/multipart"
@@ -114,11 +115,20 @@ func (u *Uploads) list(w http.ResponseWriter, r *http.Request) {
 
 func (u *Uploads) switchVersion(w http.ResponseWriter, r *http.Request) {
 	in := core.SwitchVersion{BotID: botID(r), Version: r.PathValue("version"), Actor: api.Actor(r.Context())}
+	// The body is optional: {"config_version"} confirms the tgpanel.yaml diff.
+	var body struct {
+		ConfigVersion string `json:"config_version"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<12)).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		api.WriteError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	in.ConfigVersion = body.ConfigVersion
 	if err := u.Core.Call(r.Context(), "releases.switch", in, nil); err != nil {
 		bots.WriteCoreError(w, err)
 		return
 	}
-	audit.Annotate(r, "release.switch", in.Version, nil)
+	audit.Annotate(r, "release.switch", in.Version, map[string]any{"config_confirmed": in.ConfigVersion != ""})
 	api.WriteJSON(w, http.StatusOK, map[string]string{"version": in.Version})
 }
 

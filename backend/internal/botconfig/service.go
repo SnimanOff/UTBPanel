@@ -12,6 +12,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/alerts"
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
+	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
 
@@ -176,6 +177,70 @@ func (s *Service) Apply(ctx context.Context, id int64, in Edit, actorCtx context
 	return out, err
 }
 
+// ReleaseView is the diff tgpanel.yaml of a stored version would make now.
+// SettingsVersion goes back with the deploy to confirm exactly this diff.
+type ReleaseView struct {
+	YAML            string     `json:"yaml"`
+	Diff            Difference `json:"diff"`
+	SettingsVersion string     `json:"settings_version"`
+	Error           string     `json:"error,omitempty"`
+}
+
+func (s *Service) ReleaseDiff(ctx context.Context, id int64, version string) (ReleaseView, error) {
+	var out ReleaseView
+	if err := s.Core.Call(ctx, "releases.config", ReleaseRequest{BotID: id, Version: version}, &out.YAML); err != nil {
+		return out, err
+	}
+	if out.YAML == "" {
+		return out, wire.Errorf(wire.CodeNotFound, "в версии %s нет tgpanel.yaml", version)
+	}
+	ctx, unlock, err := s.Guard.Lock(ctx)
+	if err != nil {
+		return out, err
+	}
+	defer unlock()
+	current, err := s.snapshot(ctx, id)
+	if err != nil {
+		return out, err
+	}
+	out.SettingsVersion = current.Version
+	out.Diff = Difference{Changes: []Change{}}
+	file, err := ParseRelease([]byte(out.YAML))
+	if err == nil {
+		var next Document
+		if next, err = file.Over(current.Document); err == nil {
+			out.Diff = Diff(current.Document, next)
+		}
+	}
+	if err != nil {
+		out.Error = err.Error()
+	}
+	return out, nil
+}
+
+// OnCoreEvent saves alert thresholds a deployed tgpanel.yaml brought: the
+// core applies the rest of the document but the rules live in the panel.
+func (s *Service) OnCoreEvent(ev events.Event) {
+	raw, _ := ev.Data["alerts"].(string)
+	if ev.Type != "release_config" || raw == "" {
+		return
+	}
+	var list []Alert
+	if err := json.Unmarshal([]byte(raw), &list); err != nil {
+		return
+	}
+	rules := []alerts.Rule{}
+	for _, r := range list {
+		rules = append(rules, alerts.Rule{Metric: r.Metric, Op: r.Op, Value: r.Value, Minutes: r.Minutes, Enabled: r.Enabled})
+	}
+	ctx, unlock, err := s.Guard.Lock(context.Background())
+	if err != nil {
+		return
+	}
+	defer unlock()
+	s.Rules.Replace(ctx, ev.BotID, rules)
+}
+
 func (s *Service) Register(mux *api.Mux) {
 	pathID := func(w http.ResponseWriter, r *http.Request) (int64, bool) {
 		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -234,6 +299,18 @@ func (s *Service) Register(mux *api.Mux) {
 			api.WriteJSON(w, 200, out)
 		})
 	}
+	mux.HandleFunc("GET /api/bots/{id}/releases/{version}/config", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r)
+		if !ok {
+			return
+		}
+		out, err := s.ReleaseDiff(r.Context(), id, r.PathValue("version"))
+		if err != nil {
+			s.WriteError(w, err)
+			return
+		}
+		api.WriteJSON(w, 200, out)
+	})
 	mux.HandleFunc("GET /api/bot-config/schema", func(w http.ResponseWriter, r *http.Request) {
 		out, err := Schema()
 		if err != nil {

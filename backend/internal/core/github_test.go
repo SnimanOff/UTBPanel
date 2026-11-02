@@ -39,6 +39,8 @@ func TestGitHubRelease(t *testing.T) {
 	c := newCore(t)
 	withTelegram(t, c)
 	b, _ := c.CreateBot(ctx, CreateBot{Name: "Echo", Token: "111:good"})
+	// The fake Telegram has no profile methods: the settings use a cached one.
+	c.DB.W.Exec(`UPDATE bots SET settings = json_set(settings, '$.profile_cache', json('{}')) WHERE id = ?`, b.ID)
 
 	bin := linuxBot(t)
 	var arch bytes.Buffer
@@ -46,7 +48,7 @@ func TestGitHubRelease(t *testing.T) {
 	tw := tar.NewWriter(gz)
 	tw.WriteHeader(&tar.Header{Name: "bot", Mode: 0o755, Size: int64(len(bin)), Typeflag: tar.TypeReg})
 	tw.Write(bin)
-	cfg := []byte("name: echo\n")
+	cfg := []byte("tz: Europe/Berlin\n")
 	tw.WriteHeader(&tar.Header{Name: "tgpanel.yaml", Mode: 0o644, Size: int64(len(cfg)), Typeflag: tar.TypeReg})
 	tw.Write(cfg)
 	tw.Close()
@@ -131,6 +133,10 @@ func TestGitHubRelease(t *testing.T) {
 	ds, _ := c.Deploys(ctx, b.ID, 10)
 	if len(ds) != 1 || ds[0].To != "v1.0.0" || ds[0].Result == "running" || ds[0].Actor != "github:github" {
 		t.Fatalf("deploys %+v", ds)
+	}
+	// tgpanel.yaml of the release came in with the deploy.
+	if snap, _ := c.ConfigSnapshot(ctx, b.ID); snap.Document.TZ != "Europe/Berlin" {
+		t.Fatalf("tz = %q", snap.Document.TZ)
 	}
 
 	// An empty repository turns GitHub off and drops its secrets.

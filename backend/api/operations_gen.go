@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "319501ac398658c342bf1db007bcb4719768340bc8d5e2b53e335b101698d8d7"
+const GeneratedHash = "b7cb11184d392f03c327fa36264d53808822913ed9f0323fdd380f59d02b4e3a"
 
 // Op is one operation of the API.
 type Op struct {
@@ -55,6 +55,7 @@ var Ops = []Op{
 	{"list_panics", "GET", "/api/bots/{id}/panics", "read", "Panic groups (kind + first frame of the bot's code), counts, versions, last stack, \"maybe fixed\""},
 	{"get_profile", "GET", "/api/bots/{id}/profile", "read", "Telegram profile for a language (empty = default) and the menu button"},
 	{"list_versions", "GET", "/api/bots/{id}/releases", "read", "Stored versions with build data"},
+	{"get_release_config", "GET", "/api/bots/{id}/releases/{version}/config", "read", "tgpanel.yaml of a stored version and the diff it would make to the current settings"},
 	{"list_flags", "GET", "/api/bots/{id}/sdk/flags", "read", "Typed SDK flag definitions and current values"},
 	{"list_sdk_metrics", "GET", "/api/bots/{id}/sdk/metrics", "read", "Custom SDK metrics, current values and dashboard selection"},
 	{"list_sdk_tasks", "GET", "/api/bots/{id}/sdk/tasks", "read", "SDK schedules in UTC and recent task runs"},
@@ -105,7 +106,7 @@ var Ops = []Op{
 	{"extend_maintenance", "POST", "/api/bots/{id}/maintenance/extend", "write", "Move the planned end (+15, +30, +60 minutes)"},
 	{"pause", "POST", "/api/bots/{id}/pause", "write", "Pause the bot: the process runs, users get the maintenance text, payments wait"},
 	{"upload_release", "POST", "/api/bots/{id}/releases", "write", "Upload a static linux/amd64 binary as a new version (does not deploy it)"},
-	{"deploy_release", "POST", "/api/bots/{id}/releases/{version}/switch", "confirm", "Switch the bot to a stored version"},
+	{"deploy_release", "POST", "/api/bots/{id}/releases/{version}/switch", "confirm", "Switch the bot to a stored version; tgpanel.yaml of the version is applied first"},
 	{"restart", "POST", "/api/bots/{id}/restart", "write", "Restart the bot"},
 	{"resume", "POST", "/api/bots/{id}/resume", "write", "End pause or maintenance; deferred updates go to the bot first"},
 	{"run_sdk_task", "POST", "/api/bots/{id}/sdk/tasks/{name}/run", "write", "Run a registered task on the main instance now"},

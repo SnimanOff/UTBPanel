@@ -113,3 +113,16 @@ func TestReleasesETagAndMeta(t *testing.T) {
 		t.Fatalf("%v %v", nets, err)
 	}
 }
+
+func TestConfigAsset(t *testing.T) {
+	r := Release{Assets: []Asset{{Name: "tgpanel.yaml"}, {Name: "bot_linux_amd64"}}}
+	if bin, _ := Pick(r, "*"); bin == nil || bin.Name != "bot_linux_amd64" {
+		t.Fatalf("bin = %+v", bin)
+	}
+	if a := ConfigAsset(r); a == nil || a.Name != "tgpanel.yaml" {
+		t.Fatalf("config = %+v", a)
+	}
+	if ConfigAsset(Release{Assets: []Asset{{Name: "bot"}}}) != nil {
+		t.Fatal("no config expected")
+	}
+}

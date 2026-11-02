@@ -75,8 +75,32 @@
     }
   }
 
-  const switchTo = (v: string) =>
-    run(() => api.post(`/api/bots/${botId}/releases/${encodeURIComponent(v)}/switch`), `Переключено на ${v}`)
+  // A version with tgpanel.yaml shows its diff first; the deploy then sends
+  // the settings revision the owner saw, so a changed diff is not applied.
+  type ReleaseConfig = { version: string; yaml: string; diff: Schemas['BotConfigDiff']; settings_version: string; error?: string }
+  let pending = $state<ReleaseConfig | null>(null)
+  $effect(() => {
+    void botId
+    pending = null
+  })
+
+  const doSwitch = (v: string, configVersion?: string) =>
+    run(async () => {
+      await api.post(`/api/bots/${botId}/releases/${encodeURIComponent(v)}/switch`, configVersion ? { config_version: configVersion } : undefined)
+      pending = null
+    }, `Переключено на ${v}`)
+
+  async function switchTo(r: Release) {
+    if (!r.config) return doSwitch(r.version)
+    error = ''
+    try {
+      const c = await api.get<Omit<ReleaseConfig, 'version'>>(`/api/bots/${botId}/releases/${encodeURIComponent(r.version)}/config`)
+      if (!c.error && !c.diff.changes.length) return doSwitch(r.version)
+      pending = { ...c, version: r.version }
+    } catch (e) {
+      error = errorText(e)
+    }
+  }
 
   function upload(e: SubmitEvent) {
     e.preventDefault()
@@ -133,6 +157,7 @@
             {r.version}
             {#if r.current}<span class="tag">текущая</span>{/if}
             {#if r.previous}<span class="tag muted">предыдущая</span>{/if}
+            {#if r.config}<span class="tag muted" title="в релизе есть tgpanel.yaml">настройки</span>{/if}
           </td>
           <td>{r.source}</td>
           <td class="num muted">{utc(r.uploaded)}</td>
@@ -144,7 +169,7 @@
           <td class="num muted">{bytes(r.size)}</td>
           <td>
             {#if !r.current}
-              <HoldButton danger={r.previous} disabled={busy} onconfirm={() => switchTo(r.version)}>
+              <HoldButton danger={r.previous} disabled={busy} onconfirm={() => switchTo(r)}>
                 {r.previous ? '↶ Откатить' : 'Переключить'}
               </HoldButton>
             {/if}
@@ -155,6 +180,35 @@
       {/each}
     </tbody>
   </table>
+  {#if pending}
+    <div class="relcfg">
+      <h4>Настройки из tgpanel.yaml версии <span class="num">{pending.version}</span></h4>
+      {#if pending.error}
+        <p class="danger pre">{pending.error}</p>
+        <p class="muted">С этим файлом версию не развернуть: исправьте его в репозитории и выпустите новый релиз.</p>
+      {:else}
+        {#each pending.diff.changes as change}
+          <div class="change">
+            <strong class="mono">{change.path}</strong>
+            <span class:danger={change.level === 'confirm'} class:muted={change.level !== 'confirm'}>{change.level === 'confirm' ? 'С подтверждением' : 'Сразу'}</span>
+            <del class="mono">{JSON.stringify(change.before)}</del>
+            <ins class="mono">{JSON.stringify(change.after)}</ins>
+          </div>
+        {/each}
+        {#if pending.diff.restart}<p class="muted">Переменные и секреты вступят в силу при запуске новой версии.</p>{/if}
+      {/if}
+      <div class="line">
+        {#if !pending.error}
+          <HoldButton disabled={busy} onconfirm={() => {
+            if (pending) doSwitch(pending.version, pending.settings_version)
+          }}>
+            Применить и переключить
+          </HoldButton>
+        {/if}
+        <button disabled={busy} onclick={() => (pending = null)}>Отмена</button>
+      </div>
+    </div>
+  {/if}
   <p class="muted">Хранятся 5 последних версий. Перед каждым переключением делается бэкап базы бота.</p>
   <form class="line" onsubmit={upload}>
     <input type="file" bind:this={file} />
@@ -233,6 +287,34 @@
 {/if}
 
 <style>
+  .relcfg {
+    border: var(--line);
+    padding: var(--s2) var(--s3);
+    margin: var(--s3) 0;
+  }
+  .relcfg h4 {
+    margin: 0 0 var(--s2);
+  }
+  .change {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--s1) var(--s3);
+    border-bottom: var(--line);
+    padding: var(--s2) 0;
+  }
+  del,
+  ins {
+    grid-column: 1 / -1;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    text-decoration: none;
+  }
+  del {
+    color: var(--danger);
+  }
+  ins {
+    color: var(--accent-hi);
+  }
   .reports {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

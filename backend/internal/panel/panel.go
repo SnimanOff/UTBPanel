@@ -216,6 +216,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	rules.Register(p.API.Mux)
 	p.Go(rules.Run)
 	p.Events.Subscribe(notes.OnCoreEvent)
+	p.Events.Subscribe(documents.OnCoreEvent)
 	p.Go(func(ctx context.Context) {
 		for {
 			notes.Prune(ctx)

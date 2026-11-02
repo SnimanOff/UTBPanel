@@ -8,6 +8,13 @@ type ApplyRequest struct {
 	Document Document      `cbor:"3,keyasint"`
 	Actor    journal.Actor `cbor:"9,keyasint"`
 }
+
+// ReleaseRequest names a stored version whose tgpanel.yaml is read.
+type ReleaseRequest struct {
+	BotID   int64  `cbor:"1,keyasint"`
+	Version string `cbor:"2,keyasint"`
+}
+
 type ApplyResult struct {
 	Snapshot       Snapshot          `cbor:"1,keyasint"`
 	Applied        bool              `cbor:"2,keyasint" json:"applied"`

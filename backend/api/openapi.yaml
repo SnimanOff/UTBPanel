@@ -1304,10 +1304,45 @@ paths:
     post:
       operationId: deploy_release
       tags: [releases]
-      summary: Switch the bot to a stored version
+      summary: Switch the bot to a stored version; tgpanel.yaml of the version is applied first
       x-mcp: confirm
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config_version:
+                  type: string
+                  description: settings_version from get_release_config; confirms its diff when it has changes of the confirm level
       responses:
         "200": { description: OK }
+        "400": { description: tgpanel.yaml of the version is invalid (bad_config) }
+        "409": { description: The diff of tgpanel.yaml needs confirmation (config_confirm) or settings changed since it was read (conflict) }
+  /api/bots/{id}/releases/{version}/config:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: version, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: get_release_config
+      tags: [releases]
+      summary: tgpanel.yaml of a stored version and the diff it would make to the current settings
+      x-mcp: read
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [yaml, diff, settings_version]
+                properties:
+                  yaml: { type: string }
+                  diff: { $ref: "#/components/schemas/BotConfigDiff" }
+                  settings_version: { type: string }
+                  error: { type: string, description: why the file cannot be applied }
+        "404": { description: No such version, or it has no tgpanel.yaml }
 
   /api/groups:
     get:
@@ -2335,7 +2370,7 @@ components:
         users: { $ref: "#/components/schemas/UserStats" }
     Release:
       type: object
-      required: [version, sha256, size, uploaded, source, current, previous, build]
+      required: [version, sha256, size, uploaded, source, current, previous, config, build]
       properties:
         version: { type: string }
         sha256: { type: string }
@@ -2344,6 +2379,7 @@ components:
         source: { type: string }
         current: { type: boolean }
         previous: { type: boolean }
+        config: { type: boolean, description: the release carries tgpanel.yaml }
         build:
           type: object
           properties:

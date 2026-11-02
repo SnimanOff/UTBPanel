@@ -323,6 +323,16 @@ func Map(ev events.Event) (Note, bool) {
 		return Note{Kind: "release", Severity: "info", Key: "gh:" + id + ":" + str(ev, "version"), Text: "новый релиз " + str(ev, "version"), Href: bot + "/deploy"}, true
 	case "github_release_failed":
 		return Note{Kind: "release", Severity: "warn", Key: "ghfail:" + id + ":" + str(ev, "tag"), Text: "релиз " + str(ev, "tag") + " не загружен: " + str(ev, "error"), Href: bot + "/deploy"}, true
+	case "release_config":
+		key := "relcfg:" + id + ":" + str(ev, "version")
+		switch str(ev, "state") {
+		case "pending":
+			return Note{Kind: "release", Severity: "warn", Key: key, Text: "версия " + str(ev, "version") + " ждёт подтверждения настроек из tgpanel.yaml: " + str(ev, "paths"), Href: bot + "/deploy"}, true
+		case "invalid":
+			return Note{Kind: "release", Severity: "error", Key: key, Text: "tgpanel.yaml версии " + str(ev, "version") + " с ошибкой: " + str(ev, "error"), Href: bot + "/deploy"}, true
+		case "applied":
+			return Note{Resolves: []string{key}, Href: bot + "/deploy"}, true
+		}
 	case "panic":
 		return Note{Kind: "panic", Severity: "error", Key: "panic:" + id + ":" + str(ev, "signature"), Text: "паника: " + str(ev, "kind"), Href: bot + "/panics"}, true
 	case "alert", "alert_ok", "disk_low", "new_device", "mcp_confirm", "mcp_secret":

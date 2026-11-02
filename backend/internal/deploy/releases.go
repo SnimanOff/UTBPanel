@@ -30,7 +30,11 @@ type Release struct {
 	Build    BuildInfo `cbor:"6,keyasint" json:"build"`
 	Current  bool      `cbor:"7,keyasint" json:"current"`
 	Previous bool      `cbor:"8,keyasint" json:"previous"`
+	Config   bool      `cbor:"9,keyasint" json:"config"` // the release carries tgpanel.yaml
 }
+
+// ConfigName is the settings file a release may carry next to the binary.
+const ConfigName = "tgpanel.yaml"
 
 // Store keeps releases under /data/core/bots/<id>/releases.
 type Store struct {
@@ -216,7 +220,29 @@ func (s *Store) read(botID int64, version string) (Release, error) {
 	if err != nil {
 		return r, err
 	}
-	return r, json.Unmarshal(b, &r)
+	if err := json.Unmarshal(b, &r); err != nil {
+		return r, err
+	}
+	_, err = os.Stat(filepath.Join(s.Dir(botID), version, ConfigName))
+	r.Config = err == nil
+	return r, nil
+}
+
+// Config returns tgpanel.yaml of a release, nil when it has none.
+func (s *Store) Config(botID int64, version string) ([]byte, error) {
+	if !versionRe.MatchString(version) {
+		return nil, os.ErrNotExist
+	}
+	b, err := os.ReadFile(filepath.Join(s.Dir(botID), version, ConfigName))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	return b, err
+}
+
+// SetConfig stores tgpanel.yaml next to a release.
+func (s *Store) SetConfig(botID int64, version string, raw []byte) error {
+	return os.WriteFile(filepath.Join(s.Dir(botID), version, ConfigName), raw, 0o640)
 }
 
 // Exists reports whether a version is stored.

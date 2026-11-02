@@ -148,11 +148,24 @@ func Pick(r Release, mask string) (bin, sums *Asset) {
 			sums = a
 			continue
 		}
+		if low == "tgpanel.yaml" || low == "tgpanel.yml" {
+			continue
+		}
 		if ok, _ := path.Match(mask, a.Name); ok && bin == nil && !strings.HasSuffix(low, ".sig") && !strings.HasSuffix(low, ".sbom.json") {
 			bin = a
 		}
 	}
 	return bin, sums
+}
+
+// ConfigAsset returns tgpanel.yaml attached to a release next to the binary.
+func ConfigAsset(r Release) *Asset {
+	for i := range r.Assets {
+		if n := strings.ToLower(r.Assets[i].Name); n == "tgpanel.yaml" || n == "tgpanel.yml" {
+			return &r.Assets[i]
+		}
+	}
+	return nil
 }
 
 // Checksums parses "sha256  name" lines (the format of sha256sum and

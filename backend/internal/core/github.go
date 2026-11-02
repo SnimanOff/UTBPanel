@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/botconfig"
 	"github.com/SnimanOff/UTBPanel/backend/internal/deploy"
 	"github.com/SnimanOff/UTBPanel/backend/internal/edge"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
@@ -255,8 +257,23 @@ func (c *Core) importRelease(ctx context.Context, g GitHubSource, r github.Relea
 	if err != nil {
 		return err
 	}
-	if len(config) > 0 {
-		os.WriteFile(filepath.Join(c.Releases.Dir(g.BotID), rel.Version, "tgpanel.yaml"), config, 0o640)
+	if a := github.ConfigAsset(r); a != nil && config == nil {
+		var buf limitedBuffer
+		buf.limit = 1 << 20
+		if err := c.GH.Download(ctx, *a, token, &buf); err != nil {
+			return fmt.Errorf("%s: %w", a.Name, err)
+		}
+		config = buf.Bytes()
+	}
+	if config != nil {
+		// A broken file is kept as well: the deploy then refuses the version
+		// instead of silently running it without its settings.
+		if err := c.Releases.SetConfig(g.BotID, rel.Version, config); err != nil {
+			return err
+		}
+		if _, err := botconfig.ParseRelease(config); err != nil {
+			return fmt.Errorf("tgpanel.yaml: %v", err)
+		}
 	}
 	cur, prev, _ := c.versions(ctx, g.BotID)
 	c.Releases.Prune(g.BotID, cur, prev)
@@ -269,6 +286,19 @@ func (c *Core) importRelease(ctx context.Context, g GitHubSource, r github.Relea
 		})
 	}
 	return nil
+}
+
+// limitedBuffer refuses writes past limit (a settings file is small).
+type limitedBuffer struct {
+	bytes.Buffer
+	limit int
+}
+
+func (b *limitedBuffer) Write(p []byte) (int, error) {
+	if b.Len()+len(p) > b.limit {
+		return 0, fmt.Errorf("file is over %d KB", b.limit>>10)
+	}
+	return b.Buffer.Write(p)
 }
 
 // runGitHub polls every bot with GitHub every 5 minutes.

@@ -38,11 +38,13 @@ type UploadFinish struct {
 	Actor journal.Actor `cbor:"9,keyasint"`
 }
 
-// SwitchVersion makes a stored version current.
+// SwitchVersion makes a stored version current. ConfigVersion confirms the
+// diff of the release's tgpanel.yaml made against that settings revision.
 type SwitchVersion struct {
-	BotID   int64         `cbor:"1,keyasint"`
-	Version string        `cbor:"2,keyasint"`
-	Actor   journal.Actor `cbor:"9,keyasint"`
+	BotID         int64         `cbor:"1,keyasint"`
+	Version       string        `cbor:"2,keyasint"`
+	ConfigVersion string        `cbor:"3,keyasint,omitempty"`
+	Actor         journal.Actor `cbor:"9,keyasint"`
 }
 
 func (c *Core) newReleases() *deploy.Store {
@@ -90,6 +92,10 @@ func (c *Core) Deploy(ctx context.Context, in SwitchVersion) (int64, error) {
 	}
 	if b.Version == in.Version {
 		return 0, nil
+	}
+	// Settings first: env and limits take effect when the new version starts.
+	if err := c.applyReleaseConfig(ctx, in); err != nil {
+		return 0, err
 	}
 	// A copy of the database before every deploy.
 	bk, err := c.BackupDB(ctx, in.BotID, "deploy")
