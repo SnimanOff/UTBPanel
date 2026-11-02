@@ -11,10 +11,37 @@ permissions:
   packages: write
 
 jobs:
-  image:
-    runs-on: ubuntu-latest
+  # gate for macOS with the menu bar icon: cgo, so built on macOS.
+  macgate:
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - working-directory: backend
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          LDFLAGS="-s -w -X github.com/SnimanOff/UTBPanel/backend/internal/buildinfo.Version=${GITHUB_REF_NAME} -X github.com/SnimanOff/UTBPanel/backend/internal/buildinfo.Commit=${GITHUB_SHA}"
+          mkdir -p ../macgate/gate
+          GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o ../macgate/gate/gate-darwin-arm64 ./cmd/gate
+          GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o ../macgate/gate/gate-darwin-amd64 ./cmd/gate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macgate
+          path: macgate
+
+  image:
+    runs-on: ubuntu-latest
+    needs: macgate
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: macgate
+          path: macgate
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -36,6 +63,8 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
+          build-contexts: |
+            macgate=macgate
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |

@@ -23,6 +23,12 @@ RUN LDFLAGS="-s -w -X github.com/SnimanOff/UTBPanel/backend/internal/buildinfo.V
     GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o /out/gate/gate-darwin-arm64 ./cmd/gate && \
     GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o /out/gate/gate-darwin-amd64 ./cmd/gate
 
+# gate for macOS with the menu bar icon needs cgo and is built on macOS by
+# the release workflow, which replaces this stage with --build-context
+# macgate=<dir with gate/>. Built here, the macOS gate has no icon.
+FROM alpine AS macgate
+RUN mkdir /gate
+
 FROM alpine
 RUN apk add --no-cache ca-certificates tzdata tini && \
     addgroup -g 1000 tgpanel && \
@@ -34,6 +40,7 @@ RUN apk add --no-cache ca-certificates tzdata tini && \
     chown root:tgpanel /run/tgpanel && chmod 2775 /run/tgpanel
 COPY --from=go /out/edge /out/core /out/panel /usr/local/bin/
 COPY --from=go /out/gate/ /srv/gate/
+COPY --from=macgate /gate/ /srv/gate/
 COPY --from=web /web/dist /srv/web
 ENV TGPANEL_SOCKET_GID=1000 TGPANEL_IN_IMAGE=1
 ENTRYPOINT ["/sbin/tini", "--"]
