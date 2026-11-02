@@ -293,6 +293,14 @@ func Map(ev events.Event) (Note, bool) {
 		return Note{Kind: "backup", Severity: "error", Key: "backup:" + id, Text: "бэкап базы не прошёл: " + str(ev, "error"), Href: bot + "/db"}, true
 	case "db_check_failed":
 		return Note{Kind: "backup", Severity: "error", Key: "check:" + id, Text: "проверка базы не прошла", Href: bot + "/db"}, true
+	case "full_backup_failed":
+		return Note{Kind: "backup", Severity: "error", Key: "full-backup:failed", Text: "Полный бэкап не создан: " + str(ev, "error"), Href: "/server"}, true
+	case "full_backup_verification_failed":
+		return Note{Kind: "backup", Severity: "error", Key: "full-backup:verify:" + str(ev, "id"), Text: "Архив " + str(ev, "name") + " не прошёл проверку: " + str(ev, "error"), Href: "/server"}, true
+	case "full_backup_verification_skipped":
+		return Note{Kind: "backup", Severity: "warn", Key: "full-backup:verify:" + str(ev, "id"), Text: "Архив " + str(ev, "name") + ": проверка пропущена — " + str(ev, "warning"), Href: "/server"}, true
+	case "full_backup_download_reminder":
+		return Note{Kind: "backup", Severity: "warn", Key: "full-backup:download", Text: str(ev, "message"), Href: "/server"}, true
 	case "telegram_429":
 		return Note{Kind: "telegram_429", Severity: "warn", Key: "429:" + id, Text: "Telegram ограничил частоту (" + str(ev, "method") + ", ждать " + num(ev, "retry_after") + " с)", Href: bot}, true
 	case "limit_reached":

@@ -20,13 +20,14 @@ import (
 var ErrExpired = errors.New("архив не найден или срок хранения истёк")
 
 type File struct {
-	Created      time.Time `cbor:"6,keyasint" json:"created,omitzero"`
-	DownloadedAt time.Time `cbor:"7,keyasint" json:"downloaded_at,omitzero"`
-	ID           string    `cbor:"1,keyasint" json:"id"`
-	BotID        int64     `cbor:"2,keyasint" json:"bot_id"`
-	Name         string    `cbor:"3,keyasint" json:"name"`
-	Size         int64     `cbor:"4,keyasint" json:"size"`
-	Expires      time.Time `cbor:"5,keyasint" json:"expires"`
+	Verification *Verification `cbor:"8,keyasint,omitempty" json:"verification,omitempty"`
+	Created      time.Time     `cbor:"6,keyasint" json:"created,omitzero"`
+	DownloadedAt time.Time     `cbor:"7,keyasint" json:"downloaded_at,omitzero"`
+	ID           string        `cbor:"1,keyasint" json:"id"`
+	BotID        int64         `cbor:"2,keyasint" json:"bot_id"`
+	Name         string        `cbor:"3,keyasint" json:"name"`
+	Size         int64         `cbor:"4,keyasint" json:"size"`
+	Expires      time.Time     `cbor:"5,keyasint" json:"expires"`
 }
 type FileRef struct {
 	ID     string `cbor:"1,keyasint"`
@@ -191,13 +192,24 @@ func (f *Files) List() ([]File, error) {
 	return out, nil
 }
 func (f *Files) MarkDownloaded(ref FileRef) error {
+	return f.update(ref, func(info *File) { info.DownloadedAt = f.now().UTC() })
+}
+func (f *Files) MarkVerified(ref FileRef, result Verification) (File, error) {
+	var out File
+	err := f.update(ref, func(info *File) { info.Verification = &result; out = *info })
+	return out, err
+}
+func (f *Files) update(ref FileRef, change func(*File)) error {
+	if !validID(ref.ID) {
+		return ErrExpired
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	info, err := f.info(ref)
 	if err != nil {
 		return err
 	}
-	info.DownloadedAt = f.now().UTC()
+	change(&info)
 	temp, err := os.CreateTemp(f.Dir, ".meta-")
 	if err != nil {
 		return err

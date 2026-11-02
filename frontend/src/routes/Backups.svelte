@@ -43,7 +43,14 @@
   {#if status?.last_download}<p class="muted">Последнее скачивание: {utc(status.last_download)}</p>{/if}
   {#if status?.last_error}<p class="danger">Последняя ошибка: {status.last_error}</p>{/if}
   {#each status?.files ?? [] as file (file.id)}
-    <div class="file"><a href={`/api/backups/${file.id}`} download={file.name}>{file.name}</a><span>{bytes(file.size)}</span><span class="muted">{utc(file.created)}</span>{#if file.downloaded_at}<span class="muted">Скачан: {utc(file.downloaded_at)}</span>{/if}</div>
+    <div class="file">
+      <div class="file-info"><a href={`/api/backups/${file.id}`} download={file.name}>{file.name}</a><span>{bytes(file.size)}</span><span class="muted">{utc(file.created)}</span>{#if file.downloaded_at}<span class="muted">Скачан: {utc(file.downloaded_at)}</span>{/if}</div>
+      {#if file.verification}
+        <p class:danger={file.verification.state === 'failed'} class="small">
+          {file.verification.state === 'passed' ? 'Проверен, всё в порядке' : file.verification.state === 'skipped' ? 'Проверка пропущена' : 'Ошибка проверки'} · {utc(file.verification.time)}{file.verification.error ? `: ${file.verification.error}` : ''}
+        </p>
+      {:else}<p class="muted small">{status?.busy ? 'Ожидает проверки…' : 'Архив ещё не проверен'}</p>{/if}
+    </div>
   {:else}<p class="muted">Полных архивов пока нет.</p>{/each}
   {#if error}<p class="danger">{error}</p>{/if}
   {#if message}<p>{message}</p>{/if}
@@ -53,6 +60,8 @@
   .settings { display: flex; gap: var(--s3); align-items: end; flex-wrap: wrap; }
   label > input:not([type=checkbox]) { display: block; margin-top: var(--s1); }
   input[type=number] { width: 110px; }
-  .file { display: flex; gap: var(--s3); flex-wrap: wrap; padding: var(--s2) 0; border-bottom: var(--line); }
+  .file { padding: var(--s2) 0; border-bottom: var(--line); }
+  .file-info { display: flex; gap: var(--s3); flex-wrap: wrap; }
+  .file p { margin-bottom: 0; }
   .small { font-size: var(--fs-s); }
 </style>

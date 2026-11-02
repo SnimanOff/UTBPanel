@@ -62,3 +62,25 @@ func TestFeed(t *testing.T) {
 		t.Fatal("a stop by the owner is not a notification")
 	}
 }
+
+func TestFullBackupEventsReachTheFeed(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "panel.db"), migrations.Panel())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s := &Service{DB: db}
+	for _, typ := range []string{"full_backup_failed", "full_backup_verification_failed", "full_backup_verification_skipped", "full_backup_download_reminder"} {
+		s.Handle(events.Event{Type: typ, Data: map[string]any{"id": typ, "name": "archive.backup", "error": "damaged", "warning": "no space", "message": "Скачайте архив"}})
+	}
+	notes, err := s.List(ctx, 0)
+	if err != nil || len(notes) != 4 {
+		t.Fatal(notes, err)
+	}
+	for _, note := range notes {
+		if note.Href != "/server" || note.Text == "" || note.BotID != 0 {
+			t.Fatal(note)
+		}
+	}
+}

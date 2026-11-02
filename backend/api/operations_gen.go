@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "a1d04a19dfce297468f7a10d646f9adec27f2b58f1e0ef0cf62c277d246dbb4c"
+const GeneratedHash = "4cc510a1a388a2fbd248d699d2b97e7e01bb6528b6d17b845d2abc42b43e6e82"
 
 // Op is one operation of the API.
 type Op struct {

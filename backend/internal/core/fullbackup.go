@@ -35,6 +35,8 @@ const fullConfigKey = "full_backup_settings"
 const fullAutoKey = "full_backup_auto"
 const fullErrorKey = "full_backup_error"
 const fullDownloadKey = "full_backup_download"
+const fullFirstKey = "full_backup_first"
+const fullReminderKey = "full_backup_reminder"
 
 func (c *Core) backupValue(ctx context.Context, key string) string {
 	var value string
@@ -306,6 +308,14 @@ func (c *Core) MakeFullBackup(ctx context.Context, conn *wire.Conn, in FullBacku
 	if err != nil {
 		return backup.File{}, err
 	}
+	verification := (backup.Verifier{Dir: filepath.Join(c.Cfg.DataDir, "tmp")}).Verify(ctx, c.FullBackups, file, master)
+	file, err = c.FullBackups.MarkVerified(backup.FileRef{ID: file.ID}, verification)
+	if err != nil {
+		return file, err
+	}
+	if _, err := c.DB.W.ExecContext(ctx, `INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO NOTHING`, fullFirstKey, file.Created.Format(time.RFC3339Nano)); err != nil {
+		return file, err
+	}
 	current, err := c.fullSettings(ctx)
 	if err != nil {
 		return file, err
@@ -314,6 +324,12 @@ func (c *Core) MakeFullBackup(ctx context.Context, conn *wire.Conn, in FullBacku
 		return file, err
 	}
 	c.putBackupValue(ctx, fullErrorKey, "")
+	if verification.State == "failed" {
+		c.putBackupValue(ctx, fullErrorKey, verification.Error)
+		c.Ev.Emit("full_backup_verification_failed", 0, events.Error, map[string]any{"id": file.ID, "name": file.Name, "error": verification.Error})
+	} else if verification.State == "skipped" {
+		c.Ev.Emit("full_backup_verification_skipped", 0, events.Warn, map[string]any{"id": file.ID, "name": file.Name, "warning": verification.Error})
+	}
 	c.Ev.Emit("full_backup_created", 0, events.Info, map[string]any{"id": file.ID, "name": file.Name, "size": file.Size})
 	return file, nil
 }
@@ -326,6 +342,7 @@ func (c *Core) runFullBackups(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
+			c.remindFullBackup(ctx, now)
 			cfg, err := c.fullSettings(ctx)
 			if err != nil || !cfg.Enabled || c.backupBusy.Load() {
 				continue
@@ -356,6 +373,37 @@ func (c *Core) runFullBackups(ctx context.Context) {
 	}
 }
 
+func (c *Core) remindFullBackup(ctx context.Context, now time.Time) {
+	files, err := c.FullBackups.List()
+	if err != nil || len(files) == 0 {
+		return
+	}
+	first, err := time.Parse(time.RFC3339Nano, c.backupValue(ctx, fullFirstKey))
+	if err != nil {
+		first = files[len(files)-1].Created
+		if first.IsZero() {
+			first = now
+		}
+		if err := c.putBackupValue(ctx, fullFirstKey, first.UTC().Format(time.RFC3339Nano)); err != nil {
+			return
+		}
+	}
+	download, _ := time.Parse(time.RFC3339Nano, c.backupValue(ctx, fullDownloadKey))
+	baseline := first
+	if download.After(baseline) {
+		baseline = download
+	}
+	reminded, _ := time.Parse(time.RFC3339Nano, c.backupValue(ctx, fullReminderKey))
+	const week = 7 * 24 * time.Hour
+	if now.Sub(baseline) < week || (!reminded.IsZero() && now.Sub(reminded) < week) {
+		return
+	}
+	if err := c.putBackupValue(ctx, fullReminderKey, now.UTC().Format(time.RFC3339Nano)); err != nil {
+		return
+	}
+	c.Ev.Emit("full_backup_download_reminder", 0, events.Warn, map[string]any{"message": "Полный архив не скачивали семь дней. Скачайте резервную копию: архивы на сервере пропадут вместе с ним.", "since": baseline.UTC().Format(time.RFC3339Nano)})
+}
+
 func (c *Core) registerFullBackups() {
 	c.FullBackups = backup.FullFiles(filepath.Join(c.Cfg.DataDir, "backups", "full"))
 	c.Mux.Handle("backups.status", wire.Func(func(ctx context.Context, _ *wire.Conn, _ struct{}) (backup.FullStatus, error) {
@@ -371,6 +419,7 @@ func (c *Core) registerFullBackups() {
 			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			defer cancel()
 			c.putBackupValue(cleanup, fullErrorKey, err.Error())
+			c.Ev.Emit("full_backup_failed", 0, events.Error, map[string]any{"error": err.Error()})
 		}
 		return file, err
 	}))

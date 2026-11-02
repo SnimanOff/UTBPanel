@@ -1552,6 +1552,13 @@ components:
         size: { type: integer }
         created: { type: string, format: date-time }
         downloaded_at: { type: string, format: date-time }
+        verification:
+          type: object
+          required: [state, time]
+          properties:
+            state: { type: string, enum: [passed, failed, skipped] }
+            time: { type: string, format: date-time }
+            error: { type: string }
     FullBackupStatus:
       type: object
       required: [files, settings, busy]
