@@ -13,7 +13,8 @@
     botId = 0,
     highlight = '',
     onset,
-  }: { botId?: number; highlight?: string; onset?: (name: string) => void } = $props()
+    empty = '',
+  }: { botId?: number; highlight?: string; onset?: (name: string) => void; empty?: string } = $props()
   let items = $state<Req[]>([])
   let error = $state('')
   let fieldErrors = $state<Record<string, string>>({})
@@ -89,6 +90,8 @@
       </div>
     {/each}
   </div>
+{:else if empty}
+  <p class="muted">{empty}</p>
 {/if}
 
 <style>

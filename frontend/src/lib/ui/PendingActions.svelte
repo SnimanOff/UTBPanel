@@ -6,7 +6,7 @@
   import { store } from '../api/stores.svelte'
   import HoldButton from './HoldButton.svelte'
 
-  let { history = false }: { history?: boolean } = $props()
+  let { history = false, empty = '' }: { history?: boolean; empty?: string } = $props()
   $effect(() => actions.start())
 
   const shown = $derived(history ? actions.items : actions.pending)
@@ -65,6 +65,8 @@
       </div>
     {/each}
   </div>
+{:else if empty}
+  <p class="muted">{empty}</p>
 {/if}
 
 <style>
