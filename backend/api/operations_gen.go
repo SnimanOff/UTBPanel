@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "5b95196bf4c13538990e025c59d99d8e800eb6c644e37b0f67654b1204011931"
+const GeneratedHash = "f1a49ec960ba8670e9c9a4cbff6806bec76de511b959dee6ced103b5304197e0"
 
 // Op is one operation of the API.
 type Op struct {
@@ -108,7 +108,7 @@ var Ops = []Op{
 	{"schedule_maintenance", "POST", "/api/bots/{id}/maintenance", "confirm", "Plan maintenance (times in UTC; text with {start} and {end}; optionally switch to a version)"},
 	{"extend_maintenance", "POST", "/api/bots/{id}/maintenance/extend", "write", "Move the planned end (+15, +30, +60 minutes)"},
 	{"pause", "POST", "/api/bots/{id}/pause", "write", "Pause the bot: the process runs, users get the maintenance text, payments wait"},
-	{"upload_release", "POST", "/api/bots/{id}/releases", "write", "Upload a static linux/amd64 binary as a new version (does not deploy it)"},
+	{"upload_release", "POST", "/api/bots/{id}/releases", "write", "Upload a static linux/amd64 binary as a new version (does not deploy it). A local build is usually too big for a tool call; send it through gate with the MCP token — curl -H \"X-Panel: 1\" -H \"Authorization: Bearer <token>\" -F file=@bot http://127.0.0.1:47100/api/bots/<id>/releases — then deploy with deploy_release"},
 	{"deploy_release", "POST", "/api/bots/{id}/releases/{version}/switch", "confirm", "Switch the bot to a stored version; tgpanel.yaml of the version is applied first"},
 	{"restart", "POST", "/api/bots/{id}/restart", "write", "Restart the bot"},
 	{"resume", "POST", "/api/bots/{id}/resume", "write", "End pause or maintenance; deferred updates go to the bot first"},

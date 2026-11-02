@@ -68,6 +68,7 @@ func newPanel(t *testing.T) *fakePanel {
 		fmt.Fprint(w, "data: last\n\n")
 	})
 	s.Mux.HandleFunc("POST /mcp", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, api.CallerFrom(r.Context()).Source) })
+	s.Mux.HandleFunc("/api/bots/{id}/releases", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, api.CallerFrom(r.Context()).Source) })
 	s.Mux.HandleFunc("GET /api/notifications/stream", func(w http.ResponseWriter, r *http.Request) {
 		sse := api.NewSSE(w)
 		sse.Send("7", "notification", map[string]any{"id": 7, "text": "Echo: упал (код 2)", "severity": "error", "href": "/bots/1/logs"})
@@ -255,6 +256,27 @@ func TestEnrollAndProxy(t *testing.T) {
 	response.Body.Close()
 	if response.StatusCode != 200 {
 		t.Fatal("MCP client without browser CSRF headers was rejected", response.StatusCode)
+	}
+	// A local build is uploaded with the same token, and nothing else.
+	upload := func(method, path string) (int, string) {
+		req, _ := http.NewRequest(method, s.base+path, strings.NewReader("bin"))
+		req.Header.Set("Authorization", "Bearer "+s.gate.MCPToken())
+		req.Header.Set("Content-Type", "multipart/form-data; boundary=x") // curl -F
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	if code, body := upload("POST", "/api/bots/3/releases"); code != 200 || body != "mcp" {
+		t.Fatalf("upload with the MCP token: %d %s", code, body)
+	}
+	for _, c := range [][2]string{{"GET", "/api/bots/3/releases"}, {"POST", "/api/bots/3/releases/v1/switch"}, {"POST", "/api/bots/3/releases/"}, {"POST", "/api/bots/x/releases"}} {
+		if code, _ := upload(c[0], c[1]); code != http.StatusForbidden {
+			t.Errorf("%s %s with the MCP token: %d", c[0], c[1], code)
+		}
 	}
 	code, _ = get(t, http.DefaultClient, s.base+"/api/whoami", "Authorization", "Bearer wrong")
 	if code != http.StatusForbidden {

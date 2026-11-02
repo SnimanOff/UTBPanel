@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -312,6 +313,14 @@ func (g *Gate) LoginURL() string {
 	return "http://127.0.0.1:" + g.port + "/__gate/login?t=" + t
 }
 
+var releasePath = regexp.MustCompile(`^/api/bots/[0-9]+/releases$`)
+
+// ReleaseUpload tells the upload of a bot binary: too big for an MCP call,
+// it goes as a plain request with the same token (curl -F file=@bot).
+func ReleaseUpload(r *http.Request) bool {
+	return r.Method == http.MethodPost && releasePath.MatchString(r.URL.Path)
+}
+
 func bearer(r *http.Request) string {
 	h := r.Header.Get("Authorization")
 	if t, ok := strings.CutPrefix(h, "Bearer "); ok {
@@ -369,8 +378,8 @@ func (g *Gate) Handler() http.Handler {
 			fmt.Fprint(w, forbiddenPage)
 			return
 		}
-		if (a == authMCP && r.URL.Path != "/mcp") || (a != authMCP && r.URL.Path == "/mcp") {
-			http.Error(w, "MCP token is required and is valid only for /mcp", http.StatusForbidden)
+		if (a == authMCP && r.URL.Path != "/mcp" && !ReleaseUpload(r)) || (a != authMCP && r.URL.Path == "/mcp") {
+			http.Error(w, "MCP token is required and is valid only for /mcp and release uploads", http.StatusForbidden)
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/__gate/") {

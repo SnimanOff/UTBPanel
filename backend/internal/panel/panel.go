@@ -331,6 +331,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	p.Go(mcpServer.RunExpiry)
 	mcpServer.Register(p.API.Mux)
 	p.API.Mux.ServeMux.Handle("/mcp", mcpServer)
+	p.API.Use(mcpServer.Direct)
 	return p, nil
 }
 

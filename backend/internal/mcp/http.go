@@ -1,16 +1,63 @@
 package mcp
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
 )
+
+var releasePath = regexp.MustCompile(`^/api/bots/([0-9]+)/releases$`)
+
+// Direct guards requests that come with the MCP token past /mcp: gate lets
+// through only release uploads, and here they get the same check as the
+// upload_release tool (write level, the bot's group in full mode). Calls
+// of tools reach the API inside the panel and do not pass here.
+func (s *Service) Direct(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if api.CallerFrom(r.Context()).Source != api.SourceMCP || r.URL.Path == "/mcp" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		m := releasePath.FindStringSubmatch(r.URL.Path)
+		if r.Method != http.MethodPost || m == nil {
+			api.WriteError(w, 403, "forbidden", "токен MCP действует только для /mcp и загрузки версии")
+			return
+		}
+		if err := s.allowUpload(r.Context(), m[1]); err != nil {
+			code, msg, _ := strings.Cut(err.Error(), ": ")
+			api.WriteError(w, 403, code, msg)
+			return
+		}
+		// The deploy stays separate: deploy_release waits for the owner.
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Service) allowUpload(ctx context.Context, bot string) error {
+	op, ok := s.ops["upload_release"]
+	if !ok {
+		return errors.New("forbidden: uploads are not available")
+	}
+	if s.Groups != nil {
+		var unlock func()
+		var err error
+		ctx, unlock, err = s.Groups.Guard.Lock(ctx)
+		if err != nil {
+			return errors.New("unavailable: permission check timed out")
+		}
+		defer unlock()
+	}
+	return s.authorize(ctx, op, map[string]any{"id": bot})
+}
 
 func (s *Service) Register(mux *api.Mux) {
 	owner := func(next http.HandlerFunc) http.HandlerFunc {

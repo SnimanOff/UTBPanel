@@ -1346,7 +1346,7 @@ paths:
     post:
       operationId: upload_release
       tags: [releases]
-      summary: Upload a static linux/amd64 binary as a new version (does not deploy it)
+      summary: 'Upload a static linux/amd64 binary as a new version (does not deploy it). A local build is usually too big for a tool call; send it through gate with the MCP token — curl -H "X-Panel: 1" -H "Authorization: Bearer <token>" -F file=@bot http://127.0.0.1:47100/api/bots/<id>/releases — then deploy with deploy_release'
       x-mcp: write
       requestBody:
         required: true
