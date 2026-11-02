@@ -28,6 +28,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/dbgate"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/livehub"
+	"github.com/SnimanOff/UTBPanel/backend/internal/mcp"
 	"github.com/SnimanOff/UTBPanel/backend/internal/metrics"
 	"github.com/SnimanOff/UTBPanel/backend/internal/panics"
 	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
@@ -304,6 +305,13 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 			}
 		}
 	})
+	mcpServer, err := mcp.New(p.Audit.Middleware(p.API.Mux), p.Audit, log)
+	if err != nil {
+		p.W.Close()
+		p.DB.Close()
+		return nil, err
+	}
+	p.API.Mux.ServeMux.Handle("/mcp", mcpServer)
 	return p, nil
 }
 

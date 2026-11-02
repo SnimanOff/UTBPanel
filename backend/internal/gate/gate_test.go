@@ -53,6 +53,10 @@ func newPanel(t *testing.T) *fakePanel {
 		c := api.CallerFrom(r.Context())
 		fmt.Fprintf(w, "%s %s %s cookie=%q auth=%q", c.Name, c.Kind, c.Source, r.Header.Get("Cookie"), r.Header.Get("Authorization"))
 	})
+	s.Mux.HandleFunc("GET /mcp", func(w http.ResponseWriter, r *http.Request) {
+		c := api.CallerFrom(r.Context())
+		fmt.Fprintf(w, "%s %s %s auth=%q", c.Name, c.Kind, c.Source, r.Header.Get("Authorization"))
+	})
 	s.Mux.HandleFunc("GET /api/sse", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		fmt.Fprint(w, "data: first\n\n")
@@ -63,6 +67,7 @@ func newPanel(t *testing.T) *fakePanel {
 		}
 		fmt.Fprint(w, "data: last\n\n")
 	})
+	s.Mux.HandleFunc("POST /mcp", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, api.CallerFrom(r.Context()).Source) })
 	s.Mux.HandleFunc("GET /api/notifications/stream", func(w http.ResponseWriter, r *http.Request) {
 		sse := api.NewSSE(w)
 		sse.Send("7", "notification", map[string]any{"id": 7, "text": "Echo: упал (код 2)", "severity": "error", "href": "/bots/1/logs"})
@@ -228,9 +233,28 @@ func TestEnrollAndProxy(t *testing.T) {
 	}
 
 	// MCP client with its token.
-	code, body = get(t, http.DefaultClient, s.base+"/api/whoami", "Authorization", "Bearer "+s.gate.MCPToken())
+	code, body = get(t, http.DefaultClient, s.base+"/mcp", "Authorization", "Bearer "+s.gate.MCPToken())
 	if code != 200 || !strings.HasPrefix(body, "home-pc owner mcp") || !strings.Contains(body, `auth=""`) {
 		t.Fatalf("mcp: %d %s", code, body)
+	}
+	code, _ = get(t, http.DefaultClient, s.base+"/api/whoami", "Authorization", "Bearer "+s.gate.MCPToken())
+	if code != http.StatusForbidden {
+		t.Fatal("MCP token bypassed the tool policy through the REST API", code)
+	}
+	code, _ = get(t, s.browser, s.base+"/mcp")
+	if code != http.StatusForbidden {
+		t.Fatal("browser session accessed MCP without its token", code)
+	}
+	req, _ := http.NewRequest("POST", s.base+"/mcp", strings.NewReader(`{}`))
+	req.Header.Set("Authorization", "Bearer "+s.gate.MCPToken())
+	req.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != 200 {
+		t.Fatal("MCP client without browser CSRF headers was rejected", response.StatusCode)
 	}
 	code, _ = get(t, http.DefaultClient, s.base+"/api/whoami", "Authorization", "Bearer wrong")
 	if code != http.StatusForbidden {

@@ -143,7 +143,7 @@ func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 // Middleware records every changing request together with its result.
 func (l *Log) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+		if (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions) && api.CallerFrom(r.Context()).Source != api.SourceMCP {
 			next.ServeHTTP(w, r)
 			return
 		}

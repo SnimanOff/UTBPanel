@@ -291,6 +291,7 @@ func (g *Gate) buildProxy() {
 			pr.Out.Header.Del("X-Panel-Source")
 			if bearer(pr.In) != "" {
 				pr.Out.Header.Set("X-Panel-Source", "mcp")
+				pr.Out.Header.Set("X-Panel", "1")
 			}
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
@@ -366,6 +367,10 @@ func (g *Gate) Handler() http.Handler {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusForbidden)
 			fmt.Fprint(w, forbiddenPage)
+			return
+		}
+		if (a == authMCP && r.URL.Path != "/mcp") || (a != authMCP && r.URL.Path == "/mcp") {
+			http.Error(w, "MCP token is required and is valid only for /mcp", http.StatusForbidden)
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/__gate/") {

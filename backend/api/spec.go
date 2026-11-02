@@ -61,6 +61,13 @@ func Operations() ([]Operation, error) {
 				return nil, fmt.Errorf("%s %s: %w", m, path, err)
 			}
 			op.Method, op.Path = strings.ToUpper(m), path
+			if shared, ok := item["parameters"]; ok {
+				var parameters []yaml.Node
+				if err := shared.Decode(&parameters); err != nil {
+					return nil, err
+				}
+				op.Parameters = append(parameters, op.Parameters...)
+			}
 			out = append(out, op)
 		}
 	}
