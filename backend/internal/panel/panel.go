@@ -34,6 +34,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
 	"github.com/SnimanOff/UTBPanel/backend/internal/procstat"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
+	"github.com/SnimanOff/UTBPanel/backend/internal/secretreq"
 	"github.com/SnimanOff/UTBPanel/backend/internal/settings"
 	"github.com/SnimanOff/UTBPanel/backend/internal/sources"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
@@ -175,6 +176,15 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		return b.Name
 	}}
 	notes.Register(p.API.Mux)
+	secretAsks := &secretreq.Store{DB: db, Notes: notes}
+	p.Bots.OnSecretSet = secretAsks.Fulfilled
+	(&secretreq.API{Store: secretAsks, WriteError: bots.WriteCoreError,
+		Exists: func(ctx context.Context, id int64) error { return p.Core.Call(ctx, "bots.get", id, nil) },
+		CreateBot: func(ctx context.Context, name, token string, group int64) (int64, string, error) {
+			b, err := p.Bots.CreateBot(ctx, name, token, group)
+			return b.ID, b.Username, err
+		}}).Register(p.API.Mux)
+	p.Go(secretAsks.RunExpiry)
 	rules := &alerts.Rules{S: p.Metrics, Notes: notes, Bots: func(ctx context.Context) []int64 {
 		var bs []core.Bot
 		if p.Core.Call(ctx, "bots.list", struct{}{}, &bs) != nil {
@@ -206,6 +216,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		}
 		return nil, nil
 	}}
+	documents.Secrets = secretAsks
 	rules.Lock = documents.Guard.Lock
 	documents.Register(p.API.Mux)
 	exportFiles := &backup.Files{Dir: filepath.Join(cfg.DataDir, "export-temp")}
@@ -316,6 +327,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	mcpServer.Groups = p.Bots.Groups
 	mcpServer.DB = p.DB
 	mcpServer.Notes = notes
+	mcpServer.Secrets = secretAsks
 	p.Go(mcpServer.RunExpiry)
 	mcpServer.Register(p.API.Mux)
 	p.API.Mux.ServeMux.Handle("/mcp", mcpServer)

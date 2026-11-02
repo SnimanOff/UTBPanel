@@ -31,6 +31,8 @@ type Service struct {
 	Groups *Groups
 	// Owner is the owner's Telegram ID from the panel settings (previews).
 	Owner func(*http.Request) int64
+	// OnSecretSet closes requests of an AI waiting for this secret.
+	OnSecretSet func(ctx context.Context, botID int64, name, by string)
 }
 
 // Call calls the core.
@@ -189,16 +191,25 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	var b core.Bot
-	if err := s.Call(r.Context(), "bots.create", core.CreateBot{Name: in.Name, Token: in.Token, Actor: api.Actor(r.Context())}, &b); err != nil {
+	b, err := s.CreateBot(r.Context(), in.Name, in.Token, in.GroupID)
+	if err != nil {
 		WriteCoreError(w, err)
 		return
 	}
-	s.Groups.SetGroup(r.Context(), b.ID, in.GroupID)
 	audit.Annotate(r, "bot.create", b.Name, map[string]any{"username": b.Username, "token": "изменено"})
 	audit.SetBot(r, b.ID)
 	// The token is never returned: only @username is shown from now on.
 	api.WriteJSON(w, http.StatusCreated, b)
+}
+
+// CreateBot adds a bot (the core checks the token with getMe) into a group.
+func (s *Service) CreateBot(ctx context.Context, name, token string, groupID int64) (core.Bot, error) {
+	var b core.Bot
+	if err := s.Call(ctx, "bots.create", core.CreateBot{Name: name, Token: token, Actor: api.Actor(ctx)}, &b); err != nil {
+		return b, err
+	}
+	s.Groups.SetGroup(ctx, b.ID, groupID)
+	return b, nil
 }
 
 func (s *Service) setToken(w http.ResponseWriter, r *http.Request) {
@@ -406,6 +417,9 @@ func (s *Service) setSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	audit.Annotate(r, "secret.set", in.Name, map[string]any{"kind": in.Kind, "value": "изменено"})
+	if s.OnSecretSet != nil {
+		s.OnSecretSet(r.Context(), id, in.Name, api.CallerFrom(r.Context()).Name)
+	}
 	api.WriteJSON(w, http.StatusOK, map[string]any{"name": in.Name, "restart_required": true})
 }
 

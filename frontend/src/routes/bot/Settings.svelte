@@ -9,6 +9,7 @@
   import Box from '../../lib/ui/Box.svelte'
   import HoldButton from '../../lib/ui/HoldButton.svelte'
   import SecretField from '../../lib/ui/SecretField.svelte'
+  import SecretRequests from '../../lib/ui/SecretRequests.svelte'
   import Behavior from './Behavior.svelte'
 	import Tasks from './Tasks.svelte'
 	import Flags from './Flags.svelte'
@@ -28,6 +29,8 @@
   let newValue = $state('')
   let fileName = $state('')
   let fileInput = $state<HTMLInputElement>()
+  // A notification about a requested secret opens the tab with ?secret=NAME.
+  const asked = new URLSearchParams(location.search).get('secret') ?? ''
   const standard = ['BOT_TOKEN', 'PORT', 'WEBHOOK_URL', 'WEBHOOK_SECRET', 'DATABASE_URL', 'DATA_DIR']
 
   async function load() {
@@ -158,6 +161,8 @@
 {/if}
 {#if saved}<p class="ok">{saved}</p>{/if}
 {#if error}<p class="danger pre">{error}</p>{/if}
+
+<SecretRequests botId={bot.id} highlight={asked} onset={(name) => { done(`${name} сохранён`); load() }} />
 
 <ConfigDocument botId={bot.id} onapplied={(restart) => { if (restart) restartNeeded = true; configRevision++; load(); store.refresh(bot.id) }} />
 <Export botIds={[bot.id]} />

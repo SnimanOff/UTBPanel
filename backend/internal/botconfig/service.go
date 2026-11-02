@@ -13,6 +13,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
+	"github.com/SnimanOff/UTBPanel/backend/internal/secretreq"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
 
@@ -25,10 +26,14 @@ type Service struct {
 	Group      func(context.Context, int64) (*Group, error)
 	WriteError func(http.ResponseWriter, error)
 	Guard      Guard
+	// Secrets holds what an AI asked the owner for; may be nil.
+	Secrets *secretreq.Store
 }
 type View struct {
 	Document Document `json:"document"`
 	YAML     string   `json:"yaml"`
+	// SecretRequests are the states of secrets asked for in the last day.
+	SecretRequests []secretreq.Request `json:"secret_requests,omitempty"`
 }
 type Edit struct {
 	Version  string    `json:"version"`
@@ -77,7 +82,11 @@ func (s *Service) Get(ctx context.Context, id int64) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	return view(snap.Document)
+	out, err := view(snap.Document)
+	if err == nil && s.Secrets != nil {
+		out.SecretRequests, err = s.Secrets.List(ctx, id, false)
+	}
+	return out, err
 }
 
 // ExportSnapshot retains the core revision alongside panel-owned settings.
@@ -174,6 +183,15 @@ func (s *Service) Apply(ctx context.Context, id int64, in Edit, actorCtx context
 	out.Restart = applied.Restart
 	out.MissingSecrets = applied.MissingSecrets
 	out.ProfileErrors = applied.ProfileErrors
+	// A new name without a value asks the owner for it when an AI added it.
+	if caller := api.CallerFrom(actorCtx); err == nil && s.Secrets != nil && caller.Source == api.SourceMCP {
+		for _, name := range applied.MissingSecrets {
+			if _, err := s.Secrets.Ask(ctx, caller, id, name, "объявлен в документе настроек", "", 0); err != nil {
+				return out, err
+			}
+		}
+		out.SecretRequests, err = s.Secrets.List(ctx, id, false)
+	}
 	return out, err
 }
 

@@ -3,6 +3,7 @@
   import Box from '../lib/ui/Box.svelte'
   import HoldButton from '../lib/ui/HoldButton.svelte'
   import PendingActions from '../lib/ui/PendingActions.svelte'
+  import SecretRequests from '../lib/ui/SecretRequests.svelte'
 
   type Mode = 'off' | 'read' | 'full'
   let groups = $state<Group[]>([])
@@ -42,6 +43,10 @@
   <Box title="Подтверждения">
     <p class="muted">Опасные действия нейросеть только запрашивает: запрос ждёт здесь, в ленте уведомлений и в окне gate 15 минут. Подтверждение — удержанием кнопки.</p>
     <PendingActions history />
+  </Box>
+  <Box title="Запросы секретов">
+    <p class="muted">Значения секретов и токены нейросеть не передаёт: она просит, вы вводите здесь или во вкладке «Настройки» бота. Нейросеть видит только состояние. Запрос живёт 24 часа.</p>
+    <SecretRequests />
   </Box>
 {/if}
 <Box title="Подключение MCP">

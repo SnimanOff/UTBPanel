@@ -18,6 +18,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/alerts"
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
+	"github.com/SnimanOff/UTBPanel/backend/internal/secretreq"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -377,7 +378,22 @@ func (s *Service) wait(ctx context.Context, raw json.RawMessage) *sdk.CallToolRe
 	defer poll.Stop()
 	for {
 		woke := s.wake()
+		var secretWoke <-chan struct{}
+		if s.Secrets != nil {
+			secretWoke = s.Secrets.Wake()
+		}
 		a, err := s.action(ctx, in.ID)
+		if errors.Is(err, sql.ErrNoRows) && s.Secrets != nil {
+			// A secret request: the AI sees only its state.
+			r, err := s.Secrets.Get(ctx, in.ID)
+			if err != nil || r.Serial != caller.Serial {
+				return toolError("not_found: no such action")
+			}
+			if r.Final() || !waitMore(ctx, deadline.C, poll.C, woke, secretWoke) {
+				return secretResult(r)
+			}
+			continue
+		}
 		// Another device's requests are not visible.
 		if err != nil || a.caller.Serial != caller.Serial {
 			return toolError("not_found: no such action")
@@ -386,6 +402,7 @@ func (s *Service) wait(ctx context.Context, raw json.RawMessage) *sdk.CallToolRe
 			return actionResult(a)
 		}
 		select {
+		case <-secretWoke:
 		case <-woke:
 		case <-poll.C:
 		case <-deadline.C:
@@ -394,6 +411,54 @@ func (s *Service) wait(ctx context.Context, raw json.RawMessage) *sdk.CallToolRe
 			return actionResult(a)
 		}
 	}
+}
+
+// waitMore blocks until something changes; false when time is up.
+func waitMore(ctx context.Context, deadline, poll <-chan time.Time, wakes ...<-chan struct{}) bool {
+	select {
+	case <-wakes[0]:
+	case <-wakes[1]:
+	case <-poll:
+	case <-deadline:
+		return false
+	case <-ctx.Done():
+		return false
+	}
+	return true
+}
+
+func secretResult(r secretreq.Request) *sdk.CallToolResult {
+	structured := map[string]any{"id": r.ID, "status": r.State, "secret": r.Name, "expires_at": r.ExpiresAt.Format(time.RFC3339)}
+	if r.CreatedBot != 0 {
+		structured["bot_id"] = r.CreatedBot
+	}
+	text, _ := json.Marshal(structured)
+	return &sdk.CallToolResult{StructuredContent: structured, Content: []sdk.Content{&sdk.TextContent{Text: string(text)}}}
+}
+
+// askToken turns create_bot into a request for BOT_TOKEN: the token is
+// entered by the owner and checked with getMe, the bot is created then.
+func (s *Service) askToken(ctx context.Context, op operation, args map[string]any) *sdk.CallToolResult {
+	body, _ := args["body"].(map[string]any)
+	if _, ok := body["token"]; ok {
+		return s.denied(ctx, op, args, "secret_required: не передавайте токен; вызовите create_bot без token, владелец введёт его в панели")
+	}
+	if s.Secrets == nil {
+		return s.denied(ctx, op, args, "secret_required: BOT_TOKEN должен ввести владелец через запрос секрета")
+	}
+	name, _ := body["name"].(string)
+	if strings.TrimSpace(name) == "" {
+		return s.denied(ctx, op, args, "invalid_arguments: name is required")
+	}
+	hint, _ := body["hint"].(string)
+	r, err := s.Secrets.Ask(ctx, api.CallerFrom(ctx), 0, secretreq.TokenName, hint, name, inputID(body["group_id"]))
+	if err != nil {
+		return s.denied(ctx, op, args, "unavailable: "+err.Error())
+	}
+	structured := map[string]any{"status": "waiting", "id": r.ID, "secret": r.Name, "expires_at": r.ExpiresAt.Format(time.RFC3339),
+		"next": "владелец вводит токен в панели; вызовите wait_action с этим id, bot_id появится в ответе"}
+	text, _ := json.Marshal(structured)
+	return &sdk.CallToolResult{StructuredContent: structured, Content: []sdk.Content{&sdk.TextContent{Text: string(text)}}}
 }
 
 func actionResult(a Action) *sdk.CallToolResult {

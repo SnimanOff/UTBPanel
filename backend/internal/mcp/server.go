@@ -24,6 +24,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
 	"github.com/SnimanOff/UTBPanel/backend/internal/bots"
+	"github.com/SnimanOff/UTBPanel/backend/internal/secretreq"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -35,6 +36,7 @@ type Service struct {
 	// DB keeps pending actions; without it confirm-level calls are refused.
 	DB      *store.DB
 	Notes   *alerts.Service
+	Secrets *secretreq.Store
 	handler http.Handler
 	ops     map[string]operation
 
@@ -129,7 +131,7 @@ func (s *Service) call(ctx context.Context, op operation, raw json.RawMessage) *
 		return s.request(ctx, op, args)
 	}
 	if op.ID == "create_bot" {
-		return s.denied(ctx, op, args, "secret_required: BOT_TOKEN должен ввести владелец через запрос секрета")
+		return s.askToken(ctx, op, args)
 	}
 	return s.execute(ctx, op, args)
 }

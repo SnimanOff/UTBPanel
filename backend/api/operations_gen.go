@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "cfadcebc0db9516ddec61b013ba0e42e8011900f7d7f96e4c687e64fc3db9253"
+const GeneratedHash = "26b93eb840f4a14e639c4718eb11a3098e29d48882ee3b81a801f9cc8b2740bd"
 
 // Op is one operation of the API.
 type Op struct {
@@ -59,6 +59,7 @@ var Ops = []Op{
 	{"list_flags", "GET", "/api/bots/{id}/sdk/flags", "read", "Typed SDK flag definitions and current values"},
 	{"list_sdk_metrics", "GET", "/api/bots/{id}/sdk/metrics", "read", "Custom SDK metrics, current values and dashboard selection"},
 	{"list_sdk_tasks", "GET", "/api/bots/{id}/sdk/tasks", "read", "SDK schedules in UTC and recent task runs"},
+	{"list_secret_requests", "GET", "/api/bots/{id}/secret-requests", "read", "Secret requests of the bot from the last day with their states"},
 	{"list_secrets", "GET", "/api/bots/{id}/secrets", "read", "Names of the bot's secrets; values are never returned"},
 	{"get_services", "GET", "/api/bots/{id}/services", "read", "External services the bot connects to (through the proxy) with error rates and traffic"},
 	{"get_settings", "GET", "/api/bots/{id}/settings", "read", "Settings of the bot (env, renames, limits)"},
@@ -74,6 +75,7 @@ var Ops = []Op{
 	{"notifications_stream", "GET", "/api/notifications/stream", "never", "Server-Sent Events of new notifications (interface and gate.exe)"},
 	{"panics_summary", "GET", "/api/panics/summary", "read", "Panics in the last 24 h per bot id"},
 	{"ping", "GET", "/api/ping", "read", "Check the connection and see the key name"},
+	{"list_waiting_secret_requests", "GET", "/api/secret-requests", "never", "Waiting secret requests of all bots and new-bot tokens (owner only)"},
 	{"get_bots_load", "GET", "/api/server/bots", "read", "Load and revenue of every bot over 24 hours"},
 	{"get_db_checks", "GET", "/api/server/checks", "read", "Results of the weekly quick_check of core.db, panel.db and every bot.db"},
 	{"get_server_metrics", "GET", "/api/server/metrics", "read", "Server metrics (CPU, RAM, disk, network), processes and the sum over all bots"},
@@ -87,7 +89,7 @@ var Ops = []Op{
 	{"rename_group", "PATCH", "/api/groups/{gid}", "never", "Rename a group"},
 	{"save_alert_rule", "POST", "/api/alert-rules", "write", "Add or change a rule (metric p95 | err_rate | cpu | rss | updates | silence | revenue_drop, condition, minutes)"},
 	{"create_full_backup", "POST", "/api/backups", "never", "Create a full archive encrypted by the core's master key (owner only)"},
-	{"create_bot", "POST", "/api/bots", "write", "Add a bot; the token is checked with getMe and never returned"},
+	{"create_bot", "POST", "/api/bots", "write", "Add a bot; the token is checked with getMe and never returned. Through MCP leave the token out — the owner is asked for it and the call returns {status waiting, id} for wait_action"},
 	{"create_broadcast", "POST", "/api/bots/{id}/broadcasts", "never", "Start a broadcast now or at starts_at (UTC); text, optional picture and link buttons"},
 	{"test_broadcast", "POST", "/api/bots/{id}/broadcasts/test", "write", "Send the message once to the owner's Telegram ID"},
 	{"cancel_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/cancel", "confirm", "Stop a broadcast for good"},
@@ -111,6 +113,7 @@ var Ops = []Op{
 	{"restart", "POST", "/api/bots/{id}/restart", "write", "Restart the bot"},
 	{"resume", "POST", "/api/bots/{id}/resume", "write", "End pause or maintenance; deferred updates go to the bot first"},
 	{"run_sdk_task", "POST", "/api/bots/{id}/sdk/tasks/{name}/run", "write", "Run a registered task on the main instance now"},
+	{"request_secret", "POST", "/api/bots/{id}/secret-requests", "write", "Ask the owner for a secret value; values never pass through MCP. Follow the state with wait_action or get_bot_config"},
 	{"mark_service_known", "POST", "/api/bots/{id}/services/known", "write", "Mark an address as known (no more \"new address\" notifications)"},
 	{"start", "POST", "/api/bots/{id}/start", "write", "Start the bot"},
 	{"stop", "POST", "/api/bots/{id}/stop", "confirm", "Stop the bot; updates wait at Telegram"},
@@ -127,6 +130,8 @@ var Ops = []Op{
 	{"confirm_mcp_action", "POST", "/api/mcp/actions/{aid}/confirm", "never", "Confirm and run a pending AI action as the device that asked (owner only)"},
 	{"reject_mcp_action", "POST", "/api/mcp/actions/{aid}/reject", "never", "Reject a pending AI action (owner only)"},
 	{"read_notifications", "POST", "/api/notifications/read", "write", "Mark notifications read (all when ids is empty)"},
+	{"reject_secret_request", "POST", "/api/secret-requests/{rid}/reject", "never", "Reject a secret request (owner only)"},
+	{"answer_token_request", "POST", "/api/secret-requests/{rid}/token", "never", "Create the bot of a new-bot request with the owner's token, checked with getMe (owner only)"},
 	{"ban_user_everywhere", "POST", "/api/users/{uid}/ban", "never", "Ban a user in all bots at once"},
 	{"enroll", "POST", "/enroll", "never", "Request a device certificate (gate.exe with its enrollment certificate)"},
 	{"set_full_backup_settings", "PUT", "/api/backups/settings", "never", "Set UTC schedule and retention count (owner only)"},

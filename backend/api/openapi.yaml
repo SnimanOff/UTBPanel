@@ -74,7 +74,7 @@ paths:
     post:
       operationId: create_bot
       tags: [bots]
-      summary: Add a bot; the token is checked with getMe and never returned
+      summary: Add a bot; the token is checked with getMe and never returned. Through MCP leave the token out — the owner is asked for it and the call returns {status waiting, id} for wait_action
       x-mcp: write
       requestBody:
         required: true
@@ -82,11 +82,12 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name, token]
+              required: [name]
               properties:
                 name: { type: string }
-                token: { type: string, writeOnly: true }
+                token: { type: string, writeOnly: true, description: panel UI only; never through MCP }
                 group_id: { type: integer }
+                hint: { type: string, description: MCP only — where the owner gets the token }
       responses:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Bot" } } } }
         "422": { $ref: "#/components/responses/Telegram" }
@@ -866,6 +867,67 @@ paths:
       x-mcp: read
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/SecretInfo" } } } } }
+  /api/bots/{id}/secret-requests:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: request_secret
+      tags: [settings]
+      summary: Ask the owner for a secret value; values never pass through MCP. Follow the state with wait_action or get_bot_config
+      x-mcp: write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, description: variable name, e.g. PAYMENT_KEY }
+                hint: { type: string, description: where the owner finds the value (up to 300 characters) }
+      responses:
+        "201": { description: Asked (or the same waiting request), content: { application/json: { schema: { $ref: "#/components/schemas/SecretRequest" } } } }
+    get:
+      operationId: list_secret_requests
+      tags: [settings]
+      summary: Secret requests of the bot from the last day with their states
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/SecretRequest" } } } } }
+  /api/secret-requests:
+    get:
+      operationId: list_waiting_secret_requests
+      tags: [settings]
+      summary: Waiting secret requests of all bots and new-bot tokens (owner only)
+      x-mcp: never
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/SecretRequest" } } } } }
+  /api/secret-requests/{rid}/reject:
+    parameters: [{ name: rid, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: reject_secret_request
+      tags: [settings]
+      summary: Reject a secret request (owner only)
+      x-mcp: never
+      responses:
+        "204": { description: Rejected }
+        "404": { description: No such request }
+        "409": { description: Already closed or expired }
+  /api/secret-requests/{rid}/token:
+    parameters: [{ name: rid, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: answer_token_request
+      tags: [settings]
+      summary: Create the bot of a new-bot request with the owner's token, checked with getMe (owner only)
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [token], properties: { token: { type: string, writeOnly: true } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object, properties: { bot_id: { type: integer }, username: { type: string } } } } } }
+        "409": { description: Already closed or expired }
+        "422": { $ref: "#/components/responses/Telegram" }
   /api/bots/{id}/secrets/{name}:
     parameters:
       - { $ref: "#/components/parameters/BotID" }
@@ -1814,6 +1876,24 @@ components:
       properties:
         document: { $ref: "#/components/schemas/BotConfigDocument" }
         yaml: { type: string }
+        secret_requests: { type: array, items: { $ref: "#/components/schemas/SecretRequest" } }
+    SecretRequest:
+      type: object
+      required: [id, name, hint, requested_by, created_at, expires_at, state]
+      properties:
+        id: { type: string }
+        bot_id: { type: integer, description: absent for the token of a new bot }
+        name: { type: string }
+        hint: { type: string }
+        bot_name: { type: string }
+        group_id: { type: integer }
+        requested_by: { type: string }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        state: { type: string, enum: [waiting, set, rejected, expired] }
+        created_bot: { type: integer }
+        decided_by: { type: string }
+        decided_at: { type: string, format: date-time }
     BotConfigEdit:
       type: object
       additionalProperties: false
