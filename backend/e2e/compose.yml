@@ -30,6 +30,8 @@ services:
     environment:
       TGPANEL_RUN_DIR: /run/tgpanel
       FAKETG: http://faketg:8081
+      # The checkout belongs to another user inside the container.
+      GOFLAGS: -buildvcs=false
     volumes:
       - .:/src
       - gomod:/go/pkg/mod
