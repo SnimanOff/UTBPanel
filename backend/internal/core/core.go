@@ -52,14 +52,22 @@ const (
 
 // Core is the running core process.
 type Core struct {
-	ConfigGuard    botconfig.Guard
-	Exports        *backup.Files
-	Imports        *backup.Imports
-	FullBackups    *backup.Files
-	backupMu       sync.Mutex
-	backupBusy     atomic.Bool
-	restoring      atomic.Bool
-	restart        chan app.RestartRequest
+	ConfigGuard botconfig.Guard
+	Exports     *backup.Files
+	Imports     *backup.Imports
+	FullBackups *backup.Files
+	backupMu    sync.Mutex
+	backupBusy  atomic.Bool
+	restoring   atomic.Bool
+	restart     chan app.RestartRequest
+	// handedOver is closed when the next core process took the bots.
+	handedOver chan struct{}
+	upgradeMu  sync.Mutex
+	// Control is the pipe to the supervisor (nil without one).
+	Control *os.File
+	// goneW is held until exit after a handover: the new process waits
+	// for its end.
+	goneW          *os.File
 	restoreUploads *backup.Staging
 	restoreMu      sync.Mutex
 	restorePlan    *restorePlan
@@ -154,8 +162,9 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		return nil, err
 	}
 	c := &Core{
-		restart: make(chan app.RestartRequest, 1),
-		Cfg:     cfg, Log: log, DB: db,
+		restart:    make(chan app.RestartRequest, 1),
+		handedOver: make(chan struct{}),
+		Cfg:        cfg, Log: log, DB: db,
 		W:       store.NewWriter(db, 10*time.Second, log),
 		Mux:     wire.NewMux(),
 		procs:   map[string]procstat.Stats{},
@@ -205,6 +214,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.OnClose(func(context.Context) error { return c.SDK.Close() })
 	c.Runner = c.newRunner()
 	c.registerLifecycle()
+	c.registerUpgrade()
 	c.Releases = c.newReleases()
 	c.registerReleases()
 	c.registerReleaseConfig()
@@ -410,6 +420,8 @@ func (c *Core) Run(ctx context.Context) error {
 	case <-ctx.Done():
 	case request := <-c.restart:
 		restarting = &request
+	case <-c.handedOver:
+		c.Log.Info("bots handed over to the new core process")
 	}
 	cancel()
 	c.Log.Info("core stopping")

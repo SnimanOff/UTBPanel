@@ -53,16 +53,7 @@ func (c *Core) newRunner() *runner.Runner {
 		},
 		Hooks: runner.Hooks{
 			Readiness: func(b runner.Bot) (bool, bool) { return c.SDK.Readiness(b.ID, b.Instance) },
-			Prepare: func(_ context.Context, b runner.Bot) error {
-				uid := -1
-				if runtime.GOOS == "linux" {
-					uid = os.Geteuid()
-					if uid == 0 {
-						uid = runner.UID(b.ID)
-					}
-				}
-				return c.SDK.Start(b.ID, b.Instance, uid)
-			},
+			Prepare:   func(_ context.Context, b runner.Bot) error { return c.prepareSDK(b) },
 			Output: func(l runner.Line) {
 				l.Text = c.Sec.Redact.Redact(l.Text)
 				if l.Stream != "core" {
@@ -103,12 +94,7 @@ func (c *Core) newRunner() *runner.Runner {
 					env[k] = v
 				}
 			},
-			Started: func(ctx context.Context, b runner.Bot) {
-				for _, fn := range c.onStarted {
-					fn(ctx, b)
-				}
-				go c.FlushDeferred(context.Background(), b.ID)
-			},
+			Started: c.botStarted,
 			Stopping: func(ctx context.Context, b runner.Bot) {
 				for _, fn := range c.onStopping {
 					fn(ctx, b)
@@ -116,6 +102,26 @@ func (c *Core) newRunner() *runner.Runner {
 			},
 		},
 	})
+}
+
+// prepareSDK opens the SDK socket of a bot instance before it starts.
+func (c *Core) prepareSDK(b runner.Bot) error {
+	uid := -1
+	if runtime.GOOS == "linux" {
+		uid = os.Geteuid()
+		if uid == 0 {
+			uid = runner.UID(b.ID)
+		}
+	}
+	return c.SDK.Start(b.ID, b.Instance, uid)
+}
+
+// botStarted runs once a bot is ready.
+func (c *Core) botStarted(ctx context.Context, b runner.Bot) {
+	for _, fn := range c.onStarted {
+		fn(ctx, b)
+	}
+	go c.FlushDeferred(context.Background(), b.ID)
 }
 
 func runnerError(err error) error {
