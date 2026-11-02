@@ -311,6 +311,8 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		p.DB.Close()
 		return nil, err
 	}
+	mcpServer.Groups = p.Bots.Groups
+	mcpServer.Register(p.API.Mux)
 	p.API.Mux.ServeMux.Handle("/mcp", mcpServer)
 	return p, nil
 }

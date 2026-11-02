@@ -10,6 +10,7 @@
   import Audit from './routes/Audit.svelte'
   import Server from './routes/Server.svelte'
   import Mini from './routes/Mini.svelte'
+  import AI from './routes/AI.svelte'
 
   const titles: Record<string, string> = {
     home: 'Главная',
@@ -40,6 +41,8 @@
       <Audit />
     {:else if r.name === 'server'}
       <Server />
+    {:else if r.name === 'ai'}
+      <AI />
     {:else}
       <Placeholder title={titles[r.name]} />
     {/if}

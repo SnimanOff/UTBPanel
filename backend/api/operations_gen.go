@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "4cc510a1a388a2fbd248d699d2b97e7e01bb6528b6d17b845d2abc42b43e6e82"
+const GeneratedHash = "898c9aa907c0ed4d8ccd169057b147ea8e47f7648d742c747077f5885677967d"
 
 // Op is one operation of the API.
 type Op struct {
@@ -65,6 +65,7 @@ var Ops = []Op{
 	{"list_groups", "GET", "/api/groups", "read", "Groups in order"},
 	{"list_keys", "GET", "/api/keys", "never", "Access keys"},
 	{"stream_live", "GET", "/api/live", "never", "Live metrics of the server and bots once a second (Server-Sent Events)"},
+	{"get_mcp_modes", "GET", "/api/mcp/groups", "never", "Get group MCP modes (owner only)"},
 	{"list_notifications", "GET", "/api/notifications", "read", "The notification feed, newest first (repeats glued with a count)"},
 	{"problem_bots", "GET", "/api/notifications/problems", "read", "Bots with an unread, unresolved error of the last day"},
 	{"notifications_stream", "GET", "/api/notifications/stream", "never", "Server-Sent Events of new notifications (interface and gate.exe)"},
@@ -134,5 +135,6 @@ var Ops = []Op{
 	{"put_settings_section", "PUT", "/api/bots/{id}/settings/{section}", "confirm", "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates)"},
 	{"set_token", "PUT", "/api/bots/{id}/token", "never", "Replace the token (checked with getMe). Neural networks use request_secret instead"},
 	{"order_groups", "PUT", "/api/groups/order", "never", "Reorder groups"},
+	{"set_mcp_mode", "PUT", "/api/mcp/groups/{gid}", "never", "Change a group MCP mode through the owner's panel (never MCP)"},
 	{"set_panel_settings", "PUT", "/api/settings", "never", "Change panel settings (owner only)"},
 }

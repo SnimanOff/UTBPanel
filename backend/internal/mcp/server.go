@@ -21,12 +21,14 @@ import (
 	spec "github.com/SnimanOff/UTBPanel/backend/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
+	"github.com/SnimanOff/UTBPanel/backend/internal/bots"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type Service struct {
 	API     http.Handler
 	Audit   *audit.Log
+	Groups  *bots.Groups
 	handler http.Handler
 }
 
@@ -95,8 +97,25 @@ func (s *Service) call(ctx context.Context, op operation, raw json.RawMessage) *
 	if caller.Source != api.SourceMCP || caller.Serial == "" {
 		return s.denied(ctx, op, args, "forbidden: device identity is required")
 	}
-	if op.MCP != spec.Read {
-		return s.denied(ctx, op, args, "forbidden: MCP is currently read-only")
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	if s.Groups != nil {
+		var unlock func()
+		var err error
+		ctx, unlock, err = s.Groups.Guard.Lock(ctx)
+		if err != nil {
+			return s.denied(ctx, op, args, "unavailable: permission check timed out")
+		}
+		defer unlock()
+	}
+	if err := s.authorize(ctx, op, args); err != nil {
+		return s.denied(ctx, op, args, err.Error())
+	}
+	if op.MCP == spec.Confirm {
+		return s.denied(ctx, op, args, "confirmation_required: требуется подтверждение владельца")
+	}
+	if op.ID == "create_bot" {
+		return s.denied(ctx, op, args, "secret_required: BOT_TOKEN должен ввести владелец через запрос секрета")
 	}
 	path := op.Path
 	query := url.Values{}
@@ -159,8 +178,6 @@ func (s *Service) call(ctx context.Context, op operation, raw json.RawMessage) *
 			body = bytes.NewReader(data)
 		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
 	r, err := http.NewRequestWithContext(ctx, op.Method, "http://127.0.0.1:47100"+path, body)
 	if err != nil {
 		return s.denied(ctx, op, args, "invalid_arguments: invalid request")
@@ -186,6 +203,11 @@ func (s *Service) call(ctx context.Context, op operation, raw json.RawMessage) *
 		}
 	}
 	structured := map[string]any{"result": value}
+	value, err = s.filter(ctx, op, value)
+	if err != nil {
+		return s.denied(ctx, op, args, "unavailable: permissions could not be checked")
+	}
+	structured["result"] = value
 	text, err := json.Marshal(structured)
 	if err != nil {
 		return toolError("invalid_response")

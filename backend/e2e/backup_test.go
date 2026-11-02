@@ -26,8 +26,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
 	"github.com/SnimanOff/UTBPanel/backend/internal/backup"
 	"github.com/SnimanOff/UTBPanel/backend/internal/botconfig"
+	"github.com/SnimanOff/UTBPanel/backend/internal/bots"
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
 	"github.com/SnimanOff/UTBPanel/backend/internal/core"
 	"github.com/SnimanOff/UTBPanel/backend/internal/dbgate"
@@ -37,6 +39,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
 	"github.com/SnimanOff/UTBPanel/backend/internal/secrets"
 	"github.com/SnimanOff/UTBPanel/backend/internal/sources"
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -104,6 +107,7 @@ func TestBackupAndTransfer(t *testing.T) {
 		t.Fatal("configuration was not transferred", document)
 	}
 	checkBackupData(t, ctx, target.core.DataDir, imported.Bot.ID, "replacement-secret", target.master)
+	checkMCPModes(t, ctx, source)
 
 	var full backup.File
 	source.json(t, "POST", "/api/backups", map[string]bool{"files": true}, 201, &full)
@@ -137,6 +141,67 @@ func TestBackupAndTransfer(t *testing.T) {
 	if response, err := clean.client.Get(clean.url + "/api/ping"); err == nil {
 		response.Body.Close()
 		t.Fatal("discarded clean-installation CA is still accepted")
+	}
+}
+
+type mcpDeviceTransport struct{ base http.RoundTripper }
+
+func (tr mcpDeviceTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header = r.Header.Clone()
+	r.Header.Set("X-Panel", "1")
+	r.Header.Set("X-Panel-Source", "mcp")
+	return tr.base.RoundTrip(r)
+}
+func checkMCPModes(t *testing.T, ctx context.Context, installation *backupInstallation) {
+	t.Helper()
+	var group bots.Group
+	installation.json(t, "POST", "/api/groups", map[string]string{"name": "MCP test group"}, 201, &group)
+	installation.json(t, "PUT", "/api/bots/7/group", map[string]int64{"group_id": group.ID}, 200, nil)
+	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "e2e", Version: "1"}, nil)
+	session, err := client.Connect(ctx, &mcpsdk.StreamableClientTransport{Endpoint: installation.url + "/mcp", HTTPClient: &http.Client{Transport: mcpDeviceTransport{installation.client.Transport}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	invoke := func(name string, args any, wantError bool) *mcpsdk.CallToolResult {
+		t.Helper()
+		result, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: name, Arguments: args})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.IsError != wantError {
+			t.Fatalf("%s: %+v", name, result)
+		}
+		return result
+	}
+	args := map[string]any{"id": 7, "body": map[string]string{"name": "MCP renamed"}}
+	invoke("get_bot", map[string]any{"id": 7}, false)
+	invoke("rename_bot", args, true)
+	setMode := func(mode string) {
+		t.Helper()
+		installation.json(t, "PUT", fmt.Sprintf("/api/mcp/groups/%d", group.ID), map[string]string{"mode": mode}, 204, nil)
+	}
+	setMode("full")
+	invoke("rename_bot", args, false)
+	setMode("read")
+	invoke("rename_bot", args, true)
+	setMode("off")
+	invoke("get_bot", map[string]any{"id": 7}, true)
+	list := invoke("list_bots", map[string]any{}, false)
+	if strings.Contains(list.Content[0].(*mcpsdk.TextContent).Text, `"id":7`) {
+		t.Fatal("disabled group leaked through the list")
+	}
+	setMode("read")
+	var entries []audit.Entry
+	installation.json(t, "GET", "/api/audit?source=mcp", nil, 200, &entries)
+	if len(entries) < 6 {
+		t.Fatal("MCP calls were not recorded by the real panel", entries)
+	}
+	for _, entry := range entries {
+		if entry.Source != "mcp" || entry.Key != "transfer owner" {
+			t.Fatal("MCP call lost device identity", entry)
+		}
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/SnimanOff/UTBPanel/backend/internal/botconfig"
 	"strings"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
@@ -25,7 +26,8 @@ type Meta struct {
 
 // Groups keeps groups and bot order in panel.db.
 type Groups struct {
-	DB *store.DB
+	DB    *store.DB
+	Guard botconfig.Guard
 }
 
 // ErrGroupName is returned for empty or duplicate names.
@@ -83,6 +85,11 @@ func (g *Groups) Rename(ctx context.Context, id int64, name string) error {
 
 // Delete removes a group; its bots move to "No group".
 func (g *Groups) Delete(ctx context.Context, id int64) error {
+	ctx, unlock, err := g.Guard.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	return g.DB.Tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `UPDATE bot_meta SET group_id = NULL WHERE group_id = ?`, id); err != nil {
 			return err
@@ -139,6 +146,11 @@ func nullGroup(id int64) any {
 // Place puts the bots ids into a group (0 = none) in this order. Bots that
 // came from another group are moved.
 func (g *Groups) Place(ctx context.Context, groupID int64, ids []int64) error {
+	ctx, unlock, err := g.Guard.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	return g.DB.Tx(ctx, func(tx *sql.Tx) error {
 		if groupID > 0 {
 			var n int
@@ -159,6 +171,11 @@ func (g *Groups) Place(ctx context.Context, groupID int64, ids []int64) error {
 
 // SetGroup moves one bot to the end of a group.
 func (g *Groups) SetGroup(ctx context.Context, botID, groupID int64) error {
+	ctx, unlock, err := g.Guard.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	return g.DB.Tx(ctx, func(tx *sql.Tx) error {
 		if groupID > 0 {
 			var n int
@@ -174,8 +191,33 @@ func (g *Groups) SetGroup(ctx context.Context, botID, groupID int64) error {
 	})
 }
 
+func (g *Groups) SetMCPMode(ctx context.Context, id int64, mode string) (string, error) {
+	if mode != "off" && mode != "read" && mode != "full" {
+		return "", errors.New("invalid MCP mode")
+	}
+	ctx, unlock, err := g.Guard.Lock(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	var previous string
+	err = g.DB.Tx(ctx, func(tx *sql.Tx) error {
+		if err := tx.QueryRowContext(ctx, `SELECT mcp_mode FROM groups WHERE id=?`, id).Scan(&previous); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `UPDATE groups SET mcp_mode=? WHERE id=?`, mode, id)
+		return err
+	})
+	return previous, err
+}
+
 // Forget removes a deleted bot.
 func (g *Groups) Forget(ctx context.Context, botID int64) error {
-	_, err := g.DB.W.ExecContext(ctx, `DELETE FROM bot_meta WHERE bot_id = ?`, botID)
+	ctx, unlock, err := g.Guard.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	_, err = g.DB.W.ExecContext(ctx, `DELETE FROM bot_meta WHERE bot_id = ?`, botID)
 	return err
 }

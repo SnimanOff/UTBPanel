@@ -174,6 +174,13 @@ func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) create(w http.ResponseWriter, r *http.Request) {
+	ctx, unlock, err := s.Groups.Guard.Lock(r.Context())
+	if err != nil {
+		WriteCoreError(w, err)
+		return
+	}
+	defer unlock()
+	r = r.WithContext(ctx)
 	var in struct {
 		Name    string `json:"name"`
 		Token   string `json:"token"`
@@ -234,6 +241,13 @@ func (s *Service) rename(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) delete(w http.ResponseWriter, r *http.Request) {
+	ctx, unlock, err := s.Groups.Guard.Lock(r.Context())
+	if err != nil {
+		WriteCoreError(w, err)
+		return
+	}
+	defer unlock()
+	r = r.WithContext(ctx)
 	id, ok := pathID(w, r)
 	if !ok {
 		return

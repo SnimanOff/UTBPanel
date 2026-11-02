@@ -1352,6 +1352,36 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /api/mcp/groups:
+    get:
+      operationId: get_mcp_modes
+      tags: [groups]
+      summary: Get group MCP modes (owner only)
+      x-mcp: never
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Group" } } } } }
+  /api/mcp/groups/{gid}:
+    parameters: [{ name: gid, in: path, required: true, schema: { type: integer } }]
+    put:
+      operationId: set_mcp_mode
+      tags: [groups]
+      summary: Change a group MCP mode through the owner's panel (never MCP)
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [mode]
+              properties:
+                mode: { type: string, enum: [off, read, full] }
+      responses:
+        "204": { description: Saved }
+        "403": { description: Owner UI only }
+        "404": { description: Group not found }
+
   /api/server/metrics:
     get:
       operationId: get_server_metrics

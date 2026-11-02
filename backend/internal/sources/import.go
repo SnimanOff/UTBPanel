@@ -257,6 +257,15 @@ func (e *Exports) applyImport(w http.ResponseWriter, r *http.Request) {
 		request.Secrets[name] = backup.SecretInput{Kind: value.Kind, Value: raw}
 	}
 	out := Imported{Warnings: []string{}}
+	if e.Groups != nil {
+		ctx, unlock, err := e.Groups.Guard.Lock(r.Context())
+		if err != nil {
+			bots.WriteCoreError(w, err)
+			return
+		}
+		defer unlock()
+		r = r.WithContext(ctx)
+	}
 	if err := e.Core.Call(r.Context(), "imports.apply", request, &out.Bot); err != nil {
 		bots.WriteCoreError(w, err)
 		return
