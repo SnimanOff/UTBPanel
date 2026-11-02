@@ -42,4 +42,11 @@ func TestReadOnlyConnectionNotText(t *testing.T) {
 	if string(before) != string(after) {
 		t.Fatal("the database file changed")
 	}
+	// The schema is the bot's: its views and triggers are not trusted.
+	for _, write := range []bool{false, true} {
+		r, err := b.Query(ctx, 1, `PRAGMA trusted_schema`, write)
+		if err != nil || len(r.Rows) != 1 || r.Rows[0][0] != int64(0) {
+			t.Fatalf("trusted_schema (write=%v): %+v %v", write, r.Rows, err)
+		}
+	}
 }

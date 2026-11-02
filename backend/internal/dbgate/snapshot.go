@@ -20,7 +20,7 @@ func Snapshot(ctx context.Context, src, dst string, uid int) error {
 		} else if err != nil {
 			return err
 		}
-		q := url.Values{"mode": {"ro"}, "_pragma": {"busy_timeout(10000)"}}
+		q := url.Values{"mode": {"ro"}, "_pragma": {"busy_timeout(10000)", "trusted_schema(0)"}}
 		db, err := sql.Open("sqlite", sqliteURI(src, q))
 		if err != nil {
 			return err

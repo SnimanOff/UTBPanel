@@ -51,6 +51,9 @@ func (b *Browser) uid(botID int64) int {
 func dsn(path string, write bool) string {
 	q := url.Values{}
 	q.Add("_pragma", "busy_timeout(5000)")
+	// The bot writes the schema: its views and triggers run no functions
+	// that are not harmless when the core reads the file.
+	q.Add("_pragma", "trusted_schema(0)")
 	if !write {
 		q.Set("mode", "ro")
 		q.Add("_pragma", "query_only(1)")
