@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
@@ -24,14 +25,23 @@ import (
 )
 
 type FullBackups struct {
-	Core   *wire.Client
-	DB     *store.DB
-	W      *store.Writer
-	PKI    string
-	Extras *backup.Files
+	Mu      *sync.Mutex
+	Blocked func() bool
+	Core    *wire.Client
+	DB      *store.DB
+	W       *store.Writer
+	PKI     string
+	Extras  *backup.Files
 }
 
 func (f *FullBackups) prepare(ctx context.Context) (backup.PanelPart, error) {
+	if f.Mu != nil {
+		f.Mu.Lock()
+		defer f.Mu.Unlock()
+	}
+	if f.Blocked != nil && f.Blocked() {
+		return backup.PanelPart{}, wire.Errorf(wire.CodeUnavailable, "выполняется восстановление")
+	}
 	if err := f.W.Now(ctx, func(*sql.Tx) error { return nil }); err != nil {
 		return backup.PanelPart{}, err
 	}

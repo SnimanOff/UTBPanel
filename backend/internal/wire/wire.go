@@ -21,6 +21,7 @@ type (
 	Stream        = sw.Stream
 	StreamOptions = sw.StreamOptions
 	Sender        = sw.Sender
+	AfterReply    = sw.AfterReply
 )
 
 var (

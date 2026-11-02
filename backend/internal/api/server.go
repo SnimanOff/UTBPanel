@@ -174,16 +174,20 @@ func (s *Server) ListenAndServe(ctx context.Context, addr, publicAddr string) er
 		IdleTimeout:       5 * time.Minute,
 		ErrorLog:          slog.NewLogLogger(s.Log.Handler(), slog.LevelDebug),
 	}
+	stopped := make(chan struct{})
 	go func() {
+		defer close(stopped)
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		srv.Shutdown(sctx)
+		srv.Close()
 	}()
 	s.Log.Info("mtls listener started", "addr", addr)
 	if err := srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+	<-stopped
 	return nil
 }
 

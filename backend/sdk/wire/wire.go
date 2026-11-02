@@ -42,6 +42,13 @@ const (
 // Raw is an encoded CBOR value.
 type Raw = cbor.RawMessage
 
+// AfterReply runs a local action only after the successful response has been
+// written. Restart commands use it to acknowledge before closing the socket.
+type AfterReply struct {
+	Value any
+	Run   func()
+}
+
 var (
 	encMode, _ = func() (cbor.EncMode, error) {
 		o := cbor.CoreDetEncOptions()
@@ -384,6 +391,16 @@ func (c *Conn) Call(ctx context.Context, method string, in, out any) error {
 		c.writeFrame(fCancel, id, nil)
 		return ctx.Err()
 	case <-c.closed:
+		select {
+		case resp, ok := <-ch:
+			if ok {
+				if resp.Err != nil {
+					return resp.Err
+				}
+				return Unmarshal(resp.Body, out)
+			}
+		default:
+		}
 		return ErrClosed
 	}
 }
@@ -657,6 +674,7 @@ func (c *Conn) serve(id uint32, req request) {
 			return
 		}
 		var resp response
+		var after func()
 		func() {
 			defer func() {
 				if p := recover(); p != nil {
@@ -676,6 +694,10 @@ func (c *Conn) serve(id uint32, req request) {
 				resp.Err = toError(err)
 				return
 			}
+			if reply, ok := out.(AfterReply); ok {
+				out = reply.Value
+				after = reply.Run
+			}
 			b, err := Marshal(out)
 			if err != nil {
 				resp.Err = toError(err)
@@ -686,6 +708,8 @@ func (c *Conn) serve(id uint32, req request) {
 		if err := c.send(fResponse, id, resp); err != nil && !errors.Is(err, ErrClosed) {
 			// A response too big for one frame: tell the caller instead.
 			c.send(fResponse, id, response{Err: toError(err)})
+		} else if err == nil && resp.Err == nil && after != nil {
+			func() { defer c.recoverPanic(req.Method + " after reply"); after() }()
 		}
 	}()
 }

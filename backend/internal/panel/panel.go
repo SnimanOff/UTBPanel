@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/alerts"
@@ -47,21 +49,27 @@ const (
 
 // Panel is the running panel process.
 type Panel struct {
-	Cfg      config.Panel
-	Log      *slog.Logger
-	DB       *store.DB
-	W        *store.Writer
-	CoreMux  *wire.Mux
-	Core     *wire.Client
-	EdgeMux  *wire.Mux
-	EdgeSrv  *wire.Server
-	Events   *events.Sink
-	CA       *pki.CA
-	API      *api.Server
-	Bots     *bots.Service
-	Audit    *audit.Log
-	Metrics  *metrics.Storage
-	Settings *settings.Store
+	restart         chan app.RestartRequest
+	restoring       atomic.Bool
+	restoreUploads  *backup.Staging
+	restoreMu       sync.Mutex
+	restorePrepared map[string]string
+	backupPartsMu   sync.Mutex
+	Cfg             config.Panel
+	Log             *slog.Logger
+	DB              *store.DB
+	W               *store.Writer
+	CoreMux         *wire.Mux
+	Core            *wire.Client
+	EdgeMux         *wire.Mux
+	EdgeSrv         *wire.Server
+	Events          *events.Sink
+	CA              *pki.CA
+	API             *api.Server
+	Bots            *bots.Service
+	Audit           *audit.Log
+	Metrics         *metrics.Storage
+	Settings        *settings.Store
 
 	closers []func(context.Context) error
 	runners []func(context.Context)
@@ -75,6 +83,9 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 			return nil, err
 		}
 	}
+	if err := backup.RecoverInstall(cfg.DataDir); err != nil {
+		return nil, err
+	}
 	db, err := store.Open(ctx, filepath.Join(cfg.DataDir, "panel.db"), migrations.Panel())
 	if err != nil {
 		return nil, err
@@ -85,7 +96,8 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		return nil, err
 	}
 	p := &Panel{
-		Cfg: cfg, Log: log, DB: db,
+		restart: make(chan app.RestartRequest, 1),
+		Cfg:     cfg, Log: log, DB: db,
 		W:       store.NewWriter(db, 10*time.Second, log),
 		CoreMux: wire.NewMux(),
 		EdgeMux: wire.NewMux(),
@@ -197,7 +209,8 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	documents.Register(p.API.Mux)
 	exportFiles := &backup.Files{Dir: filepath.Join(cfg.DataDir, "export-temp")}
 	(&sources.Exports{Core: p.Core, Documents: documents, Metrics: p.Metrics, Extras: exportFiles, Groups: p.Bots.Groups}).Register(p.API.Mux, p.CoreMux)
-	(&sources.FullBackups{Core: p.Core, DB: p.DB, W: p.W, PKI: filepath.Join(cfg.DataDir, "pki"), Extras: exportFiles}).Register(p.API.Mux, p.CoreMux)
+	(&sources.FullBackups{Core: p.Core, DB: p.DB, W: p.W, PKI: filepath.Join(cfg.DataDir, "pki"), Extras: exportFiles, Mu: &p.backupPartsMu, Blocked: p.restoring.Load}).Register(p.API.Mux, p.CoreMux)
+	p.registerRestore()
 	p.Go(exportFiles.Run)
 	rules.Register(p.API.Mux)
 	p.Go(rules.Run)
@@ -317,20 +330,30 @@ func (p *Panel) Go(fn func(context.Context)) { p.runners = append(p.runners, fn)
 
 // Run works until ctx is done.
 func (p *Panel) Run(ctx context.Context) error {
+	parent := ctx
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	clientCtx, stopClient := context.WithCancel(parent)
+	defer stopClient()
+	var listeners sync.WaitGroup
 	ln, err := wire.Listen(wire.PanelSock(p.Cfg.RunDir), 0o660, p.Cfg.SocketGID)
 	if err != nil {
 		return fmt.Errorf("panel socket: %w", err)
 	}
 	safe.Go(p.Log, "panel socket", func() { p.EdgeSrv.Serve(ln) })
-	safe.Go(p.Log, "core client", func() { p.Core.Run(ctx) })
+	safe.Go(p.Log, "core client", func() { p.Core.Run(clientCtx) })
 	safe.Go(p.Log, "stats", func() { app.ReportStats(ctx, p.Core, "panel", 10*time.Second) })
+	listeners.Add(1)
 	safe.Go(p.Log, "mtls listener", func() {
+		defer listeners.Done()
 		if err := p.API.ListenAndServe(ctx, p.Cfg.Listen, p.Cfg.PublicAddr); err != nil {
 			p.Log.Error("mtls listener stopped", "err", err)
 		}
 	})
 	if p.Cfg.Dev {
+		listeners.Add(1)
 		safe.Go(p.Log, "dev listener", func() {
+			defer listeners.Done()
 			if err := p.API.ListenDev(ctx, p.Cfg.DevAddr); err != nil {
 				p.Log.Error("dev listener stopped", "err", err)
 			}
@@ -340,14 +363,45 @@ func (p *Panel) Run(ctx context.Context) error {
 		safe.Go(p.Log, "panel task", func() { fn(ctx) })
 	}
 	p.Log.Info("panel started", "version", buildinfo.Version)
-	<-ctx.Done()
+	var restarting *app.RestartRequest
+	select {
+	case <-ctx.Done():
+	case request := <-p.restart:
+		restarting = &request
+	}
+	cancel()
 	p.Log.Info("panel stopping")
 	ln.Close()
+	for _, conn := range p.EdgeSrv.Conns() {
+		conn.Close()
+	}
+	listeners.Wait()
+	if restarting != nil {
+		p.backupPartsMu.Lock()
+		defer p.backupPartsMu.Unlock()
+	}
 	steps := make([]func(context.Context) error, 0, len(p.closers)+1)
 	for i := len(p.closers) - 1; i >= 0; i-- {
 		steps = append(steps, p.closers[i])
 	}
 	steps = append(steps, func(context.Context) error { p.W.Close(); return p.DB.Close() })
 	app.Shutdown(p.Log, 15*time.Second, steps...)
+	if restarting != nil {
+		err := restarting.Apply()
+		if restarting.Done != nil {
+			restarting.Done <- err
+		}
+		if restarting.Replied != nil {
+			select {
+			case <-restarting.Replied:
+			case <-parent.Done():
+			case <-time.After(5 * time.Second):
+			}
+		}
+		if err != nil {
+			p.Log.Error("panel restore failed", "err", err)
+		}
+		return app.ErrRestart
+	}
 	return nil
 }

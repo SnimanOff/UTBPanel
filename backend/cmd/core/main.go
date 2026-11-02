@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log/slog"
 
@@ -23,6 +24,7 @@ func main() {
 		{Name: "bots restart", Usage: "<name>", Run: botsOp("bots restart")},
 		{Name: "masterkey export", Usage: "> master.key", Run: masterkeyExport},
 		{Name: "masterkey import", Usage: "< master.key (only while there are no bots)", Run: masterkeyImport},
+		{Name: "backup restore", Usage: "< archive.backup (clean installation only)", Run: backupRestore},
 	})
 }
 
@@ -37,10 +39,16 @@ func serve(ctx context.Context, args []string) error {
 		return err
 	}
 	log := app.Logger(cfg.Common, "core")
-	p, err := core.New(ctx, cfg, log)
-	if err != nil {
+	for {
+		p, err := core.New(ctx, cfg, log)
+		if err != nil {
+			return err
+		}
+		slog.SetDefault(p.Log)
+		err = p.Run(ctx)
+		if errors.Is(err, app.ErrRestart) && ctx.Err() == nil {
+			continue
+		}
 		return err
 	}
-	slog.SetDefault(p.Log) // redacted
-	return p.Run(ctx)
 }

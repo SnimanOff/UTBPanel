@@ -177,6 +177,9 @@ func (c *Core) CreateBot(ctx context.Context, in CreateBot) (Bot, error) {
 		return Bot{}, err
 	}
 	defer unlock()
+	if c.restoring.Load() {
+		return Bot{}, wire.Errorf(wire.CodeUnavailable, "выполняется восстановление")
+	}
 	if err := validBotName(in.Name); err != nil {
 		return Bot{}, err
 	}

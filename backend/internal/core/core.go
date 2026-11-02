@@ -52,57 +52,64 @@ const (
 
 // Core is the running core process.
 type Core struct {
-	ConfigGuard botconfig.Guard
-	Exports     *backup.Files
-	Imports     *backup.Imports
-	FullBackups *backup.Files
-	backupMu    sync.Mutex
-	backupBusy  atomic.Bool
-	Cfg         config.Core
-	Log         *slog.Logger
-	DB          *store.DB
-	W           *store.Writer
-	Mux         *wire.Mux
-	Srv         *wire.Server
-	Ev          *events.Bus
-	Sec         *secrets.Store
-	TG          *telegram.Client
-	GH          *github.Client
-	Runner      *runner.Runner
-	SDK         *sdkhost.Host
-	SDKMetrics  *sdkhost.Metrics
-	SDKTasks    *sdkhost.Tasks
-	SDKFlags    *sdkhost.Flags
-	Logs        *logs.Store
-	Journal     *journal.Journal
-	Releases    *deploy.Store
-	Pipe        *ingress.Pipeline
-	Users       *users.Tracker
-	Bans        *users.Bans
-	Closed      *users.Closed
-	Flood       *users.Antiflood
-	Maint       *maintenance.Service
-	Bcast       *broadcast.Service
-	watch       watches
-	canaries    canaryRoutes
-	parsers     panicParsers
-	crashSet    crashSetting
-	patterns    *logs.Matcher
-	rules       deploy.Rules // autorollback; zero means deploy.DefaultRules
-	warnHook    func(ctx context.Context, botID int64, text string) error
-	Count       *counters.Counters
-	Host        *counters.HostSampler
-	Live        *counters.Live
-	DBG         *dbgate.Browser
-	SQL         *dbgate.Gateway
-	DBBackups   *dbgate.Backups
-	DBChecks    *dbgate.Checks
-	Proxy       *tgproxy.Proxy
-	bundle      string
-	apiW        apiWatch
-	svc         services
-	hostMu      sync.Mutex
-	hostLast    counters.Server
+	ConfigGuard    botconfig.Guard
+	Exports        *backup.Files
+	Imports        *backup.Imports
+	FullBackups    *backup.Files
+	backupMu       sync.Mutex
+	backupBusy     atomic.Bool
+	restoring      atomic.Bool
+	restart        chan app.RestartRequest
+	restoreUploads *backup.Staging
+	restoreMu      sync.Mutex
+	restorePlan    *restorePlan
+	restoreStartMu sync.Mutex
+	runCtx         context.Context
+	Cfg            config.Core
+	Log            *slog.Logger
+	DB             *store.DB
+	W              *store.Writer
+	Mux            *wire.Mux
+	Srv            *wire.Server
+	Ev             *events.Bus
+	Sec            *secrets.Store
+	TG             *telegram.Client
+	GH             *github.Client
+	Runner         *runner.Runner
+	SDK            *sdkhost.Host
+	SDKMetrics     *sdkhost.Metrics
+	SDKTasks       *sdkhost.Tasks
+	SDKFlags       *sdkhost.Flags
+	Logs           *logs.Store
+	Journal        *journal.Journal
+	Releases       *deploy.Store
+	Pipe           *ingress.Pipeline
+	Users          *users.Tracker
+	Bans           *users.Bans
+	Closed         *users.Closed
+	Flood          *users.Antiflood
+	Maint          *maintenance.Service
+	Bcast          *broadcast.Service
+	watch          watches
+	canaries       canaryRoutes
+	parsers        panicParsers
+	crashSet       crashSetting
+	patterns       *logs.Matcher
+	rules          deploy.Rules // autorollback; zero means deploy.DefaultRules
+	warnHook       func(ctx context.Context, botID int64, text string) error
+	Count          *counters.Counters
+	Host           *counters.HostSampler
+	Live           *counters.Live
+	DBG            *dbgate.Browser
+	SQL            *dbgate.Gateway
+	DBBackups      *dbgate.Backups
+	DBChecks       *dbgate.Checks
+	Proxy          *tgproxy.Proxy
+	bundle         string
+	apiW           apiWatch
+	svc            services
+	hostMu         sync.Mutex
+	hostLast       counters.Server
 
 	mu           sync.Mutex
 	procs        map[string]procstat.Stats
@@ -128,6 +135,9 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 			return nil, err
 		}
 	}
+	if err := backup.RecoverInstall(cfg.DataDir); err != nil {
+		return nil, err
+	}
 	key, err := secrets.LoadMasterKey(cfg.KeysDir)
 	if err != nil {
 		return nil, err
@@ -144,7 +154,8 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		return nil, err
 	}
 	c := &Core{
-		Cfg: cfg, Log: log, DB: db,
+		restart: make(chan app.RestartRequest, 1),
+		Cfg:     cfg, Log: log, DB: db,
 		W:       store.NewWriter(db, 10*time.Second, log),
 		Mux:     wire.NewMux(),
 		procs:   map[string]procstat.Stats{},
@@ -273,6 +284,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerExports()
 	c.registerImports()
 	c.registerFullBackups()
+	c.registerRestore()
 	c.DBChecks = c.newChecks()
 	c.registerDBBackups()
 	c.Live = &counters.Live{
@@ -340,15 +352,23 @@ func (c *Core) OnClose(fn func(context.Context) error) { c.closers = append(c.cl
 
 // Run serves the core socket until ctx is done, then stops gracefully.
 func (c *Core) Run(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	c.runCtx = ctx
 	ln, err := wire.Listen(wire.CoreSock(c.Cfg.RunDir), 0o660, c.Cfg.SocketGID)
 	if err != nil {
 		return fmt.Errorf("core socket: %w", err)
 	}
 	safe.Go(c.Log, "core socket", func() { c.Srv.Serve(ln) })
 	safe.Go(c.Log, "events", func() { c.Ev.Run(ctx) })
-	safe.Go(c.Log, "restore bots", func() { c.Runner.Restore(ctx) })
+	safe.Go(c.Log, "restore bots", func() {
+		if c.backupValue(ctx, restoreWaitEdgeKey) == "" {
+			c.Runner.Restore(ctx)
+		}
+	})
 	safe.Go(c.Log, "prune exports", func() { c.Exports.Run(ctx) })
 	safe.Go(c.Log, "prune imports", func() { c.Imports.Run(ctx) })
+	safe.Go(c.Log, "prune restores", func() { c.restoreUploads.Run(ctx) })
 	safe.Go(c.Log, "scheduled full backups", func() { c.runFullBackups(ctx) })
 	safe.Go(c.Log, "SDK tasks", func() {
 		if err := c.SDKTasks.Run(ctx); err != nil {
@@ -383,7 +403,13 @@ func (c *Core) Run(ctx context.Context) error {
 		}
 	})
 	c.Log.Info("core started", "version", buildinfo.Version, "socket", wire.CoreSock(c.Cfg.RunDir))
-	<-ctx.Done()
+	var restarting *app.RestartRequest
+	select {
+	case <-ctx.Done():
+	case request := <-c.restart:
+		restarting = &request
+	}
+	cancel()
 	c.Log.Info("core stopping")
 	ln.Close()
 	steps := make([]func(context.Context) error, 0, len(c.closers)+2)
@@ -396,6 +422,9 @@ func (c *Core) Run(ctx context.Context) error {
 		func(context.Context) error { c.Runner.Shutdown(); c.Logs.Close(); return nil },
 		func(context.Context) error {
 			for _, conn := range c.Srv.Conns() {
+				if restarting != nil && conn.Proto() == wire.ProtoCorePanel {
+					continue
+				}
 				conn.Close()
 			}
 			return nil
@@ -403,6 +432,16 @@ func (c *Core) Run(ctx context.Context) error {
 		func(context.Context) error { c.W.Close(); return c.DB.Close() },
 	)
 	app.Shutdown(c.Log, 30*time.Second, steps...)
+	if restarting != nil {
+		err := restarting.Apply()
+		if err != nil {
+			c.Log.Error("restore install failed", "err", err)
+		}
+		for _, conn := range c.Srv.Conns() {
+			conn.Close()
+		}
+		return app.ErrRestart
+	}
 	return nil
 }
 

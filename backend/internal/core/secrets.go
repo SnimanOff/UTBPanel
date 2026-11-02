@@ -84,7 +84,7 @@ func (c *Core) registerSecrets() {
 	}))
 	// Only from the core CLI: core masterkey import.
 	c.Mux.Handle("masterkey.import", wire.Func(func(ctx context.Context, conn *wire.Conn, key []byte) (struct{}, error) {
-		if conn.Proto() != wire.ProtoCoreCLI {
+		if conn.Proto() != wire.ProtoCoreCLI || !localCLI(conn) {
 			return struct{}{}, wire.Errorf("forbidden", "master key import is available only from the core CLI")
 		}
 		return struct{}{}, c.Journal.Do(ctx, journal.Actor{Source: journal.SourceCLI, Name: "ssh"}, "masterkey.import", 0, nil, func() error {
@@ -101,6 +101,14 @@ func HasBots(ctx context.Context, db *sql.DB) (bool, error) {
 }
 
 func (c *Core) importMasterKey(ctx context.Context, key []byte) error {
+	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if c.restoring.Load() {
+		return wire.Errorf(wire.CodeUnavailable, "выполняется восстановление")
+	}
 	has, err := HasBots(ctx, c.DB.R)
 	if err != nil {
 		return err

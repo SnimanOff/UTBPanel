@@ -176,6 +176,9 @@ func (r *Runner) Restore(ctx context.Context) {
 				return
 			}
 			if err := r.Start(ctx, b); err != nil {
+				if err == ErrRunning {
+					return
+				}
 				r.log.Warn("bot did not start after core restart", "bot", id, "err", err)
 				r.setState(ctx, id, Crashed)
 				// Treat it as a crash so the usual restarts apply.

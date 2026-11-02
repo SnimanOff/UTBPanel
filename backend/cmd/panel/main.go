@@ -42,9 +42,15 @@ func serve(ctx context.Context, args []string) error {
 	}
 	cfg.Dev = *dev
 	log := app.Logger(cfg.Common, "panel")
-	p, err := panel.New(ctx, cfg, log)
-	if err != nil {
+	for {
+		p, err := panel.New(ctx, cfg, log)
+		if err != nil {
+			return err
+		}
+		err = p.Run(ctx)
+		if errors.Is(err, app.ErrRestart) && ctx.Err() == nil {
+			continue
+		}
 		return err
 	}
-	return p.Run(ctx)
 }

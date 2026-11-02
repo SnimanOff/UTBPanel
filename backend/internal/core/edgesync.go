@@ -114,7 +114,11 @@ func (c *Core) registerEdgeSync() {
 		_, err := c.DB.W.ExecContext(ctx, `INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
 			kvEdgeCert, string(pem))
 		// The edge just connected: give it the current settings.
-		go c.PushEdge(context.Background())
+		if err == nil && c.backupValue(ctx, restoreWaitEdgeKey) != "" {
+			go c.resumeRestoredBots()
+		} else {
+			go c.PushEdge(context.Background())
+		}
 		return struct{}{}, err
 	}))
 }

@@ -28,6 +28,22 @@ func sockPath(t *testing.T) string {
 
 var testHello = Hello{Proto: "test", Version: 2, MinVersion: 1, Caps: []string{"canary", "metrics"}}
 
+func TestAfterReplyDeliversAcknowledgementBeforeClose(t *testing.T) {
+	for range 30 {
+		mux := NewMux()
+		mux.Handle("restart", func(_ context.Context, c *Conn, _ Raw) (any, error) {
+			return AfterReply{Value: "accepted", Run: func() { c.Close() }}, nil
+		})
+		p := newPair(t, mux)
+		var result string
+		if err := p.client.Call(context.Background(), "restart", struct{}{}, &result); err != nil || result != "accepted" {
+			t.Fatal(result, err)
+		}
+		p.client.Close()
+		p.ln.Close()
+	}
+}
+
 type pair struct {
 	srv    *Server
 	ln     net.Listener

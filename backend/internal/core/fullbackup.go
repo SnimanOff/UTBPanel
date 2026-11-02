@@ -189,6 +189,9 @@ func (c *Core) addFullBot(ctx context.Context, a *backup.Archive, b backup.FullB
 }
 
 func (c *Core) MakeFullBackup(ctx context.Context, conn *wire.Conn, in FullBackupRequest) (backup.File, error) {
+	if c.restoring.Load() {
+		return backup.File{}, wire.Errorf(wire.CodeUnavailable, "выполняется восстановление")
+	}
 	if !c.backupMu.TryLock() {
 		return backup.File{}, wire.Errorf("conflict", "бэкап уже создаётся")
 	}
