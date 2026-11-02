@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "f1a49ec960ba8670e9c9a4cbff6806bec76de511b959dee6ced103b5304197e0"
+const GeneratedHash = "e3c560b28d4c1e996738ae7845ae55b06264186eb55e179fad9ca60e7ae2a184"
 
 // Op is one operation of the API.
 type Op struct {
@@ -81,7 +81,9 @@ var Ops = []Op{
 	{"get_server_metrics", "GET", "/api/server/metrics", "read", "Server metrics (CPU, RAM, disk, network), processes and the sum over all bots"},
 	{"get_server_services", "GET", "/api/server/services", "read", "External addresses across all bots over the last 10 minutes"},
 	{"get_panel_settings", "GET", "/api/settings", "read", "Panel settings (Telegram ID of the owner)"},
+	{"get_ai_docs", "GET", "/docs/ai.md", "never", "Guide for neural networks — concepts, every MCP tool with its level and arguments, the settings document schema; generated from this spec"},
 	{"enroll_status", "GET", "/enroll/{id}", "never", "State of an enrollment request (gate.exe polls it)"},
+	{"get_llms_txt", "GET", "/llms.txt", "never", "Short description of the panel and its MCP tools for neural networks (llmstxt.org), generated from this spec; open to the MCP token"},
 	{"rename_bot", "PATCH", "/api/bots/{id}", "write", "Rename the bot in the panel (the Telegram name is in the profile)"},
 	{"set_canary", "PATCH", "/api/bots/{id}/canary", "write", "Change the share and users of the canary on the fly"},
 	{"update_profile", "PATCH", "/api/bots/{id}/profile", "confirm", "Send only changed fields (name, descriptions, commands, menu); errors come per field"},

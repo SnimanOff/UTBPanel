@@ -23,7 +23,8 @@ var releasePath = regexp.MustCompile(`^/api/bots/([0-9]+)/releases$`)
 // of tools reach the API inside the panel and do not pass here.
 func (s *Service) Direct(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if api.CallerFrom(r.Context()).Source != api.SourceMCP || r.URL.Path == "/mcp" {
+		docs := r.Method == http.MethodGet && (r.URL.Path == "/llms.txt" || r.URL.Path == "/docs/ai.md")
+		if api.CallerFrom(r.Context()).Source != api.SourceMCP || r.URL.Path == "/mcp" || docs {
 			next.ServeHTTP(w, r)
 			return
 		}

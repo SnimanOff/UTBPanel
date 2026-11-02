@@ -49,6 +49,9 @@ func TestDirectUploadWithMCPToken(t *testing.T) {
 	}{
 		{api.SourceMCP, "POST", "/api/bots/22/releases", true},
 		{api.SourceMCP, "POST", "/mcp", true},
+		{api.SourceMCP, "GET", "/llms.txt", true},
+		{api.SourceMCP, "GET", "/docs/ai.md", true},
+		{api.SourceMCP, "POST", "/llms.txt", false},
 		{api.SourceMCP, "POST", "/api/bots/11/releases", false}, // read-only group
 		{api.SourceMCP, "POST", "/api/bots/33/releases", false}, // MCP off
 		{api.SourceMCP, "POST", "/api/bots/44/releases", false}, // no group: read only

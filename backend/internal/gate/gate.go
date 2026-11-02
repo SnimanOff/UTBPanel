@@ -321,6 +321,11 @@ func ReleaseUpload(r *http.Request) bool {
 	return r.Method == http.MethodPost && releasePath.MatchString(r.URL.Path)
 }
 
+// AIDocs tells reading /llms.txt and /docs/ai.md, open to the MCP token.
+func AIDocs(r *http.Request) bool {
+	return r.Method == http.MethodGet && (r.URL.Path == "/llms.txt" || r.URL.Path == "/docs/ai.md")
+}
+
 func bearer(r *http.Request) string {
 	h := r.Header.Get("Authorization")
 	if t, ok := strings.CutPrefix(h, "Bearer "); ok {
@@ -378,8 +383,8 @@ func (g *Gate) Handler() http.Handler {
 			fmt.Fprint(w, forbiddenPage)
 			return
 		}
-		if (a == authMCP && r.URL.Path != "/mcp" && !ReleaseUpload(r)) || (a != authMCP && r.URL.Path == "/mcp") {
-			http.Error(w, "MCP token is required and is valid only for /mcp and release uploads", http.StatusForbidden)
+		if (a == authMCP && r.URL.Path != "/mcp" && !ReleaseUpload(r) && !AIDocs(r)) || (a != authMCP && r.URL.Path == "/mcp") {
+			http.Error(w, "MCP token is required and is valid only for /mcp, release uploads and the AI docs", http.StatusForbidden)
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/__gate/") {

@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/aidocs"
 	"github.com/SnimanOff/UTBPanel/backend/internal/alerts"
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/app"
@@ -332,6 +333,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	mcpServer.Register(p.API.Mux)
 	p.API.Mux.ServeMux.Handle("/mcp", mcpServer)
 	p.API.Use(mcpServer.Direct)
+	aidocs.Register(p.API.Mux)
 	return p, nil
 }
 
