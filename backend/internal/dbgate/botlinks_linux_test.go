@@ -30,6 +30,9 @@ func TestBotLinksReachNoCoreFile(t *testing.T) {
 	os.Chmod(core, 0o600)
 	before, _ := os.ReadFile(core)
 
+	// As in /data/core: the bot passes through, lists nothing.
+	os.Chmod(filepath.Dir(base), 0o711)
+	os.Mkdir(filepath.Join(base, "bots"), 0o711)
 	botDir := filepath.Join(base, "bots", "1")
 	os.MkdirAll(botDir, 0o770)
 	os.Chown(botDir, 0, uid)
@@ -61,5 +64,31 @@ func TestBotLinksReachNoCoreFile(t *testing.T) {
 	}
 	if info, err := backups.B.Tables(ctx, 1); err == nil && len(info.Tables) > 0 {
 		t.Fatalf("core tables listed: %+v", info.Tables)
+	}
+
+	// The backup before a deploy: a link must not copy core.db into it (an
+	// autorollback would restore that copy and give it to the bot).
+	if b, err := backups.Make(ctx, 1, "deploy"); err == nil {
+		t.Fatalf("core.db backed up through the link: %+v", b)
+	}
+	os.Remove(botDB)
+	if err := withIdentity(uid, func() error {
+		own, err := sql.Open("sqlite", "file:"+botDB)
+		if err != nil {
+			return err
+		}
+		defer own.Close()
+		_, err = own.Exec(`CREATE TABLE orders (id INTEGER); INSERT INTO orders VALUES (1)`)
+		return err
+	}); err != nil {
+		t.Fatalf("the bot creates its database: %v", err)
+	}
+	b, err := backups.Make(ctx, 1, "deploy")
+	if err != nil || !b.OK {
+		t.Fatalf("own database not backed up: %+v %v", b, err)
+	}
+	fi, err := os.Lstat(filepath.Join(base, "backups", b.Name))
+	if err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("backup file: %v %v", fi, err)
 	}
 }

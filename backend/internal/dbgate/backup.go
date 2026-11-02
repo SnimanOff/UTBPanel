@@ -37,14 +37,15 @@ type Backups struct {
 
 // SchemaVersion reads PRAGMA schema_version: SQLite bumps it on every
 // CREATE, ALTER and DROP, so a schema change is seen without parsing SQL.
-func (b *Browser) SchemaVersion(ctx context.Context, botID int64) (int64, error) {
-	db, err := b.open(botID, false)
-	if err != nil {
-		return 0, err
-	}
-	defer db.Close()
-	var v int64
-	err = db.QueryRowContext(ctx, `PRAGMA schema_version`).Scan(&v)
+func (b *Browser) SchemaVersion(ctx context.Context, botID int64) (v int64, err error) {
+	err = withIdentity(b.uid(botID), func() error {
+		db, err := b.open(botID, false)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		return db.QueryRowContext(ctx, `PRAGMA schema_version`).Scan(&v)
+	})
 	return v, err
 }
 
@@ -86,7 +87,7 @@ func Integrity(ctx context.Context, path string, quick bool) error {
 // the copy at once.
 func (k *Backups) Make(ctx context.Context, botID int64, reason string) (Backup, error) {
 	src := k.B.Path(botID)
-	if _, err := os.Stat(src); err != nil {
+	if _, err := os.Lstat(src); err != nil {
 		return Backup{}, ErrNoDB
 	}
 	dir := k.Dir(botID)
@@ -99,14 +100,8 @@ func (k *Backups) Make(ctx context.Context, botID int64, reason string) (Backup,
 	// The version of the live database at backup time: autorollback compares
 	// it with the version after a deploy (VACUUM INTO resets the copy's own).
 	b.SchemaVersion, _ = k.B.SchemaVersion(ctx, botID)
-	db, err := sql.Open("sqlite", "file:"+src+"?_pragma=busy_timeout(10000)")
-	if err != nil {
+	if err := k.vacuumInto(ctx, botID, src, dst); err != nil {
 		return b, err
-	}
-	_, err = db.ExecContext(ctx, `VACUUM INTO ?`, dst)
-	db.Close()
-	if err != nil {
-		return b, fmt.Errorf("dbgate: VACUUM INTO: %w", err)
 	}
 	if fi, err := os.Stat(dst); err == nil {
 		b.Size = fi.Size()
@@ -190,6 +185,46 @@ func (k *Backups) Path(botID int64, name string) (string, error) {
 		return "", fmt.Errorf("dbgate: no backup %s", name)
 	}
 	return p, nil
+}
+
+// vacuumInto copies the bot's database to dst. The bot controls bot.db and
+// could make it a link to core.db: it is read with the bot's filesystem
+// identity, into a directory of the bot's, and root takes only a regular
+// file with a single link from there (takeCopy).
+func (k *Backups) vacuumInto(ctx context.Context, botID int64, src, dst string) error {
+	vacuum := func(to string) error {
+		db, err := sql.Open("sqlite", "file:"+src+"?_pragma=busy_timeout(10000)&_pragma=trusted_schema(0)")
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		if _, err := db.ExecContext(ctx, `VACUUM INTO ?`, to); err != nil {
+			return fmt.Errorf("dbgate: VACUUM INTO: %w", err)
+		}
+		return nil
+	}
+	uid := k.B.uid(botID)
+	if uid < 0 {
+		return vacuum(dst)
+	}
+	dir := filepath.Dir(dst)
+	// The bot's identity passes through, never lists or writes here.
+	if err := os.Chmod(dir, 0o711); err != nil {
+		return err
+	}
+	tmp, err := os.MkdirTemp(dir, ".copy-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	if err := os.Chown(tmp, uid, uid); err != nil {
+		return err
+	}
+	part := filepath.Join(tmp, "bot.db")
+	if err := withIdentity(uid, func() error { return vacuum(part) }); err != nil {
+		return err
+	}
+	return takeCopy(part, dst)
 }
 
 // Restore replaces bot.db with a backup. The caller stops the bot before
