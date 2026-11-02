@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/botdir"
 	"github.com/SnimanOff/UTBPanel/backend/internal/secrets"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 )
@@ -277,21 +278,14 @@ func (r *Runner) prepareDirs(id int64) error {
 			os.Chmod(d, 0o711)
 		}
 	}
+	if r.cfg.DropPrivileges {
+		// The bot must not own its directory: it could put links there
+		// that the core, as root, would follow (see botdir.Secure).
+		return botdir.Secure(dir, UID(id))
+	}
 	for _, d := range []string{dir, filepath.Join(dir, "files"), filepath.Join(dir, "releases")} {
 		if err := os.MkdirAll(d, 0o750); err != nil {
 			return err
-		}
-		if r.cfg.DropPrivileges {
-			os.Chmod(d, 0o750)
-			if err := os.Chown(d, UID(id), UID(id)); err != nil {
-				return err
-			}
-		}
-	}
-	// The SQLite files of the bot must be writable by it.
-	if r.cfg.DropPrivileges {
-		for _, f := range []string{"bot.db", "bot.db-wal", "bot.db-shm"} {
-			os.Chown(filepath.Join(dir, f), UID(id), UID(id))
 		}
 	}
 	return nil

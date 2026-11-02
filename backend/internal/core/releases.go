@@ -52,7 +52,7 @@ func (c *Core) newReleases() *deploy.Store {
 		return filepath.Join(c.Cfg.DataDir, "bots", strconv.FormatInt(id, 10), "releases")
 	}}
 	if c.Runner != nil && os.Geteuid() == 0 {
-		s.Chown = func(id int64, p string) error { return os.Chown(p, runner.UID(id), runner.UID(id)) }
+		s.Chown = func(id int64, p string) error { return os.Lchown(p, 0, runner.UID(id)) }
 	}
 	return s
 }

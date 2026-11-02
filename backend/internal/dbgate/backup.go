@@ -206,7 +206,9 @@ func (k *Backups) Restore(botID int64, name string, chown func(string) error) er
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	// The bot can name a link bot.db.restore; O_EXCL does not follow it.
+	os.Remove(tmp)
+	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}

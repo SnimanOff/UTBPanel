@@ -325,8 +325,9 @@ func (s *Store) DecryptAll(ctx context.Context, botID int64) ([]Secret, error) {
 	return out, rows.Err()
 }
 
-// WriteFiles puts file secrets into dir with mode 0400 owned by uid (when
-// uid >= 0) and returns name → path.
+// WriteFiles puts file secrets into dir with mode 0440, owned by root with
+// the group uid (when uid >= 0): the bot reads them but cannot replace the
+// directory or the files. It returns name → path.
 func WriteFiles(dir string, uid int, secs []Secret) (map[string]string, error) {
 	paths := map[string]string{}
 	for _, s := range secs {
@@ -338,18 +339,28 @@ func WriteFiles(dir string, uid int, secs []Secret) (map[string]string, error) {
 		}
 		p := filepath.Join(dir, s.Name)
 		os.Remove(p) // it is 0400: replace instead of overwriting
-		if err := os.WriteFile(p, s.Value, 0o400); err != nil {
+		// O_EXCL never follows a link put in place of the removed file.
+		f, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o440)
+		if err != nil {
 			return nil, err
 		}
+		_, werr := f.Write(s.Value)
+		cerr := f.Close()
+		if werr != nil {
+			return nil, werr
+		}
+		if cerr != nil {
+			return nil, cerr
+		}
 		if uid >= 0 {
-			if err := os.Chown(p, uid, uid); err != nil {
+			if err := os.Lchown(p, 0, uid); err != nil {
 				return nil, err
 			}
 		}
 		paths[s.Name] = p
 	}
 	if uid >= 0 && len(paths) > 0 {
-		os.Chown(dir, uid, uid)
+		os.Lchown(dir, 0, uid)
 	}
 	return paths, nil
 }

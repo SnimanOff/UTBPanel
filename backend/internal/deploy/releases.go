@@ -40,7 +40,9 @@ const ConfigName = "tgpanel.yaml"
 type Store struct {
 	// Dir returns the releases directory of a bot.
 	Dir func(botID int64) string
-	// Chown gives files to the bot's uid; nil when not running as root.
+	// Chown gives a stored file or directory to root with the bot's group
+	// (the bot may run its binaries but not change them); nil when not
+	// running as root.
 	Chown func(botID int64, path string) error
 
 	mu      sync.Mutex
@@ -169,7 +171,7 @@ func (s *Store) Finish(id string) (Release, error) {
 	if err := os.Rename(u.f.Name(), bin); err != nil {
 		return Release{}, err
 	}
-	os.Chmod(bin, 0o500)
+	os.Chmod(bin, 0o550)
 	meta, _ := json.MarshalIndent(rel, "", "  ")
 	if err := os.WriteFile(filepath.Join(dir, "release.json"), meta, 0o640); err != nil {
 		return Release{}, err

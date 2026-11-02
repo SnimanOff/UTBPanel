@@ -35,6 +35,17 @@ const MaxRows = 1000
 type Browser struct {
 	// Path returns bot.db of a bot.
 	Path func(botID int64) string
+	// UID is the bot's uid: its database is opened with the bot's
+	// filesystem identity, so a link the bot puts in place of bot.db
+	// cannot reach a file of the core. nil or -1: the current identity.
+	UID func(botID int64) int
+}
+
+func (b *Browser) uid(botID int64) int {
+	if b.UID == nil {
+		return -1
+	}
+	return b.UID(botID)
 }
 
 func dsn(path string, write bool) string {
@@ -104,17 +115,39 @@ func quoteIdent(s string) string { return `"` + strings.ReplaceAll(s, `"`, `""`)
 // Sizes returns bot.db and WAL sizes (for counters).
 func (b *Browser) Sizes(botID int64) (db, wal int64) {
 	p := b.Path(botID)
-	if fi, err := os.Stat(p); err == nil {
+	if fi, err := os.Lstat(p); err == nil {
 		db = fi.Size()
 	}
-	if fi, err := os.Stat(p + "-wal"); err == nil {
+	if fi, err := os.Lstat(p + "-wal"); err == nil {
 		wal = fi.Size()
 	}
 	return
 }
 
 // Tables lists tables and views with schema and row counts.
-func (b *Browser) Tables(ctx context.Context, botID int64) (Info, error) {
+func (b *Browser) Tables(ctx context.Context, botID int64) (info Info, err error) {
+	err = withIdentity(b.uid(botID), func() error { info, err = b.tables(ctx, botID); return err })
+	return info, err
+}
+
+// Rows returns a page of a table.
+func (b *Browser) Rows(ctx context.Context, botID int64, table string, limit, offset int) (r Result, err error) {
+	err = withIdentity(b.uid(botID), func() error { r, err = b.rows(ctx, botID, table, limit, offset); return err })
+	return r, err
+}
+
+// Query runs console SQL with the bot's identity (see query).
+func (b *Browser) Query(ctx context.Context, botID int64, query string, write bool) (r Result, err error) {
+	err = withIdentity(b.uid(botID), func() error { r, err = b.query(ctx, botID, query, write); return err })
+	return r, err
+}
+
+// CSV exports a table or a read-only query with the bot's identity.
+func (b *Browser) CSV(ctx context.Context, botID int64, table, query string, w io.Writer) error {
+	return withIdentity(b.uid(botID), func() error { return b.csv(ctx, botID, table, query, w) })
+}
+
+func (b *Browser) tables(ctx context.Context, botID int64) (Info, error) {
 	var info Info
 	info.Size, info.WALSize = b.Sizes(botID)
 	db, err := b.open(botID, false)
@@ -213,7 +246,7 @@ func collect(rows *sql.Rows, limit int) (Result, error) {
 }
 
 // Rows returns a page of a table.
-func (b *Browser) Rows(ctx context.Context, botID int64, table string, limit, offset int) (Result, error) {
+func (b *Browser) rows(ctx context.Context, botID int64, table string, limit, offset int) (Result, error) {
 	db, err := b.open(botID, false)
 	if err != nil {
 		return Result{}, err
@@ -238,7 +271,7 @@ func (b *Browser) Rows(ctx context.Context, botID int64, table string, limit, of
 // Query runs console SQL. Read-only by default: the connection itself is
 // read-only (query_only), the text is not inspected. With write it uses a
 // separate read-write connection that waits for the bot's writes.
-func (b *Browser) Query(ctx context.Context, botID int64, query string, write bool) (Result, error) {
+func (b *Browser) query(ctx context.Context, botID int64, query string, write bool) (Result, error) {
 	db, err := b.open(botID, write)
 	if err != nil {
 		return Result{}, err
@@ -281,7 +314,7 @@ func (b *Browser) Query(ctx context.Context, botID int64, query string, write bo
 func ms(t time.Time) float64 { return float64(time.Since(t).Microseconds()) / 1000 }
 
 // CSV writes a table (or a read-only query) as CSV.
-func (b *Browser) CSV(ctx context.Context, botID int64, table, query string, w io.Writer) error {
+func (b *Browser) csv(ctx context.Context, botID int64, table, query string, w io.Writer) error {
 	db, err := b.open(botID, false)
 	if err != nil {
 		return err

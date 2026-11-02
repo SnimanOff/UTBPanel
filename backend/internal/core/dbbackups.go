@@ -56,7 +56,7 @@ func (c *Core) RestoreDB(ctx context.Context, botID int64, name string) error {
 	}
 	var chown func(string) error
 	if os.Geteuid() == 0 {
-		chown = func(p string) error { return os.Chown(p, runner.UID(botID), runner.UID(botID)) }
+		chown = func(p string) error { return os.Lchown(p, runner.UID(botID), runner.UID(botID)) }
 	}
 	err := c.DBBackups.Restore(botID, name, chown)
 	if err == nil {

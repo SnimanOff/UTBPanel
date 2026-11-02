@@ -256,6 +256,11 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerClosed()
 	c.DBG = &dbgate.Browser{Path: func(id int64) string {
 		return filepath.Join(c.Cfg.DataDir, "bots", strconv.FormatInt(id, 10), "bot.db")
+	}, UID: func(id int64) int {
+		if runtime.GOOS == "linux" && os.Geteuid() == 0 {
+			return runner.UID(id)
+		}
+		return -1
 	}}
 	c.DBG.Register(c.Mux, c.Journal)
 	c.SQL = &dbgate.Gateway{Path: c.DBG.Path, Timeout: c.Cfg.SDKQueryTimeout, UID: func(id int64) int {
