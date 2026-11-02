@@ -57,6 +57,16 @@ func Guard(next http.Handler) http.Handler {
 	})
 }
 
+// NoFraming is set on every answer: a page on another port of localhost
+// is the same site for the gate's cookie and could frame the panel and
+// steer a hold-to-confirm button. No page of the panel is ever framed.
+func NoFraming(h http.Header) {
+	h.Set("X-Frame-Options", "DENY")
+	h.Set("Content-Security-Policy", "frame-ancestors 'none'")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Referrer-Policy", "no-referrer")
+}
+
 func localHost(host string) bool {
 	h, port, err := net.SplitHostPort(host)
 	if err != nil || port == "" {

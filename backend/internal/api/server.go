@@ -114,6 +114,7 @@ func (s *Server) Handler() http.Handler {
 		h = s.middleware[i](h)
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		NoFraming(w.Header())
 		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 			http.Error(w, "client certificate required", http.StatusUnauthorized)
 			return

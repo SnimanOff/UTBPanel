@@ -102,6 +102,9 @@ func TestPingWithCertificate(t *testing.T) {
 	if resp.StatusCode != 200 || !strings.Contains(string(b), "home-pc") {
 		t.Fatalf("%d %s", resp.StatusCode, b)
 	}
+	if resp.Header.Get("X-Frame-Options") != "DENY" || !strings.Contains(resp.Header.Get("Content-Security-Policy"), "frame-ancestors 'none'") {
+		t.Fatalf("the panel may be framed: %v", resp.Header)
+	}
 	// last_seen is written by the batch writer.
 	e.w.Flush(context.Background())
 	var seen string
