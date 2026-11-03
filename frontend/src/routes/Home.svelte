@@ -121,8 +121,10 @@
 </div>
 
 {#if error}<p class="danger">{error}</p>{/if}
-{#if store.bots.length}<Export all />{/if}
-<ImportBot />
+<div class="transfer">
+  {#if store.bots.length}<Export all />{/if}
+  <ImportBot />
+</div>
 {#if store.error}<p class="danger">{store.error}</p>{/if}
 
 {#each sections as s (s.group.id)}
@@ -192,6 +194,16 @@
 {/if}
 
 <style>
+  /* Export and import side by side; an opened form takes the whole row. */
+  .transfer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s2);
+    align-items: flex-start;
+  }
+  .transfer > :global(:has(.box)) {
+    flex-basis: 100%;
+  }
   .toolbar {
     display: flex;
     justify-content: space-between;
@@ -255,6 +267,9 @@
 
   /* Phones: one column, rows of controls wrap. */
   @media (max-width: 700px) {
+    .sep button {
+      min-height: 40px;
+    }
     .sep {
       flex-wrap: wrap;
     }

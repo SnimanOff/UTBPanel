@@ -165,4 +165,10 @@
   .err {
     white-space: pre-wrap;
   }
+  /* Phones: card buttons big enough for a finger. */
+  @media (max-width: 700px) {
+    .buttons :global(button) {
+      min-width: 44px;
+    }
+  }
 </style>

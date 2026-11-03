@@ -109,10 +109,15 @@ table {
   background: var(--accent);
 }
 
-/* Phones: wide tables scroll inside themselves instead of widening the page. */
+/* Phones: wide tables scroll inside themselves instead of widening the page;
+   buttons are big enough for a finger. */
 @media (max-width: 700px) {
   table {
     display: block;
     overflow-x: auto;
+  }
+  button {
+    min-height: 40px;
+    min-width: 40px;
   }
 }
