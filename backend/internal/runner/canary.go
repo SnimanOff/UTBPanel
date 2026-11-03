@@ -63,13 +63,14 @@ func (r *Runner) StartCanary(ctx context.Context, b Bot) error {
 	go func() {
 		outWG.Wait()
 		p.exit = cmd.Wait()
-		close(p.done)
+		// Out of the table before done, as for the main process (forget).
 		r.mu.Lock()
 		if r.canaries[b.ID] == p {
 			delete(r.canaries, b.ID)
 		}
 		stopping := p.stopping || p.detached
 		r.mu.Unlock()
+		close(p.done)
 		if !stopping {
 			r.coreLine(b.ID, "canary %s exited: %v", b.Version, p.exit)
 			r.emit(b.ID, "canary_crashed", "error", map[string]any{"version": b.Version, "exit": exitCode(p.exit), "error": fmt.Sprint(p.exit)})

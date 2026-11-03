@@ -110,14 +110,17 @@ func (r *Runner) Adopt(hs []Handed, files []*os.File) {
 			waitPidFD(pfd)
 			pfd.Close()
 			p.exit = ErrExitUnknown
-			close(p.done)
-			if instance == "canary" {
+			if instance != "canary" {
+				r.forget(p)
+				close(p.done)
+			} else {
 				r.mu.Lock()
 				if r.canaries[h.Bot.ID] == p {
 					delete(r.canaries, h.Bot.ID)
 				}
 				stopping := p.stopping || p.detached
 				r.mu.Unlock()
+				close(p.done)
 				if !stopping {
 					r.coreLine(h.Bot.ID, "canary %s exited", h.Bot.Version)
 					r.emit(h.Bot.ID, "canary_crashed", "error", map[string]any{"version": h.Bot.Version, "exit": -1, "error": ErrExitUnknown.Error()})

@@ -337,6 +337,7 @@ func (r *Runner) Start(ctx context.Context, b Bot) error {
 	go func() {
 		outWG.Wait() // read all output before Wait closes the pipes
 		p.exit = cmd.Wait()
+		r.forget(p)
 		close(p.done)
 		r.exited(p)
 	}()
@@ -458,11 +459,20 @@ func (r *Runner) kill(p *proc) {
 	<-p.done
 }
 
-func (r *Runner) exited(p *proc) {
+// forget drops an exited process from the table. It runs before p.done is
+// closed: Stop waits for done, and IsRunning right after it must already
+// say false.
+func (r *Runner) forget(p *proc) {
 	r.mu.Lock()
 	if r.procs[p.bot.ID] == p {
 		delete(r.procs, p.bot.ID)
 	}
+	r.mu.Unlock()
+}
+
+func (r *Runner) exited(p *proc) {
+	r.forget(p)
+	r.mu.Lock()
 	stopping, detached := p.stopping, p.detached
 	r.mu.Unlock()
 	if stopping || detached {
