@@ -87,25 +87,53 @@
       .slice(0, 5)
       .map(([k]) => k.slice(4))
   })
+  // Health tiles always; audience and revenue on request. Open by default
+  // on wide screens, folded on phones so the tabs stay in view; the choice
+  // is remembered in this browser.
+  const moreKey = 'tgpanel.metrics.more'
+  function initialMore(): boolean {
+    try {
+      const saved = localStorage.getItem(moreKey)
+      if (saved !== null) return saved === '1'
+    } catch {
+      /* private mode: fall back to the screen width */
+    }
+    return typeof matchMedia === 'function' && matchMedia('(min-width: 900px)').matches
+  }
+  let more = $state(initialMore())
+  function toggleMore() {
+    more = !more
+    try {
+      localStorage.setItem(moreKey, more ? '1' : '0')
+    } catch {
+      /* not remembered */
+    }
+  }
+
   // Live: per-second updates of this bot from the shared stream.
   const liveSeries = $derived(l?.history ?? [])
   const liveX = $derived(liveSeries.map((_, i) => Math.floor(Date.now() / 1000) - liveSeries.length + i))
 </script>
 
 <div class="tiles">
-  <Tile label="запуск" value={bot.status?.started ? new Date(bot.status.started).toISOString().slice(5, 16).replace('T', ' ') : '—'} />
   <Tile label="аптайм" value={bot.status?.running ? uptime(bot.status.started) : '—'} />
-  <Tile label="рестарты" value={bot.status?.restarts ?? 0} bad={(bot.status?.restarts ?? 0) > 0} />
-  <Tile label="CPU / RAM" value={l ? `${l.cpu.toFixed(0)}% · ${bytes(l.rss)}` : '—'} />
-  <Tile label="в обработке" value={l?.inflight ?? 0} />
-  <Tile label="апд/с" value={l ? l.ups.toFixed(1) : '0'} />
-  <Tile label="польз. / DAU" value={`${compact(u?.total ?? 0)} / ${compact(day?.series.uniques.dau ?? 0)}`} />
-  <Tile label="новые / ушли" value={`${s?.totals.users_new ?? 0} / ${s?.totals.users_blocked ?? 0}`} />
-  <Tile label="удержание D7" value={u ? Math.round((u.d7 ?? 0) * 100) + '%' : '—'} />
-  <Tile label="доход 24ч" value={revenue} />
   <Tile label="ошибки" value={errors} bad={errors > 0} />
+  <Tile label="рестарты" value={bot.status?.restarts ?? 0} bad={(bot.status?.restarts ?? 0) > 0} />
   <Tile label="p95" value={s ? Math.round(s.p95) + ' мс' : '—'} />
-	{#each selectedSDK as m (m.name)}<Tile label={m.name} value={m.kind === 'counter' ? m.counter : m.value} />{/each}
+  <Tile label="апд/с" value={l ? l.ups.toFixed(1) : '0'} />
+  <Tile label="CPU / RAM" value={l ? `${l.cpu.toFixed(0)}% · ${bytes(l.rss)}` : '—'} />
+  {#each selectedSDK as m (m.name)}<Tile label={m.name} value={m.kind === 'counter' ? m.counter : m.value} />{/each}
+  {#if more}
+    <Tile label="запуск" value={bot.status?.started ? new Date(bot.status.started).toISOString().slice(5, 16).replace('T', ' ') : '—'} />
+    <Tile label="в обработке" value={l?.inflight ?? 0} />
+    <Tile label="польз. / DAU" value={`${compact(u?.total ?? 0)} / ${compact(day?.series.uniques.dau ?? 0)}`} />
+    <Tile label="новые / ушли" value={`${s?.totals.users_new ?? 0} / ${s?.totals.users_blocked ?? 0}`} />
+    <Tile label="удержание D7" value={u ? Math.round((u.d7 ?? 0) * 100) + '%' : '—'} />
+    <Tile label="доход 24ч" value={revenue} />
+  {/if}
+  <button class="more" aria-expanded={more} onclick={toggleMore}>
+    {more ? 'Свернуть' : 'Аудитория и доход'}
+  </button>
 </div>
 
 {#if hasSDKMetrics}
@@ -172,6 +200,11 @@
     grid-template-columns: repeat(auto-fill, minmax(min(130px, 100%), 1fr));
     gap: var(--s2);
     margin-bottom: var(--s3);
+  }
+  .more {
+    font-size: var(--fs-s);
+    color: var(--muted);
+    min-height: 40px;
   }
   .periods {
     display: flex;
