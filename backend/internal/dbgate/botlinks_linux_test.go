@@ -39,7 +39,7 @@ func TestBotLinksReachNoCoreFile(t *testing.T) {
 	must(t, err)
 
 	// As in /data/core: the bot passes through, lists nothing; backups are root's.
-	must(t, os.Chmod(filepath.Dir(base), 0o711)) //nolint:gosec // the production layout of /data/core
+	must(t, os.Chmod(filepath.Dir(base), 0o711))          //nolint:gosec // the production layout of /data/core
 	must(t, os.Mkdir(filepath.Join(base, "bots"), 0o711)) //nolint:gosec // the production layout of /data/core
 	botDir := filepath.Join(base, "bots", "1")
 	must(t, os.Mkdir(botDir, 0o770)) //nolint:gosec // the production layout of /data/core
