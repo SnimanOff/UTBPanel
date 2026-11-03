@@ -338,9 +338,10 @@ func WriteFiles(dir string, uid int, secs []Secret) (map[string]string, error) {
 			return nil, err
 		}
 		p := filepath.Join(dir, s.Name)
-		os.Remove(p) // it is 0400: replace instead of overwriting
+		_ = os.Remove(p) // read-only: replace instead of overwriting
 		// O_EXCL never follows a link put in place of the removed file.
-		f, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o440)
+		// 0440: the bot reads it through its group.
+		f, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o440) //nolint:gosec // see above
 		if err != nil {
 			return nil, err
 		}
@@ -360,7 +361,9 @@ func WriteFiles(dir string, uid int, secs []Secret) (map[string]string, error) {
 		paths[s.Name] = p
 	}
 	if uid >= 0 && len(paths) > 0 {
-		os.Lchown(dir, 0, uid)
+		if err := os.Lchown(dir, 0, uid); err != nil {
+			return nil, err
+		}
 	}
 	return paths, nil
 }

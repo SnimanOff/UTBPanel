@@ -171,7 +171,9 @@ func (s *Store) Finish(id string) (Release, error) {
 	if err := os.Rename(u.f.Name(), bin); err != nil {
 		return Release{}, err
 	}
-	os.Chmod(bin, 0o550)
+	if err := os.Chmod(bin, 0o550); err != nil { //nolint:gosec // executable by the bot's group, see Chown
+		return Release{}, err
+	}
 	meta, _ := json.MarshalIndent(rel, "", "  ")
 	if err := os.WriteFile(filepath.Join(dir, "release.json"), meta, 0o640); err != nil {
 		return Release{}, err

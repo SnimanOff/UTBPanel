@@ -17,20 +17,19 @@ func TestPeerUIDOfLoopbackConnection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	go func() {
 		c, err := net.Dial("tcp", ln.Addr().String())
 		if err == nil {
-			defer c.Close()
-			buf := make([]byte, 1)
-			c.Read(buf)
+			defer func() { _ = c.Close() }()
+			_, _ = c.Read(make([]byte, 1)) // wait until the server end closes
 		}
 	}()
 	c, err := ln.Accept()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	if uid, ok := peerUID(c); !ok || uid != os.Getuid() {
 		t.Fatalf("peer uid %d %v, want %d", uid, ok, os.Getuid())
 	}
@@ -50,14 +49,16 @@ func TestProxyPortServesOnlyItsBot(t *testing.T) {
 		t.Fatal(err)
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
+	if err := ln.Close(); err != nil {
+		t.Fatal(err)
+	}
 	p := &Proxy{UID: func(int64) int { return botUID }}
 	if err := p.Start(1, "main", port); err != nil {
 		t.Fatal(err)
 	}
 	defer p.Stop(1, "main")
 	ask := func(uid uint32) string {
-		cmd := exec.Command("/bin/bash", "-c", `exec 3<>/dev/tcp/127.0.0.1/`+strconv.Itoa(port)+`; printf 'GET / HTTP/1.0\r\n\r\n' >&3; head -c 12 <&3`)
+		cmd := exec.Command("/bin/bash", "-c", `exec 3<>/dev/tcp/127.0.0.1/`+strconv.Itoa(port)+`; printf 'GET / HTTP/1.0\r\n\r\n' >&3; head -c 12 <&3`) //nolint:gosec // a fixed script and a port number
 		cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uid, Gid: uid}}
 		out, _ := cmd.Output()
 		return string(out)

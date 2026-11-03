@@ -16,7 +16,7 @@ func TestSessionsExpire(t *testing.T) {
 	}}
 	with := func(sid string) authKind {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
-		r.AddCookie(&http.Cookie{Name: CookieName, Value: sid})
+		r.AddCookie(&http.Cookie{Name: CookieName, Value: sid, Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode})
 		return g.auth(r)
 	}
 	if with("fresh") != authSession {

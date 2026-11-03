@@ -158,7 +158,7 @@ func (l *ownerListener) Accept() (net.Conn, error) {
 		if l.log != nil {
 			l.log.Warn("tgproxy: connection from another uid refused", "bot", l.bot)
 		}
-		c.Close()
+		_ = c.Close()
 	}
 }
 

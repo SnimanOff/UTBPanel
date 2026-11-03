@@ -37,7 +37,7 @@ func ownDir(path string, uid, gid int, mode uint32) error {
 			return err
 		}
 		same, err := fixFD(fd, path, uid, gid, mode)
-		unix.Close(fd)
+		_ = unix.Close(fd)
 		if err != nil {
 			return err
 		}
@@ -60,7 +60,7 @@ func ownFile(path string, uid, gid int, mode uint32) error {
 	case err != nil:
 		return err
 	}
-	defer unix.Close(fd)
+	defer func() { _ = unix.Close(fd) }()
 	var st unix.Stat_t
 	if err := unix.Fstat(fd, &st); err != nil {
 		return err
@@ -117,7 +117,7 @@ func entries(dir string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer unix.Close(fd)
+	defer func() { _ = unix.Close(fd) }()
 	var names []string
 	buf := make([]byte, 8192)
 	for {

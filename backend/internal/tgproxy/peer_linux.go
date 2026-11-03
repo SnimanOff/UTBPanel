@@ -29,7 +29,7 @@ func peerUID(c net.Conn) (int, bool) {
 	if err != nil {
 		return 0, false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		fields := strings.Fields(sc.Text())

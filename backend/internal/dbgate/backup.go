@@ -43,7 +43,7 @@ func (b *Browser) SchemaVersion(ctx context.Context, botID int64) (v int64, err 
 		if err != nil {
 			return err
 		}
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		return db.QueryRowContext(ctx, `PRAGMA schema_version`).Scan(&v)
 	})
 	return v, err
@@ -197,7 +197,7 @@ func (k *Backups) vacuumInto(ctx context.Context, botID int64, src, dst string) 
 		if err != nil {
 			return err
 		}
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		if _, err := db.ExecContext(ctx, `VACUUM INTO ?`, to); err != nil {
 			return fmt.Errorf("dbgate: VACUUM INTO: %w", err)
 		}
@@ -207,16 +207,13 @@ func (k *Backups) vacuumInto(ctx context.Context, botID int64, src, dst string) 
 	if uid < 0 {
 		return vacuum(dst)
 	}
-	dir := filepath.Dir(dst)
-	// The bot's identity passes through, never lists or writes here.
-	if err := os.Chmod(dir, 0o711); err != nil {
-		return err
-	}
-	tmp, err := os.MkdirTemp(dir, ".copy-")
+	// The backups directory stays root's; the copy is made in a private
+	// temporary directory of the bot's (as for exports).
+	tmp, err := os.MkdirTemp("", "utbpanel-backup-db-*")
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 	if err := os.Chown(tmp, uid, uid); err != nil {
 		return err
 	}
@@ -242,8 +239,8 @@ func (k *Backups) Restore(botID int64, name string, chown func(string) error) er
 	}
 	defer in.Close()
 	// The bot can name a link bot.db.restore; O_EXCL does not follow it.
-	os.Remove(tmp)
-	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	_ = os.Remove(tmp)
+	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) //nolint:gosec // the core's own path next to bot.db
 	if err != nil {
 		return err
 	}
