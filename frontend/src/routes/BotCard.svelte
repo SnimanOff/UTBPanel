@@ -10,7 +10,7 @@
   import { router } from '../lib/router.svelte'
   import HoldButton from '../lib/ui/HoldButton.svelte'
   import Spark from '../lib/ui/Spark.svelte'
-  import StatusSquare from '../lib/ui/StatusSquare.svelte'
+  import StatusSquare, { stateTitles } from '../lib/ui/StatusSquare.svelte'
 
   let { bot }: { bot: BotView & { panics_24h?: number; users?: number } } = $props()
   let editing = $state(false)
@@ -70,7 +70,11 @@
     <span class="muted user">@{bot.username}</span>
   </div>
   <div class="row muted small">
-    <span class="num">{bot.status?.running ? uptime(bot.status.started) : '—'}</span>
+    {#if bot.status?.running}
+      <span class="num">{uptime(bot.status.started)}</span>
+    {:else}
+      <span class="state" class:bad={bot.state === 'crashed' || bot.state === 'error'}>{stateTitles[bot.state] ?? bot.state}</span>
+    {/if}
     <span class="num">{bot.version || 'нет версии'}</span>
     {#if bot.maintenance}<span class="maint">{bot.maintenance}</span>{/if}
     {#if bot.canary}<span class="canary">{bot.canary}</span>{/if}
@@ -96,6 +100,9 @@
 </div>
 
 <style>
+  .state.bad {
+    color: var(--danger-text);
+  }
   .card {
     background: var(--surface);
     border: var(--line);

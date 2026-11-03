@@ -1,8 +1,6 @@
-<script lang="ts">
-  // Bot status as a square: violet — running, hollow — paused,
-  // grey — stopped, red — error.
-  let { state, size = 10 }: { state: string; size?: number } = $props()
-  const titles: Record<string, string> = {
+<script lang="ts" module>
+  /** Words for bot states: the square's label and the card's status line. */
+  export const stateTitles: Record<string, string> = {
     running: 'работает',
     paused: 'пауза',
     stopped: 'остановлен',
@@ -11,7 +9,15 @@
   }
 </script>
 
-<span class="sq {state}" style="--size: {size}px" title={titles[state] ?? state}></span>
+<script lang="ts">
+  // Bot status as a square: violet — running, hollow — paused,
+  // grey — stopped, red — error. The color is not the only sign: screen
+  // readers get the word.
+  let { state, size = 10 }: { state: string; size?: number } = $props()
+  const title = $derived(stateTitles[state] ?? state)
+</script>
+
+<span class="sq {state}" style="--size: {size}px" role="img" aria-label={title} {title}></span>
 
 <style>
   .sq {
