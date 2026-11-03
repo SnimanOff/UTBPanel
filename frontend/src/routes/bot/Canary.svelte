@@ -173,4 +173,11 @@
     color: var(--muted);
     font-weight: 400;
   }
+
+  /* Phones: one column, rows of controls wrap. */
+  @media (max-width: 700px) {
+    .line {
+      flex-wrap: wrap;
+    }
+  }
 </style>

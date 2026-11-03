@@ -236,7 +236,7 @@
   }
   .cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
     gap: var(--s3);
   }
   .slot {
@@ -251,5 +251,18 @@
     display: flex;
     gap: var(--s2);
     max-width: 360px;
+  }
+
+  /* Phones: one column, rows of controls wrap. */
+  @media (max-width: 700px) {
+    .sep {
+      flex-wrap: wrap;
+    }
+    .toolbar {
+      flex-wrap: wrap;
+    }
+    .filters {
+      flex-wrap: wrap;
+    }
   }
 </style>

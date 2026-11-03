@@ -293,4 +293,14 @@
   .pre {
     white-space: pre-wrap;
   }
+
+  /* Phones: one column, rows of controls wrap. */
+  @media (max-width: 700px) {
+    .layout > * {
+      min-width: 0;
+    }
+    .layout {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>

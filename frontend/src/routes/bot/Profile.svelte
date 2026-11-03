@@ -262,4 +262,11 @@
   .ok {
     color: var(--accent-hi);
   }
+
+  /* Phones: one column, rows of controls wrap. */
+  @media (max-width: 700px) {
+    .cols {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>

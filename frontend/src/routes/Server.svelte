@@ -160,7 +160,7 @@
   }
   .tiles {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr));
     gap: var(--s2);
     margin-bottom: var(--s3);
   }
@@ -177,7 +177,7 @@
   }
   .charts {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
     gap: var(--s3);
     margin-bottom: var(--s3);
   }
@@ -227,5 +227,12 @@
     display: flex;
     justify-content: space-between;
     padding: 2px 0;
+  }
+
+  /* Phones: one column, rows of controls wrap. */
+  @media (max-width: 700px) {
+    .grid {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

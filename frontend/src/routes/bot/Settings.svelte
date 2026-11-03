@@ -249,7 +249,7 @@
 <style>
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(460px, 100%), 1fr));
     gap: var(--s3);
   }
   .restart {
@@ -310,5 +310,13 @@
   }
   .delete {
     justify-content: space-between;
+  }
+
+  /* Phones: one column, rows of controls wrap. */
+  @media (max-width: 700px) {
+    .add,
+    .kv {
+      flex-wrap: wrap;
+    }
   }
 </style>

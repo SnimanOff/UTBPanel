@@ -52,4 +52,11 @@
     margin: 2px 0 var(--s2) 208px;
     white-space: pre-wrap;
   }
+
+  /* Phones: one column, rows of controls wrap. */
+  @media (max-width: 700px) {
+    .secret {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>

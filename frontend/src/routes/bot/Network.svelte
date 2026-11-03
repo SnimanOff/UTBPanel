@@ -91,4 +91,11 @@
     font-weight: 400;
     font-size: var(--fs-s);
   }
+
+  /* Phones: one column, rows of controls wrap. */
+  @media (max-width: 700px) {
+    .bar {
+      flex-wrap: wrap;
+    }
+  }
 </style>

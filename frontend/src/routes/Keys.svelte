@@ -230,4 +230,17 @@
   .revoked {
     margin: var(--s5) 0 var(--s2);
   }
+
+  /* Phones: one column, rows of controls wrap. */
+  @media (max-width: 700px) {
+    form {
+      flex-wrap: wrap;
+    }
+    form input {
+      width: 100%;
+    }
+    .top {
+      flex-wrap: wrap;
+    }
+  }
 </style>

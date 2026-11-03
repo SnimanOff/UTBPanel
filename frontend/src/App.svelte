@@ -55,4 +55,9 @@
     max-width: 1600px;
     margin: 0 auto;
   }
+  @media (max-width: 700px) {
+    main {
+      padding: var(--s3);
+    }
+  }
 </style>

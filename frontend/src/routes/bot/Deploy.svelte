@@ -317,7 +317,7 @@
   }
   .reports {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
     gap: var(--s3);
   }
   .report {
@@ -387,5 +387,15 @@
   }
   .pre {
     white-space: pre-wrap;
+  }
+
+  /* Phones: one column, rows of controls wrap. */
+  @media (max-width: 700px) {
+    .cols {
+      grid-template-columns: 1fr;
+    }
+    .line {
+      flex-wrap: wrap;
+    }
   }
 </style>

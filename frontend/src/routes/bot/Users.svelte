@@ -228,4 +228,20 @@
     color: var(--muted);
     margin: var(--s3) 0 var(--s1);
   }
+
+  /* Phones: one column, rows of controls wrap. */
+  @media (max-width: 700px) {
+    .layout > * {
+      min-width: 0;
+    }
+    .layout {
+      grid-template-columns: 1fr;
+    }
+    .bar {
+      flex-wrap: wrap;
+    }
+    .filters {
+      flex-wrap: wrap;
+    }
+  }
 </style>

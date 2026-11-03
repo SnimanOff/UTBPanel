@@ -108,3 +108,11 @@ table {
 ::selection {
   background: var(--accent);
 }
+
+/* Phones: wide tables scroll inside themselves instead of widening the page. */
+@media (max-width: 700px) {
+  table {
+    display: block;
+    overflow-x: auto;
+  }
+}

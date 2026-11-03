@@ -122,9 +122,39 @@
     position: absolute;
     right: var(--s5);
     top: 100%;
-    width: 380px;
+    width: min(380px, calc(100vw - 2 * var(--s3)));
     background: var(--surface);
     border: var(--line);
     z-index: 5;
+  }
+  /* Phones: the navigation goes to its own scrolling line under the logo
+     and the buttons. */
+  @media (max-width: 700px) {
+    header {
+      flex-wrap: wrap;
+      gap: var(--s2) var(--s3);
+      padding: var(--s2) var(--s3);
+    }
+    .grow {
+      order: 3;
+      flex-basis: 100%;
+      min-width: 0;
+    }
+    .right {
+      margin-left: auto;
+    }
+    nav {
+      overflow-x: auto;
+      white-space: nowrap;
+      padding-bottom: 2px;
+    }
+    .metrics {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .feed {
+      right: var(--s3);
+    }
   }
 </style>

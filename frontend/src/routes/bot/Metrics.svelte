@@ -169,7 +169,7 @@
 	.sdk-selection label { display: inline-flex; align-items: center; gap: var(--s1); margin: var(--s2) var(--s3) 0 0; }
   .tiles {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(130px, 100%), 1fr));
     gap: var(--s2);
     margin-bottom: var(--s3);
   }
@@ -178,6 +178,7 @@
     gap: 0;
     align-items: center;
     margin-bottom: var(--s3);
+    overflow-x: auto;
   }
   .periods button + button {
     border-left: none;
@@ -192,7 +193,7 @@
   }
   .charts {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
     gap: var(--s3);
     margin-bottom: var(--s4);
   }
