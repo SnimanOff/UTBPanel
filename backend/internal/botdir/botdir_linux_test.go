@@ -36,7 +36,7 @@ func TestBotDirLinksAreNotFollowed(t *testing.T) {
 		t.Skip("needs root")
 	}
 	base := t.TempDir()
-	must(t, os.Chmod(base, 0o711))
+	must(t, os.Chmod(base, 0o711)) //nolint:gosec // the production layout of /data/core
 	secret := filepath.Join(base, "master.key")
 	must(t, os.WriteFile(secret, []byte("key"), 0o600))
 	keys := filepath.Join(base, "keys")

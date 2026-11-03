@@ -26,7 +26,7 @@ func TestBotLinksReachNoCoreFile(t *testing.T) {
 	}
 	ctx := context.Background()
 	base := t.TempDir()
-	must(t, os.Chmod(base, 0o711))
+	must(t, os.Chmod(base, 0o711)) //nolint:gosec // the production layout of /data/core
 	const uid = 12346
 	core := filepath.Join(base, "core.db")
 	db, err := sql.Open("sqlite", "file:"+core)
@@ -39,10 +39,10 @@ func TestBotLinksReachNoCoreFile(t *testing.T) {
 	must(t, err)
 
 	// As in /data/core: the bot passes through, lists nothing; backups are root's.
-	must(t, os.Chmod(filepath.Dir(base), 0o711))
-	must(t, os.Mkdir(filepath.Join(base, "bots"), 0o711))
+	must(t, os.Chmod(filepath.Dir(base), 0o711)) //nolint:gosec // the production layout of /data/core
+	must(t, os.Mkdir(filepath.Join(base, "bots"), 0o711)) //nolint:gosec // the production layout of /data/core
 	botDir := filepath.Join(base, "bots", "1")
-	must(t, os.Mkdir(botDir, 0o770))
+	must(t, os.Mkdir(botDir, 0o770)) //nolint:gosec // the production layout of /data/core
 	must(t, os.Chown(botDir, 0, uid))
 	must(t, os.Chmod(botDir, 0o1770)) //nolint:gosec // the bot directory layout
 	botDB := filepath.Join(botDir, "bot.db")
