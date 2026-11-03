@@ -21,7 +21,7 @@
     font-size: var(--fs-s);
   }
   .error {
-    color: var(--danger);
+    color: var(--danger-text);
     font-size: var(--fs-s);
     white-space: pre-wrap;
   }

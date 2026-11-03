@@ -283,14 +283,14 @@
     padding-left: var(--s2);
   }
   .text :global(a) {
-    color: var(--accent-hi);
+    color: var(--accent-text);
   }
   .kb {
     margin-top: var(--s1);
     border: var(--line);
     text-align: center;
     padding: var(--s1);
-    color: var(--accent-hi);
+    color: var(--accent-text);
   }
   table {
     width: 100%;
@@ -328,7 +328,7 @@
     gap: var(--s1);
   }
   .ok {
-    color: var(--accent-hi);
+    color: var(--accent-text);
   }
 
   /* Phones: one column, rows of controls wrap. */

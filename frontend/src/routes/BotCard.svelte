@@ -136,14 +136,14 @@
     margin-left: auto;
   }
   .panics {
-    color: var(--danger);
+    color: var(--danger-text);
     margin-left: auto;
   }
   .panics {
-    color: var(--danger);
+    color: var(--danger-text);
   }
   .canary {
-    color: var(--accent-hi);
+    color: var(--accent-text);
   }
   .maint {
     color: var(--warn);

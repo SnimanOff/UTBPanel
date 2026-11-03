@@ -32,7 +32,7 @@ pre,
 }
 
 .danger {
-  color: var(--danger);
+  color: var(--danger-text);
 }
 
 button {

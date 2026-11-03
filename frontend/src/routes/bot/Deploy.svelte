@@ -310,10 +310,10 @@
     text-decoration: none;
   }
   del {
-    color: var(--danger);
+    color: var(--danger-text);
   }
   ins {
-    color: var(--accent-hi);
+    color: var(--accent-text);
   }
   .reports {
     display: grid;
@@ -383,7 +383,7 @@
     margin: var(--s1) 0;
   }
   .ok {
-    color: var(--accent-hi);
+    color: var(--accent-text);
   }
   .pre {
     white-space: pre-wrap;

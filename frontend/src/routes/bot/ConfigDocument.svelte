@@ -88,5 +88,5 @@
   .changes { margin: var(--s3) 0; max-height: 400px; overflow: auto; }
   .change { display: grid; grid-template-columns: 1fr auto; gap: var(--s1) var(--s3); border-bottom: var(--line); padding: var(--s2) 0; }
   del, ins { grid-column: 1 / -1; white-space: pre-wrap; overflow-wrap: anywhere; text-decoration: none; }
-  del { color: var(--danger); } ins { color: var(--accent-hi); }
+  del { color: var(--danger-text); } ins { color: var(--accent-text); }
 </style>

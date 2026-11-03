@@ -126,7 +126,7 @@
     flex-wrap: wrap;
   }
   .canary {
-    color: var(--accent-hi);
+    color: var(--accent-text);
   }
   .maint {
     color: var(--warn);

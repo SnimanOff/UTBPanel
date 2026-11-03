@@ -11,6 +11,10 @@
   --accent-hi: #8a45c8;
   --danger: #c8102e;
   --warn: #b8862b;
+  /* Text in these colors: the fills above are too dark for small text on
+     the dark background (3.4:1 and 3.5:1); these give 6.5:1 and 7.5:1. */
+  --danger-text: #ff5a6a;
+  --accent-text: #b48cf0;
 
   --font-text: 'IBM Plex Sans', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;

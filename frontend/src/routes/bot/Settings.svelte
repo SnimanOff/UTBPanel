@@ -261,7 +261,7 @@
     margin-bottom: var(--s3);
   }
   .ok {
-    color: var(--accent-hi);
+    color: var(--accent-text);
   }
   .pre {
     white-space: pre-wrap;

@@ -30,6 +30,6 @@
     font-size: var(--fs-xs);
   }
   .bad .value {
-    color: var(--danger);
+    color: var(--danger-text);
   }
 </style>

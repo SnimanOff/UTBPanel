@@ -111,6 +111,6 @@
     padding: var(--s2);
   }
   .ok {
-    color: var(--accent-hi);
+    color: var(--accent-text);
   }
 </style>

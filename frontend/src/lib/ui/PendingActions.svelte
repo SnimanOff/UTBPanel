@@ -102,10 +102,10 @@
     text-decoration: none;
   }
   del {
-    color: var(--danger);
+    color: var(--danger-text);
   }
   ins {
-    color: var(--accent-hi);
+    color: var(--accent-text);
   }
   .args {
     font-size: var(--fs-s);

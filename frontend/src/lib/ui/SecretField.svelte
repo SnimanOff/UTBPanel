@@ -47,7 +47,7 @@
     text-overflow: ellipsis;
   }
   .error {
-    color: var(--danger);
+    color: var(--danger-text);
     font-size: var(--fs-s);
     margin: 2px 0 var(--s2) 208px;
     white-space: pre-wrap;

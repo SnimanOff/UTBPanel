@@ -183,10 +183,10 @@
     color: var(--warn);
   }
   .line.error .m {
-    color: var(--danger);
+    color: var(--danger-text);
   }
   .line.core .m {
-    color: var(--accent-hi);
+    color: var(--accent-text);
   }
   .empty {
     padding: var(--s3);

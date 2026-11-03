@@ -260,7 +260,7 @@
     margin-bottom: var(--s2);
   }
   .ok {
-    color: var(--accent-hi);
+    color: var(--accent-text);
   }
 
   /* Phones: one column, rows of controls wrap. */
