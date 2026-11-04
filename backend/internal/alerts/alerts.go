@@ -33,6 +33,8 @@ type Notification struct {
 	Count    int       `json:"count"`
 	Read     bool      `json:"read"`
 	Resolved bool      `json:"resolved"`
+	// Key glues repeats; subscribers (the service bot) need it.
+	Key string `json:"-"`
 }
 
 // Note is what an event becomes: Key glues repeats, Resolves closes keys.
@@ -151,7 +153,7 @@ func (s *Service) insert(ctx context.Context, botID int64, n Note, now time.Time
 		return
 	}
 	id, _ := res.LastInsertId()
-	s.publish(Notification{ID: id, TS: now.UTC(), LastTS: now.UTC(), BotID: botID, Kind: n.Kind, Severity: n.Severity, Text: text, Href: n.Href, Count: 1})
+	s.publish(Notification{ID: id, TS: now.UTC(), LastTS: now.UTC(), BotID: botID, Kind: n.Kind, Severity: n.Severity, Text: text, Href: n.Href, Count: 1, Key: n.Key})
 }
 
 func (s *Service) publish(n Notification) {
@@ -322,6 +324,13 @@ func Map(ev events.Event) (Note, bool) {
 		return Note{Kind: "maintenance", Severity: "warn", Key: "maintlate:" + id, Text: "техработы затянулись: продлите или закончите", Href: bot + "/deploy"}, true
 	case "maintenance_deploy_failed":
 		return Note{Kind: "maintenance", Severity: "error", Key: "maintdeploy:" + id, Text: "деплой на техработах не прошёл, техработы продолжаются", Href: bot + "/deploy"}, true
+	case "broadcast_revised":
+		what := "исправлена"
+		if str(ev, "revision") == "deleted" {
+			what = "отозвана"
+		}
+		return Note{Kind: "broadcast", Severity: "info", Key: "bcrev:" + id + ":" + num(ev, "id") + ":" + str(ev, "revision"),
+			Text: "рассылка " + what + ": готово " + num(ev, "done") + ", ошибок " + num(ev, "failed"), Href: bot + "/broadcast"}, true
 	case "broadcast_finished":
 		return Note{Kind: "broadcast", Severity: "info", Key: "bc:" + id + ":" + num(ev, "id"),
 			Text: "рассылка завершена: доставлено " + num(ev, "sent") + ", заблокировали " + num(ev, "blocked") + ", ошибок " + num(ev, "failed"), Href: bot + "/broadcast"}, true

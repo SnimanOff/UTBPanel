@@ -153,8 +153,12 @@ func (s *Service) list(w http.ResponseWriter, r *http.Request) {
 		api.WriteError(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
+	caller := api.CallerFrom(r.Context())
 	out := make([]View, 0, len(bs))
 	for _, b := range bs {
+		if !caller.SeesBot(b.ID) {
+			continue
+		}
 		out = append(out, s.view(r.Context(), b, metas))
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Position < out[j].Position })

@@ -2,6 +2,7 @@ package broadcast
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"strings"
 	"time"
@@ -25,10 +26,10 @@ func markup(bs []Button) json.RawMessage {
 
 // deliver sends the message to one chat; the photo goes by file_id once
 // Telegram has given one.
-func (s *Service) deliver(ctx context.Context, token string, b *B, chat int64) error {
+func (s *Service) deliver(ctx context.Context, token string, b *B, chat int64) (int64, error) {
 	if len(b.Photo) == 0 && b.fileID == "" {
-		_, err := s.TG.SendMessage(ctx, token, telegram.SendMessage{ChatID: chat, Text: b.Text, ParseMode: b.ParseMode, ReplyMarkup: markup(b.Buttons)})
-		return err
+		m, err := s.TG.SendMessage(ctx, token, telegram.SendMessage{ChatID: chat, Text: b.Text, ParseMode: b.ParseMode, ReplyMarkup: markup(b.Buttons)})
+		return m.MessageID, err
 	}
 	p := telegram.SendPhoto{ChatID: chat, Caption: b.Text, ParseMode: b.ParseMode, ReplyMarkup: markup(b.Buttons)}
 	if b.fileID != "" {
@@ -47,7 +48,7 @@ func (s *Service) deliver(ctx context.Context, token string, b *B, chat int64) e
 			s.DB.W.ExecContext(ctx, `UPDATE broadcasts SET photo_file_id = ? WHERE id = ?`, b.fileID, b.ID)
 		}
 	}
-	return err
+	return m.MessageID, err
 }
 
 // SendTest sends the message once, to the owner (preview).
@@ -59,9 +60,14 @@ func (s *Service) SendTest(ctx context.Context, b B, chat int64) error {
 	if b.ParseMode == "" {
 		b.ParseMode = "HTML"
 	}
-	return s.deliver(ctx, token, &b, chat)
+	_, err = s.deliver(ctx, token, &b, chat)
+	return err
 }
 
+type sentMessage struct{ user, message, at int64 }
+
+// save writes progress together with the message ids delivered since the
+// last save (they make editing and recalling possible).
 func (s *Service) save(b *B, final bool) error {
 	errs, _ := json.Marshal(b.Errors)
 	q := `UPDATE broadcasts SET cursor = ?, total = ?, sent = ?, blocked = ?, failed = ?, errors = ? WHERE id = ?`
@@ -70,8 +76,21 @@ func (s *Service) save(b *B, final bool) error {
 		q = `UPDATE broadcasts SET cursor = ?, total = ?, sent = ?, blocked = ?, failed = ?, errors = ?, state = ?, finished_at = ? WHERE id = ? AND state = ?`
 		args = []any{b.cursor, b.Total, b.Sent, b.Blocked, b.Failed, string(errs), Done, store.Now(), b.ID, Running}
 	}
+	sent := b.sent
 	// Progress is written even when the run was cancelled.
-	_, err := s.DB.W.ExecContext(context.Background(), q, args...)
+	err := s.DB.Tx(context.Background(), func(tx *sql.Tx) error {
+		for _, m := range sent {
+			if _, err := tx.Exec(`INSERT OR REPLACE INTO broadcast_messages (broadcast_id, user_id, message_id, sent_at) VALUES (?, ?, ?, ?)`,
+				b.ID, m.user, m.message, m.at); err != nil {
+				return err
+			}
+		}
+		_, err := tx.Exec(q, args...)
+		return err
+	})
+	if err == nil {
+		b.sent = b.sent[:0]
+	}
 	return err
 }
 
@@ -137,9 +156,10 @@ func (s *Service) send(ctx context.Context, id int64) error {
 				if err := s.Limit.Wait(ctx, b.BotID); err != nil {
 					return err
 				}
-				err := s.deliver(ctx, token, &b, user)
+				msg, err := s.deliver(ctx, token, &b, user)
 				if err == nil {
 					b.Sent++
+					b.sent = append(b.sent, sentMessage{user: user, message: msg, at: time.Now().Unix()})
 					break
 				}
 				if ctx.Err() != nil {

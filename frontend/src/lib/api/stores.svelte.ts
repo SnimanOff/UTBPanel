@@ -19,7 +19,8 @@ class BotsStore {
       try {
         const [bots, groups] = await Promise.all([
           api.get<BotView[]>('/api/bots'),
-          api.get<Group[]>('/api/groups'),
+          // A person with some bots does not see groups.
+          api.get<Group[]>('/api/groups').catch(() => [] as Group[]),
         ])
         this.bots = bots
         this.groups = groups

@@ -5,8 +5,10 @@
   import { utc } from '../../lib/format'
   import Box from '../../lib/ui/Box.svelte'
   import HoldButton from '../../lib/ui/HoldButton.svelte'
+  import Payments from './Payments.svelte'
 
   let { botId }: { botId: number } = $props()
+  let payUser = $state(0)
   type List = Schemas['UserList']
   type Audience = Schemas['Audience']
   const PAGE = 100
@@ -109,6 +111,7 @@
                 <button onclick={() => openBan(u.id)}>бан</button>
               {/if}
               {#if u.blocked}<span class="muted">заблокировал</span>{/if}
+              <button onclick={() => (payUser = u.id)} title="Платежи пользователя">платежи</button>
             </td>
           </tr>
           {#if banFor === u.id}
@@ -146,6 +149,7 @@
         <button disabled={page >= pages - 1} onclick={() => page++}>→</button>
       </div>
     {/if}
+    <div class="payments"><Payments {botId} bind:user={payUser} /></div>
   </div>
   {#if aud}
     <Box title="Аудитория">
@@ -211,6 +215,9 @@
   }
   .banrow input:first-child {
     flex: 1;
+  }
+  .payments {
+    margin-top: var(--s4);
   }
   .pager {
     display: flex;

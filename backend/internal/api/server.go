@@ -27,17 +27,40 @@ const (
 	SourceUI  Source = "ui"
 	SourceMCP Source = "mcp"
 	SourceCLI Source = "cli"
+	// SourceWeb is a browser signed in with a passkey on the web listener.
+	SourceWeb Source = "web"
 )
+
+// Scope limits a passkey caller to some bots and a role.
+type Scope struct {
+	All  bool
+	Bots map[int64]bool
+	// Role: view (read operations), manage (read, write, confirm) or full
+	// (with All: what a child key can do).
+	Role string
+}
 
 // Caller is the authenticated client of a request.
 type Caller struct {
 	pki.Identity
 	IP     string
 	Source Source
+	// Scope is nil for gate keys: they see every bot.
+	Scope *Scope
 }
 
 // IsOwner reports whether the caller holds the owner key.
 func (c Caller) IsOwner() bool { return c.Kind == pki.Owner }
+
+// SeesBot reports whether the caller may see bot id.
+func (c Caller) SeesBot(id int64) bool {
+	return c.Scope == nil || c.Scope.All || c.Scope.Bots[id]
+}
+
+// Limited reports whether the caller sees only some bots or some operations.
+func (c Caller) Limited() bool {
+	return c.Scope != nil && (!c.Scope.All || c.Scope.Role != "full")
+}
 
 type callerKey struct{}
 
@@ -71,16 +94,34 @@ type Server struct {
 // New returns a server with an empty route table.
 func New(ca *pki.CA, w *store.Writer, log *slog.Logger) *Server {
 	s := &Server{CA: ca, W: w, Log: log, Mux: NewMux()}
-	s.Use(Guard)
 	s.Mux.HandleFunc("GET /api/ping", func(w http.ResponseWriter, r *http.Request) {
 		c := CallerFrom(r.Context())
-		WriteJSON(w, http.StatusOK, map[string]string{"pong": c.Name, "kind": string(c.Kind)})
+		out := map[string]any{"pong": c.Name, "kind": string(c.Kind), "source": string(c.Source)}
+		if c.Scope != nil {
+			bots := []int64{}
+			for id := range c.Scope.Bots {
+				bots = append(bots, id)
+			}
+			out["scope"] = map[string]any{"all": c.Scope.All, "role": c.Scope.Role, "bots": bots}
+		}
+		WriteJSON(w, http.StatusOK, out)
 	})
 	return s
 }
 
 // Use adds middleware applied inside the authentication layer.
 func (s *Server) Use(mw func(http.Handler) http.Handler) { s.middleware = append(s.middleware, mw) }
+
+// Chain is the route table wrapped in the middleware, without the
+// authentication and the local-port guard: the passkey listener puts its
+// own in front.
+func (s *Server) Chain() http.Handler {
+	var h http.Handler = s.Mux
+	for i := len(s.middleware) - 1; i >= 0; i-- {
+		h = s.middleware[i](h)
+	}
+	return h
+}
 
 // TLSConfig returns the :443 TLS settings: TLS 1.3, client certificate
 // required and checked against the registry on every handshake, so a
@@ -109,10 +150,7 @@ func (s *Server) TLSConfig(publicAddr string) (*tls.Config, error) {
 
 // Handler authenticates by client certificate and dispatches.
 func (s *Server) Handler() http.Handler {
-	var h http.Handler = s.Mux
-	for i := len(s.middleware) - 1; i >= 0; i-- {
-		h = s.middleware[i](h)
-	}
+	h := Guard(s.Chain())
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		NoFraming(w.Header())
 		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {

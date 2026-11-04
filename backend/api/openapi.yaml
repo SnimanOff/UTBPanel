@@ -465,6 +465,39 @@ paths:
       x-mcp: confirm
       responses:
         "204": { description: Done }
+  /api/bots/{id}/broadcasts/{bid}/edit:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: bid, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: edit_broadcast
+      tags: [broadcasts]
+      summary: Change the text and buttons of delivered messages (within 48 h, not while sending); the picture stays
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+                parse_mode: { type: string, enum: [HTML, MarkdownV2] }
+                buttons: { type: array, items: { $ref: "#/components/schemas/LinkButton" } }
+      responses:
+        "204": { description: Started; progress in rev_done and rev_failed }
+  /api/bots/{id}/broadcasts/{bid}/recall:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: bid, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: recall_broadcast
+      tags: [broadcasts]
+      summary: Delete delivered messages from users' chats (within 48 h); a paused broadcast is cancelled
+      x-mcp: never
+      responses:
+        "204": { description: Started; progress in rev_done and rev_failed }
 
   /api/bots/{id}/deploys:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
@@ -1094,6 +1127,30 @@ paths:
       x-mcp: write
       responses:
         "204": { description: Done }
+  /api/bots/{id}/payments:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: list_payments
+      tags: [users]
+      summary: Payments of the bot, newest first; filter by user
+      x-mcp: read
+      parameters:
+        - { name: user, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: offset, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Payment" } } } } }
+  /api/bots/{id}/payments/{pid}/refund:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: pid, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: refund_payment
+      tags: [users]
+      summary: Refund a payment in Stars (refundStarPayment); other currencies are refunded at the payment provider
+      x-mcp: never
+      responses:
+        "200": { description: Refunded, content: { application/json: { schema: { $ref: "#/components/schemas/Payment" } } } }
   /api/users/{uid}/ban:
     parameters:
       - { name: uid, in: path, required: true, schema: { type: integer } }
@@ -1647,6 +1704,143 @@ paths:
                     ok: { type: boolean }
                     error: { type: string }
 
+  /api/access:
+    get:
+      operationId: list_web_access
+      tags: [keys]
+      summary: Passkey accesses (phones and people with some bots); owner only
+      x-mcp: never
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enabled, url, accesses]
+                properties:
+                  enabled: { type: boolean, description: false without DOMAIN }
+                  url: { type: string }
+                  accesses: { type: array, items: { $ref: "#/components/schemas/WebAccess" } }
+    post:
+      operationId: create_web_access
+      tags: [keys]
+      summary: Invite a person; returns a one-time link valid for 24 h; owner only
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, role]
+              properties:
+                name: { type: string }
+                role: { type: string, enum: [view, manage, full], description: "full only with all_bots" }
+                all_bots: { type: boolean }
+                bots: { type: array, items: { type: integer } }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access, url, expires_at]
+                properties:
+                  access: { $ref: "#/components/schemas/WebAccess" }
+                  url: { type: string }
+                  expires_at: { type: string, format: date-time }
+  /api/access/{id}/invite:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: invite_web_access
+      tags: [keys]
+      summary: A new one-time link for another device of the same person; owner only
+      x-mcp: never
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, expires_at]
+                properties:
+                  url: { type: string }
+                  expires_at: { type: string, format: date-time }
+  /api/access/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    delete:
+      operationId: delete_web_access
+      tags: [keys]
+      summary: Revoke an access with its passkeys and sessions at once; owner only
+      x-mcp: never
+      responses:
+        "204": { description: Done }
+  /api/access/credentials/{cid}/approve:
+    parameters:
+      - { name: cid, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: approve_web_passkey
+      tags: [keys]
+      summary: Approve a passkey after comparing its four-word code; owner only
+      x-mcp: never
+      responses:
+        "204": { description: Done }
+  /api/access/credentials/{cid}:
+    parameters:
+      - { name: cid, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: delete_web_passkey
+      tags: [keys]
+      summary: Reject or remove one passkey; owner only
+      x-mcp: never
+      responses:
+        "204": { description: Done }
+
+  /api/server/service-bot:
+    get:
+      operationId: get_service_bot
+      tags: [system]
+      summary: Service bot that sends notifications to the owner's Telegram (no token is returned)
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ServiceBot" } } } }
+    put:
+      operationId: set_service_bot
+      tags: [system]
+      summary: Connect the service bot (token from BotFather, checked by getMe) and/or set the level; owner only
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string }
+                level: { type: string, enum: [errors, warnings] }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ServiceBot" } } } }
+    delete:
+      operationId: delete_service_bot
+      tags: [system]
+      summary: Disconnect the service bot; owner only
+      x-mcp: never
+      responses:
+        "204": { description: Done }
+  /api/server/service-bot/test:
+    post:
+      operationId: test_service_bot
+      tags: [system]
+      summary: Send a test message to the owner; 409 not_started when the owner has not pressed Start
+      x-mcp: never
+      responses:
+        "204": { description: Sent }
+
   /api/server/services:
     get:
       operationId: get_server_services
@@ -1773,6 +1967,43 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
   schemas:
+    WebAccess:
+      type: object
+      required: [id, name, role, all_bots, bots, created_at, created_by, credentials]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        role: { type: string, enum: [view, manage, full] }
+        all_bots: { type: boolean }
+        bots: { type: array, items: { type: integer } }
+        created_at: { type: string, format: date-time }
+        created_by: { type: string }
+        invite:
+          type: object
+          required: [expires_at]
+          properties:
+            expires_at: { type: string, format: date-time }
+        credentials:
+          type: array
+          items:
+            type: object
+            required: [id, code, approved, device, ip, created_at]
+            properties:
+              id: { type: string }
+              code: { type: string, description: Four words to compare with the phone }
+              approved: { type: boolean }
+              device: { type: string, description: User-Agent of the phone (untrusted) }
+              ip: { type: string }
+              created_at: { type: string, format: date-time }
+              last_used: { type: string, format: date-time }
+    ServiceBot:
+      type: object
+      required: [configured, username, level, owner_tg_id]
+      properties:
+        configured: { type: boolean }
+        username: { type: string }
+        level: { type: string, enum: [errors, warnings], description: "errors: only errors; warnings: errors and warnings" }
+        owner_tg_id: { type: integer, description: Recipient; 0 means not set in the panel settings }
     FullBackupSettings:
       type: object
       required: [enabled, cron, keep, files]
@@ -2287,6 +2518,10 @@ components:
         blocked: { type: integer }
         failed: { type: integer }
         errors: { type: object, additionalProperties: { type: integer } }
+        revision: { type: string, enum: ["", editing, deleting, edited, deleted], description: Editing or recalling after sending }
+        rev_done: { type: integer }
+        rev_failed: { type: integer }
+        revisable_until: { type: string, format: date-time, description: Edit and recall work until then }
     DeployRecord:
       type: object
       required: [id, from, to, actor, started_at, result]
@@ -2363,6 +2598,19 @@ components:
         value: { type: number }
         minutes: { type: integer }
         enabled: { type: boolean }
+    Payment:
+      type: object
+      required: [id, ts, user_id, currency, amount, payload, charge_id, refundable]
+      properties:
+        id: { type: integer }
+        ts: { type: string, format: date-time }
+        user_id: { type: integer }
+        currency: { type: string, description: "XTR for Telegram Stars" }
+        amount: { type: integer, description: In the smallest units of the currency }
+        payload: { type: string, description: Invoice payload set by the bot (untrusted) }
+        charge_id: { type: string }
+        refunded_at: { type: string, format: date-time }
+        refundable: { type: boolean, description: Stars with a charge id, not refunded yet }
     BanRequest:
       type: object
       required: [reason]

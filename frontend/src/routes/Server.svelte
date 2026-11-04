@@ -11,6 +11,7 @@
   import Chart from '../lib/ui/Chart.svelte'
   import Tile from '../lib/ui/Tile.svelte'
   import Backups from './Backups.svelte'
+  import ServiceBot from './ServiceBot.svelte'
 
   type Server = Schemas['ServerMetrics']
   type Load = { bot_id: number; updates_24h: number; errors_24h: number; cpu_max: number; rss_max: number; revenue_24h: Record<string, number> }
@@ -71,6 +72,7 @@
 
 <h1>Сервер</h1>
 <Backups />
+<ServiceBot />
 {#if error}<p class="danger">{error}</p>{/if}
 
 <div class="tiles">

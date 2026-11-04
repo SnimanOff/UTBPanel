@@ -51,7 +51,34 @@
       error = errorText(e)
     }
   }
-  const active = $derived(history.some((b) => b.state === 'running' || b.state === 'scheduled'))
+  const active = $derived(
+    history.some((b) => b.state === 'running' || b.state === 'scheduled' || b.revision === 'editing' || b.revision === 'deleting'),
+  )
+
+  // Editing and recalling a sent broadcast (48 hours, Telegram's limit).
+  let editing = $state<number | null>(null)
+  let editText = $state('')
+  let editButtons = $state<Btn[]>([])
+  const revisable = (b: B) =>
+    !!b.revisable_until && new Date(b.revisable_until).getTime() > Date.now() &&
+    b.state !== 'running' && b.state !== 'scheduled' &&
+    b.revision !== 'editing' && b.revision !== 'deleting' && b.revision !== 'deleted'
+  function openEdit(b: B) {
+    editing = b.id
+    editText = b.text
+    editButtons = b.buttons.map((x) => ({ ...x }))
+  }
+  const saveEdit = (b: B) =>
+    run(async () => {
+      await api.post(`/api/bots/${botId}/broadcasts/${b.id}/edit`, {
+        text: editText, parse_mode: b.parse_mode, buttons: editButtons.filter((x) => x.text.trim() && x.url.trim()),
+      })
+      editing = null
+      await loadHistory()
+    }, 'Сообщения исправляются')
+  const revisions: Record<string, string> = {
+    editing: 'исправляется', deleting: 'отзывается', edited: 'исправлена', deleted: 'отозвана',
+  }
   $effect(() => {
     void botId
     loadHistory()
@@ -200,6 +227,11 @@
           <td>
             {states[b.state] ?? b.state}
             {#if b.state === 'scheduled'}<span class="muted num">{utc(b.starts_at)}</span>{/if}
+            {#if b.revision}
+              <div class="muted">
+                {revisions[b.revision] ?? b.revision}: <span class="num">{b.rev_done ?? 0}</span>{#if b.rev_failed} · ошибок <span class="num">{b.rev_failed}</span>{/if}
+              </div>
+            {/if}
           </td>
           <td><div class="bar"><div style:width="{pct(b)}%"></div></div><span class="num muted">{done(b)}/{b.total}</span></td>
           <td class="num">{b.sent}</td>
@@ -211,8 +243,33 @@
             {#if b.state === 'running' || b.state === 'scheduled' || b.state === 'paused'}
               <HoldButton onconfirm={() => control(b, 'cancel')}>отменить</HoldButton>
             {/if}
+            {#if revisable(b)}
+              <button onclick={() => (editing === b.id ? (editing = null) : openEdit(b))} title="До {utc(b.revisable_until!)}">исправить</button>
+              <HoldButton onconfirm={() => control(b, 'recall')} title="Удалить сообщение у всех получателей">отозвать</HoldButton>
+            {/if}
           </td>
         </tr>
+        {#if editing === b.id}
+          <tr class="editrow">
+            <td colspan="9">
+              <textarea rows="5" bind:value={editText}></textarea>
+              {#each editButtons as x, i}
+                <div class="line">
+                  <input bind:value={x.text} placeholder="текст кнопки" />
+                  <input class="grow" bind:value={x.url} placeholder="https://…" />
+                  <button class="x" onclick={() => (editButtons = editButtons.filter((_, j) => j !== i))}>×</button>
+                </div>
+              {/each}
+              <div class="line">
+                <button onclick={() => (editButtons = [...editButtons, { text: '', url: '' }])}>+ кнопка-ссылка</button>
+                <span class="grow"></span>
+                {#if b.photo_name}<span class="muted">картинка останется прежней</span>{/if}
+                <button onclick={() => (editing = null)}>Отмена</button>
+                <HoldButton danger={false} disabled={busy || !editText.trim()} onconfirm={() => saveEdit(b)}>Исправить у всех ({b.sent})</HoldButton>
+              </div>
+            </td>
+          </tr>
+        {/if}
       {:else}
         <tr><td colspan="9" class="muted">Рассылок ещё не было</td></tr>
       {/each}
@@ -329,6 +386,9 @@
   }
   .ok {
     color: var(--accent-text);
+  }
+  .editrow textarea {
+    margin-bottom: var(--s1);
   }
 
   /* Phones: one column, rows of controls wrap. */

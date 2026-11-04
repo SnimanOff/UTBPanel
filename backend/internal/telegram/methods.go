@@ -217,3 +217,29 @@ func (c *Client) AnswerPreCheckoutQuery(ctx context.Context, token, id string, o
 	}
 	return c.Call(ctx, token, "answerPreCheckoutQuery", m, nil)
 }
+
+// EditMessage changes the text (or the caption of a picture) and the
+// buttons of a sent message.
+type EditMessage struct {
+	ChatID      int64           `json:"chat_id"`
+	MessageID   int64           `json:"message_id"`
+	Text        string          `json:"text,omitempty"`
+	Caption     string          `json:"caption,omitempty"`
+	ParseMode   string          `json:"parse_mode,omitempty"`
+	ReplyMarkup json.RawMessage `json:"reply_markup,omitempty"`
+}
+
+// EditMessageText edits a text message.
+func (c *Client) EditMessageText(ctx context.Context, token string, p EditMessage) error {
+	return c.Call(ctx, token, "editMessageText", p, nil)
+}
+
+// EditMessageCaption edits the caption of a picture.
+func (c *Client) EditMessageCaption(ctx context.Context, token string, p EditMessage) error {
+	return c.Call(ctx, token, "editMessageCaption", p, nil)
+}
+
+// DeleteMessage deletes a message the bot sent less than 48 hours ago.
+func (c *Client) DeleteMessage(ctx context.Context, token string, chat, message int64) error {
+	return c.Call(ctx, token, "deleteMessage", map[string]any{"chat_id": chat, "message_id": message}, nil)
+}

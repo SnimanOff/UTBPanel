@@ -90,7 +90,7 @@ func New(cfg config.Edge, log *slog.Logger) (*Edge, error) {
 		OnDisconnect: func(_ *wire.Conn, err error) { log.Warn("core connection lost", "err", err) },
 	}
 	e.Panel = &wire.Client{
-		Path: wire.PanelSock(cfg.RunDir), Log: log,
+		Path: wire.PanelSock(cfg.RunDir), Log: log, Mux: e.webCertMux(),
 		Hello:        app.Hello(wire.ProtoEdgePanel, "edge", PanelVersion, 1),
 		OnConnect:    func(c *wire.Conn) { log.Info("connected to panel", "peer", c.Peer().Hello.Name) },
 		OnDisconnect: func(_ *wire.Conn, err error) { log.Warn("panel connection lost", "err", err) },
@@ -111,6 +111,9 @@ func (e *Edge) Run(ctx context.Context) error {
 		return err
 	}
 	e.certPEM = pemBytes
+	if acm != nil {
+		acmeManager.Store(acm)
+	}
 	srv := &http.Server{
 		Addr: e.Cfg.ListenTLS, Handler: e.handler(), TLSConfig: tlsCfg,
 		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 2 * time.Minute,

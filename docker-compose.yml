@@ -7,6 +7,7 @@ x-common: &common
   environment: &env
     TGPANEL_PUBLIC_ADDR: ${PUBLIC_ADDR:?set PUBLIC_ADDR in .env}
     TGPANEL_DOMAIN: ${DOMAIN:-}
+    TGPANEL_WEB_LISTEN: ":${WEB_PORT:-9443}"
     TGPANEL_LOG_LEVEL: ${LOG_LEVEL:-info}
 
 services:
@@ -46,6 +47,7 @@ services:
     user: "1002:1000"
     ports:
       - "443:443"
+      - "${WEB_PORT:-9443}:${WEB_PORT:-9443}" # passkey sign-in from phones, only with DOMAIN
     volumes:
       - panel-data:/data/panel
       - run:/run/tgpanel

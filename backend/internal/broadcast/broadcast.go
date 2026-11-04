@@ -56,8 +56,17 @@ type B struct {
 	Blocked    int            `cbor:"19,keyasint" json:"blocked"`
 	Failed     int            `cbor:"20,keyasint" json:"failed"`
 	Errors     map[string]int `cbor:"21,keyasint" json:"errors"`
-	cursor     int64
-	fileID     string
+	// Revision is editing or recalling after sending:
+	// '' | editing | deleting | edited | deleted.
+	Revision  string `cbor:"22,keyasint" json:"revision"`
+	RevDone   int    `cbor:"23,keyasint" json:"rev_done"`
+	RevFailed int    `cbor:"24,keyasint" json:"rev_failed"`
+	// RevisableUntil: edit and recall work until then (48 h after start).
+	RevisableUntil time.Time `cbor:"25,keyasint,omitzero" json:"revisable_until,omitzero"`
+	cursor         int64
+	revCursor      int64
+	sent           []sentMessage // delivered since the last save
+	fileID         string
 }
 
 // Sender is the part of the Telegram client broadcasts use.
@@ -91,13 +100,15 @@ var (
 )
 
 const columns = `id, bot_id, text, parse_mode, photo, photo_name, photo_file_id, buttons, audience, active_days, starts_at, state, kind,
-	created_by, created_at, COALESCE(started_at, ''), COALESCE(finished_at, ''), cursor, total, sent, blocked, failed, errors`
+	created_by, created_at, COALESCE(started_at, ''), COALESCE(finished_at, ''), cursor, total, sent, blocked, failed, errors,
+	revision, rev_cursor, rev_done, rev_failed`
 
 func scan(row interface{ Scan(...any) error }) (B, error) {
 	var b B
 	var buttons, errs, starts, created, started, finished string
 	err := row.Scan(&b.ID, &b.BotID, &b.Text, &b.ParseMode, &b.Photo, &b.PhotoName, &b.fileID, &buttons, &b.Audience, &b.ActiveDays,
-		&starts, &b.State, &b.Kind, &b.CreatedBy, &created, &started, &finished, &b.cursor, &b.Total, &b.Sent, &b.Blocked, &b.Failed, &errs)
+		&starts, &b.State, &b.Kind, &b.CreatedBy, &created, &started, &finished, &b.cursor, &b.Total, &b.Sent, &b.Blocked, &b.Failed, &errs,
+		&b.Revision, &b.revCursor, &b.RevDone, &b.RevFailed)
 	if err != nil {
 		return b, err
 	}
@@ -107,6 +118,9 @@ func scan(row interface{ Scan(...any) error }) (B, error) {
 	b.CreatedAt, _ = store.ParseTime(created)
 	b.StartedAt, _ = store.ParseTime(started)
 	b.FinishedAt, _ = store.ParseTime(finished)
+	if !b.StartedAt.IsZero() && b.Sent > 0 && b.Revision != Deleted && b.Kind == "" {
+		b.RevisableUntil = b.StartedAt.Add(RevisableFor)
+	}
 	if b.Buttons == nil {
 		b.Buttons = []Button{}
 	}
@@ -233,8 +247,15 @@ func (s *Service) Pause(ctx context.Context, id int64) error {
 	return s.setState(ctx, id, Paused, Running, Scheduled)
 }
 
-// Resume continues a paused broadcast.
+// Resume continues a paused broadcast; not while it is being revised.
 func (s *Service) Resume(ctx context.Context, id int64) error {
+	b, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if b.Revision == Editing || b.Revision == Deleting || b.Revision == Deleted {
+		return ErrState
+	}
 	return s.setState(ctx, id, Running, Paused)
 }
 
@@ -256,8 +277,13 @@ func (s *Service) stop(id int64) {
 func (s *Service) Run(ctx context.Context) {
 	t := time.NewTicker(2 * time.Second)
 	defer t.Stop()
+	var pruned time.Time
 	for {
 		s.Tick(ctx)
+		if time.Since(pruned) > time.Hour {
+			s.Prune(ctx)
+			pruned = time.Now()
+		}
 		select {
 		case <-ctx.Done():
 			s.wg.Wait()
@@ -282,31 +308,53 @@ func (s *Service) Tick(ctx context.Context) {
 	}
 	rows.Close()
 	for _, id := range ids {
-		s.mu.Lock()
-		if s.running == nil {
-			s.running = map[int64]context.CancelFunc{}
-		}
-		if _, busy := s.running[id]; busy {
-			s.mu.Unlock()
-			continue
-		}
-		rctx, cancel := context.WithCancel(ctx)
-		s.running[id] = cancel
-		s.mu.Unlock()
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
-			defer func() {
-				s.mu.Lock()
-				delete(s.running, id)
-				s.mu.Unlock()
-				cancel()
-			}()
-			if err := s.send(rctx, id); err != nil && !errors.Is(err, context.Canceled) && s.Log != nil {
-				s.Log.Error("broadcast failed", "id", id, "err", err)
-			}
-		}()
+		s.launch(ctx, id, s.send)
 	}
+	// Revisions run under the negative id: a paused broadcast may be
+	// recalled while nothing sends it.
+	rows, err = s.DB.R.QueryContext(ctx, `SELECT id FROM broadcasts WHERE revision IN (?, ?)`, Editing, Deleting)
+	if err != nil {
+		return
+	}
+	ids = ids[:0]
+	for rows.Next() {
+		var id int64
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	_ = rows.Close()
+	for _, id := range ids {
+		s.launch(ctx, -id, func(ctx context.Context, id int64) error { return s.revise(ctx, -id) })
+	}
+}
+
+// launch runs fn(key) once at a time per key.
+func (s *Service) launch(ctx context.Context, key int64, fn func(context.Context, int64) error) {
+	s.mu.Lock()
+	if s.running == nil {
+		s.running = map[int64]context.CancelFunc{}
+	}
+	if _, busy := s.running[key]; busy {
+		s.mu.Unlock()
+		return
+	}
+	rctx, cancel := context.WithCancel(ctx)
+	s.running[key] = cancel
+	s.mu.Unlock()
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		defer func() {
+			s.mu.Lock()
+			delete(s.running, key)
+			s.mu.Unlock()
+			cancel()
+		}()
+		if err := fn(rctx, key); err != nil && !errors.Is(err, context.Canceled) && s.Log != nil {
+			s.Log.Error("broadcast failed", "id", key, "err", err)
+		}
+	}()
 }
 
 // Wait waits for running broadcasts (tests).

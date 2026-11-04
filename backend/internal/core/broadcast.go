@@ -38,6 +38,8 @@ func broadcastError(err error) error {
 		return wire.Errorf(wire.CodeBadRequest, "нужен текст или картинка")
 	case errors.Is(err, broadcast.ErrNotFound):
 		return wire.Errorf(wire.CodeNotFound, "нет такой рассылки")
+	case errors.Is(err, broadcast.ErrTooLate):
+		return wire.Errorf("conflict", "прошло больше 48 часов: Telegram уже не даёт менять эти сообщения")
 	case errors.Is(err, broadcast.ErrState):
 		return wire.Errorf("conflict", "в этом состоянии нельзя")
 	}
@@ -97,6 +99,29 @@ func (c *Core) registerBroadcasts() {
 	}))
 	c.Mux.Handle("broadcast.estimate", wire.Func(func(ctx context.Context, _ *wire.Conn, in BroadcastReq) (int, error) {
 		return c.Bcast.Estimate(ctx, in.B.BotID, in.B.Audience, in.B.ActiveDays)
+	}))
+	owned := func(ctx context.Context, in BroadcastReq) error {
+		b, err := c.Bcast.Get(ctx, in.ID)
+		if err == nil && b.BotID != in.B.BotID {
+			err = broadcast.ErrNotFound
+		}
+		return err
+	}
+	c.Mux.Handle("broadcast.edit", wire.Func(func(ctx context.Context, _ *wire.Conn, in BroadcastReq) (struct{}, error) {
+		return struct{}{}, c.Journal.Do(ctx, in.Actor, "broadcast.edit", in.B.BotID, map[string]int64{"id": in.ID}, func() error {
+			if err := owned(ctx, in); err != nil {
+				return broadcastError(err)
+			}
+			return broadcastErrorOrNil(c.Bcast.Edit(ctx, in.ID, in.B.Text, in.B.Buttons))
+		})
+	}))
+	c.Mux.Handle("broadcast.recall", wire.Func(func(ctx context.Context, _ *wire.Conn, in BroadcastReq) (struct{}, error) {
+		return struct{}{}, c.Journal.Do(ctx, in.Actor, "broadcast.recall", in.B.BotID, map[string]int64{"id": in.ID}, func() error {
+			if err := owned(ctx, in); err != nil {
+				return broadcastError(err)
+			}
+			return broadcastErrorOrNil(c.Bcast.Recall(ctx, in.ID))
+		})
 	}))
 	for op, fn := range map[string]func(context.Context, int64) error{
 		"broadcast.pause":  c.Bcast.Pause,

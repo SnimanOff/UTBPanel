@@ -21,10 +21,7 @@ var ErrDevInImage = errors.New("dev mode is not allowed in the Docker image")
 // request acts as the owner key "dev". Only on 127.0.0.1, only with
 // TGPANEL_DEV=1, never in the image.
 func (s *Server) DevHandler() http.Handler {
-	var h http.Handler = s.Mux
-	for i := len(s.middleware) - 1; i >= 0; i-- {
-		h = s.middleware[i](h)
-	}
+	h := Guard(s.Chain())
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 		c := Caller{Identity: pki.Identity{Name: "dev", Kind: pki.Owner, Serial: "dev"}, IP: ip, Source: SourceUI}

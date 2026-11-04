@@ -8,6 +8,8 @@ export type Route =
   | { name: 'audit' }
   | { name: 'keys' }
   | { name: 'ai' }
+  | { name: 'access' }
+  | { name: 'invite'; token: string }
   | { name: 'mini' }
   | { name: 'notfound' }
 
@@ -17,6 +19,8 @@ export function parse(path: string, search = ''): Route {
   switch (parts[0]) {
     case undefined:
       return { name: 'home' }
+    case 'invite':
+      return parts[1] ? { name: 'invite', token: parts[1] } : { name: 'notfound' }
     case 'bots':
       if (parts[1] && /^\d+$/.test(parts[1])) {
         return { name: 'bot', id: Number(parts[1]), tab: parts[2] ?? q.get('tab') ?? 'logs' }
@@ -26,6 +30,7 @@ export function parse(path: string, search = ''): Route {
     case 'audit':
     case 'keys':
     case 'ai':
+    case 'access':
     case 'mini':
       return { name: parts[0] }
   }

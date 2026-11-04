@@ -21,7 +21,8 @@ func (s *Service) registerBroadcasts(mux *api.Mux) {
 	mux.HandleFunc("POST /api/bots/{id}/broadcasts/test", s.testBroadcast)
 	mux.HandleFunc("GET /api/bots/{id}/broadcasts/estimate", s.estimateBroadcast)
 	mux.HandleFunc("GET /api/bots/{id}/broadcasts/{bid}", s.getBroadcast)
-	for _, op := range []string{"pause", "resume", "cancel"} {
+	mux.HandleFunc("POST /api/bots/{id}/broadcasts/{bid}/edit", s.editBroadcast)
+	for _, op := range []string{"pause", "resume", "cancel", "recall"} {
 		mux.HandleFunc("POST /api/bots/{id}/broadcasts/{bid}/"+op, s.controlBroadcast("broadcast."+op))
 	}
 }
@@ -197,4 +198,27 @@ func (s *Service) controlBroadcast(method string) http.HandlerFunc {
 		audit.Annotate(r, method, strconv.FormatInt(bid, 10), nil)
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// editBroadcast changes the text and buttons of delivered messages.
+func (s *Service) editBroadcast(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	bid, ok := broadcastID(w, r)
+	if !ok {
+		return
+	}
+	b := broadcast.B{BotID: id}
+	if !readBroadcast(w, r, &b) {
+		return
+	}
+	req := core.BroadcastReq{B: b, ID: bid, Actor: api.Actor(r.Context())}
+	if err := s.Call(r.Context(), "broadcast.edit", req, nil); err != nil {
+		WriteCoreError(w, err)
+		return
+	}
+	audit.Annotate(r, "broadcast.edit", strconv.FormatInt(bid, 10), nil)
+	w.WriteHeader(http.StatusNoContent)
 }

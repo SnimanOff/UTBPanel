@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/api"
 	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
@@ -97,4 +98,58 @@ func (a *API) unban(w http.ResponseWriter, r *http.Request) {
 	}
 	audit.Annotate(r, "user.unban", strconv.FormatInt(uid, 10), nil)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Payment mirrors core.Payment.
+type Payment struct {
+	ID         int64     `cbor:"1,keyasint" json:"id"`
+	TS         time.Time `cbor:"2,keyasint" json:"ts"`
+	UserID     int64     `cbor:"3,keyasint" json:"user_id"`
+	Currency   string    `cbor:"4,keyasint" json:"currency"`
+	Amount     int64     `cbor:"5,keyasint" json:"amount"`
+	Payload    string    `cbor:"6,keyasint" json:"payload"`
+	ChargeID   string    `cbor:"7,keyasint" json:"charge_id"`
+	RefundedAt time.Time `cbor:"8,keyasint" json:"refunded_at,omitzero"`
+	Refundable bool      `cbor:"9,keyasint" json:"refundable"`
+}
+
+type paymentsQuery struct {
+	BotID  int64 `cbor:"1,keyasint"`
+	UserID int64 `cbor:"2,keyasint,omitempty"`
+	Limit  int   `cbor:"3,keyasint,omitempty"`
+	Offset int   `cbor:"4,keyasint,omitempty"`
+}
+
+type refundReq struct {
+	BotID     int64         `cbor:"1,keyasint"`
+	PaymentID int64         `cbor:"2,keyasint"`
+	Actor     journal.Actor `cbor:"9,keyasint"`
+}
+
+// RegisterPayments adds the payments list and Stars refunds.
+func (a *API) RegisterPayments(mux *api.Mux) {
+	mux.HandleFunc("GET /api/bots/{id}/payments", func(w http.ResponseWriter, r *http.Request) {
+		v := r.URL.Query()
+		q := paymentsQuery{BotID: botID(r)}
+		q.UserID, _ = strconv.ParseInt(v.Get("user"), 10, 64)
+		q.Limit, _ = strconv.Atoi(v.Get("limit"))
+		q.Offset, _ = strconv.Atoi(v.Get("offset"))
+		var out []Payment
+		if err := a.Core.Call(r.Context(), "payments.list", q, &out); err != nil {
+			a.WriteErr(w, err)
+			return
+		}
+		api.WriteJSON(w, http.StatusOK, out)
+	})
+	mux.HandleFunc("POST /api/bots/{id}/payments/{pid}/refund", func(w http.ResponseWriter, r *http.Request) {
+		pid, _ := strconv.ParseInt(r.PathValue("pid"), 10, 64)
+		var p Payment
+		if err := a.Core.Call(r.Context(), "payments.refund", refundReq{BotID: botID(r), PaymentID: pid, Actor: api.Actor(r.Context())}, &p); err != nil {
+			a.WriteErr(w, err)
+			return
+		}
+		audit.Annotate(r, "payment.refund", strconv.FormatInt(pid, 10), map[string]any{
+			"user": p.UserID, "amount": p.Amount, "currency": p.Currency, "charge_id": p.ChargeID})
+		api.WriteJSON(w, http.StatusOK, p)
+	})
 }

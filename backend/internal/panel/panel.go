@@ -4,6 +4,8 @@ package panel
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -27,6 +29,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/core"
 	"github.com/SnimanOff/UTBPanel/backend/internal/counters"
 	"github.com/SnimanOff/UTBPanel/backend/internal/dbgate"
+	"github.com/SnimanOff/UTBPanel/backend/internal/edge"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
 	"github.com/SnimanOff/UTBPanel/backend/internal/livehub"
 	"github.com/SnimanOff/UTBPanel/backend/internal/mcp"
@@ -36,11 +39,13 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/procstat"
 	"github.com/SnimanOff/UTBPanel/backend/internal/safe"
 	"github.com/SnimanOff/UTBPanel/backend/internal/secretreq"
+	"github.com/SnimanOff/UTBPanel/backend/internal/servicebot"
 	"github.com/SnimanOff/UTBPanel/backend/internal/settings"
 	"github.com/SnimanOff/UTBPanel/backend/internal/sources"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store/migrations"
 	"github.com/SnimanOff/UTBPanel/backend/internal/users"
+	"github.com/SnimanOff/UTBPanel/backend/internal/webaccess"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
 )
 
@@ -264,10 +269,15 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	p.Events.Subscribe(p.Metrics.OnCoreEvent)
 	usersAPI := &users.API{Core: p.Core, WriteErr: bots.WriteCoreError}
 	usersAPI.Register(p.API.Mux)
+	usersAPI.RegisterPayments(p.API.Mux)
 	p.Settings = &settings.Store{DB: db}
 	p.Settings.Register(p.API.Mux)
 	p.Bots.Owner = func(r *http.Request) int64 { return p.Settings.Get(r.Context()).OwnerTgID }
 	usersAPI.RegisterClosed(p.API.Mux, func(r *http.Request) int64 { return p.Settings.Get(r.Context()).OwnerTgID })
+	serviceBot := &servicebot.Service{DB: db, Core: p.Core, Notes: notes, Log: log, WriteErr: bots.WriteCoreError,
+		Owner: func(ctx context.Context) int64 { return p.Settings.Get(ctx).OwnerTgID }}
+	serviceBot.Register(p.API.Mux)
+	p.Go(serviceBot.Run)
 	dbAPI := &dbgate.API{Core: p.Core, WriteErr: bots.WriteCoreError}
 	dbAPI.RegisterAPI(p.API.Mux)
 	dbAPI.RegisterBackups(p.API.Mux)
@@ -334,7 +344,59 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	p.API.Mux.ServeMux.Handle("/mcp", mcpServer)
 	p.API.Use(mcpServer.Direct)
 	aidocs.Register(p.API.Mux)
+	if err := p.setupWebAccess(notes); err != nil {
+		_ = p.W.Close()
+		_ = p.DB.Close()
+		return nil, err
+	}
 	return p, nil
+}
+
+// setupWebAccess adds the passkey listener (with a domain) and the
+// owner's "Access" API (always: it explains that a domain is needed).
+func (p *Panel) setupWebAccess(notes *alerts.Service) error {
+	st := &webaccess.Store{DB: p.DB}
+	web, err := webaccess.New(st, p.Cfg.Domain, p.Cfg.WebListen, p.API, api.Static(p.Cfg.WebDir), p.Log)
+	if err != nil {
+		return err
+	}
+	web.Cert = func(ctx context.Context) (*tls.Certificate, error) {
+		for _, conn := range p.EdgeSrv.Conns() {
+			if conn.Proto() != wire.ProtoEdgePanel {
+				continue
+			}
+			var wc edge.WebCert
+			if err := conn.Call(ctx, edge.MethodWebCert, struct{}{}, &wc); err != nil {
+				return nil, err
+			}
+			c, err := tls.X509KeyPair(wc.Chain, wc.Key)
+			return &c, err
+		}
+		return nil, errors.New("the edge is not connected")
+	}
+	web.Pending = func(ctx context.Context, name, code, ip string) {
+		notes.Notify(ctx, 0, alerts.Note{Kind: "new_device", Severity: "warn", Key: "webdev:" + code,
+			Text: "новый ключ входа «" + name + "» ждёт подтверждения, код: " + code + " (IP " + ip + ")", Href: "/access"})
+	}
+	web.Register(p.API.Mux)
+	p.Go(func(ctx context.Context) {
+		for {
+			st.Prune(ctx)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Hour):
+			}
+		}
+	})
+	if web.Enabled() {
+		p.Go(func(ctx context.Context) {
+			if err := web.Run(ctx); err != nil {
+				p.Log.Error("passkey listener stopped", "err", err)
+			}
+		})
+	}
+	return nil
 }
 
 // GateServers returns the addresses written into gate.exe.

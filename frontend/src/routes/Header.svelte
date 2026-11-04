@@ -6,29 +6,37 @@
   import { actions } from '../lib/actions.svelte'
   import PendingActions from '../lib/ui/PendingActions.svelte'
   import NewBot from './NewBot.svelte'
+  import { session } from '../lib/session.svelte'
 
-  const nav = [
+  const all = [
     { href: '/', label: 'Главная', name: 'home' },
     { href: '/server', label: 'Сервер', name: 'server' },
     { href: '/audit', label: 'Аудит', name: 'audit' },
     { href: '/keys', label: 'Ключи', name: 'keys' },
+    { href: '/access', label: 'Доступ', name: 'access', owner: true },
     { href: '/ai', label: 'Нейросети', name: 'ai' },
   ]
+  // A person with some bots sees only the bots; "Доступ" is the owner's.
+  const nav = $derived(session.limited ? all.slice(0, 1) : all.filter((n) => !n.owner || session.owner))
   let adding = $state(false)
   let feedOpen = $state(false)
   const s = $derived(live.server)
   const pct = (v?: number) => (v === undefined ? '—' : Math.round(v) + '%')
   const mbs = (v?: number) => (v === undefined ? '—' : (v / 1048576).toFixed(1))
   // The bell shows how many AI requests wait for the owner.
-  $effect(() => actions.start())
+  $effect(() => {
+    if (session.owner) return actions.start()
+  })
 </script>
 
 <header>
   <a class="logo mono" href="/" use:link>TG PANEL</a>
   <div class="grow">
-    <a class="metrics num" href="/server" use:link title="Сервер">
-      CPU {pct(s?.cpu)} · RAM {pct(s?.ram)} · диск {pct(s?.disk)} · ↓{mbs(s?.rx)} ↑{mbs(s?.tx)} МБ/с · {s?.ups ?? '—'} апд/с
-    </a>
+    {#if !session.limited}
+      <a class="metrics num" href="/server" use:link title="Сервер">
+        CPU {pct(s?.cpu)} · RAM {pct(s?.ram)} · диск {pct(s?.disk)} · ↓{mbs(s?.rx)} ↑{mbs(s?.tx)} МБ/с · {s?.ups ?? '—'} апд/с
+      </a>
+    {/if}
     <nav>
       {#each nav as n}
         <a href={n.href} use:link class:active={router.route.name === n.name}>{n.label}</a>
@@ -36,11 +44,14 @@
     </nav>
   </div>
   <div class="right">
-    <button class="bell" class:has={notifications.unread > 0} onclick={() => (feedOpen = !feedOpen)} title="Уведомления">
-      🔔 <span class="num">{notifications.unread}</span>
-      {#if actions.pending.length}<span class="num ask" title="Нейросеть ждёт подтверждения">· {actions.pending.length}?</span>{/if}
-    </button>
-    <button class="primary" onclick={() => (adding = true)}>+ Бот</button>
+    {#if !session.limited}
+      <button class="bell" class:has={notifications.unread > 0} onclick={() => (feedOpen = !feedOpen)} title="Уведомления">
+        🔔 <span class="num">{notifications.unread}</span>
+        {#if actions.pending.length}<span class="num ask" title="Нейросеть ждёт подтверждения">· {actions.pending.length}?</span>{/if}
+      </button>
+      <button class="primary" onclick={() => (adding = true)}>+ Бот</button>
+    {/if}
+    {#if session.web}<button onclick={() => session.logout()} title={session.name}>Выйти</button>{/if}
   </div>
   {#if feedOpen}
     <div class="feed">

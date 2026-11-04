@@ -80,6 +80,10 @@ type Panel struct {
 	DevAddr string `yaml:"dev_addr" env:"PANEL_DEV_ADDR"`
 	WebDir  string `yaml:"web_dir" env:"WEB_DIR"`
 	GateExe string `yaml:"gate_exe" env:"GATE_EXE"`
+	// Domain enables the passkey listener (WebAuthn needs a domain and a
+	// trusted certificate, which the edge gets from Let's Encrypt).
+	Domain    string `yaml:"domain" env:"DOMAIN"`
+	WebListen string `yaml:"web_listen" env:"WEB_LISTEN"`
 }
 
 func defaultCommon() Common {
@@ -125,12 +129,13 @@ func DefaultCore() Core {
 // DefaultPanel returns panel defaults.
 func DefaultPanel() Panel {
 	return Panel{
-		Common:  defaultCommon(),
-		DataDir: "/data/panel",
-		Listen:  ":443",
-		DevAddr: "127.0.0.1:8080",
-		WebDir:  "/srv/web",
-		GateExe: "/srv/gate/gate.exe",
+		Common:    defaultCommon(),
+		DataDir:   "/data/panel",
+		Listen:    ":443",
+		DevAddr:   "127.0.0.1:8080",
+		WebDir:    "/srv/web",
+		GateExe:   "/srv/gate/gate.exe",
+		WebListen: ":9443",
 	}
 }
 

@@ -76,13 +76,19 @@ func (h *LiveHub) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	caller := api.CallerFrom(r.Context())
+	limited := caller.Scope != nil && !caller.Scope.All
 	filter := func(s counters.Snapshot) counters.Snapshot {
-		if only == nil {
+		if only == nil && !limited {
 			return s
 		}
 		out := counters.Snapshot{TS: s.TS, Server: s.Server, Bots: map[int64]counters.LiveBot{}}
+		if limited {
+			// Someone with access to some bots does not see the server.
+			out.Server = counters.Snapshot{}.Server
+		}
 		for id, b := range s.Bots {
-			if only[id] {
+			if (only == nil || only[id]) && caller.SeesBot(id) {
 				out.Bots[id] = b
 			}
 		}

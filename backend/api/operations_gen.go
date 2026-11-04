@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "3c04c00619429a8c50598677c359198bc2242a8ee9c834b561193d50b90f6bd0"
+const GeneratedHash = "146edf9ef2049c20d566918c785555f23c6377c393fc263d1911b3fd29e65241"
 
 // Op is one operation of the API.
 type Op struct {
@@ -12,6 +12,8 @@ type Op struct {
 
 // Ops lists all operations.
 var Ops = []Op{
+	{"delete_web_passkey", "DELETE", "/api/access/credentials/{cid}", "never", "Reject or remove one passkey; owner only"},
+	{"delete_web_access", "DELETE", "/api/access/{id}", "never", "Revoke an access with its passkeys and sessions at once; owner only"},
 	{"delete_alert_rule", "DELETE", "/api/alert-rules/{rid}", "write", "Delete a rule"},
 	{"delete_bot", "DELETE", "/api/bots/{id}", "never", "Stop the bot, remove its webhook and delete all its data"},
 	{"stop_canary", "DELETE", "/api/bots/{id}/canary", "write", "Cancel the canary; everyone goes back to the main version, the database is not touched"},
@@ -20,6 +22,8 @@ var Ops = []Op{
 	{"delete_secret", "DELETE", "/api/bots/{id}/secrets/{name}", "confirm", "Delete a secret"},
 	{"delete_group", "DELETE", "/api/groups/{gid}", "never", "Delete a group; its bots move to \"No group\""},
 	{"discard_bot_import", "DELETE", "/api/imports/bots/{import}", "never", "Remove temporary import files; an already imported bot stays"},
+	{"delete_service_bot", "DELETE", "/api/server/service-bot", "never", "Disconnect the service bot; owner only"},
+	{"list_web_access", "GET", "/api/access", "never", "Passkey accesses (phones and people with some bots); owner only"},
 	{"list_alert_rules", "GET", "/api/alert-rules", "read", "Threshold rules; ?bot=id for one bot (0 = rules for all bots)"},
 	{"alerts_log", "GET", "/api/alerts/log", "read", "Firings and recoveries of rules, newest first"},
 	{"get_audit", "GET", "/api/audit", "read", "Action log with filters"},
@@ -53,6 +57,7 @@ var Ops = []Op{
 	{"get_metrics", "GET", "/api/bots/{id}/metrics", "read", "Metrics of the bot for a period, with user numbers and deploy marks"},
 	{"get_bot_overview", "GET", "/api/bots/{id}/overview", "read", "Diagnose a bot in one read-only snapshot (process, errors, webhook, deploy, thresholds, limits and queue)"},
 	{"list_panics", "GET", "/api/bots/{id}/panics", "read", "Panic groups (kind + first frame of the bot's code), counts, versions, last stack, \"maybe fixed\""},
+	{"list_payments", "GET", "/api/bots/{id}/payments", "read", "Payments of the bot, newest first; filter by user"},
 	{"get_profile", "GET", "/api/bots/{id}/profile", "read", "Telegram profile for a language (empty = default) and the menu button"},
 	{"list_versions", "GET", "/api/bots/{id}/releases", "read", "Stored versions with build data"},
 	{"get_release_config", "GET", "/api/bots/{id}/releases/{version}/config", "read", "tgpanel.yaml of a stored version and the diff it would make to the current settings"},
@@ -79,6 +84,7 @@ var Ops = []Op{
 	{"get_bots_load", "GET", "/api/server/bots", "read", "Load and revenue of every bot over 24 hours"},
 	{"get_db_checks", "GET", "/api/server/checks", "read", "Results of the weekly quick_check of core.db, panel.db and every bot.db"},
 	{"get_server_metrics", "GET", "/api/server/metrics", "read", "Server metrics (CPU, RAM, disk, network), processes and the sum over all bots"},
+	{"get_service_bot", "GET", "/api/server/service-bot", "read", "Service bot that sends notifications to the owner's Telegram (no token is returned)"},
 	{"get_server_services", "GET", "/api/server/services", "read", "External addresses across all bots over the last 10 minutes"},
 	{"get_panel_settings", "GET", "/api/settings", "read", "Panel settings (Telegram ID of the owner)"},
 	{"get_ai_docs", "GET", "/docs/ai.md", "never", "Guide for neural networks — concepts, every MCP tool with its level and arguments, the settings document schema; generated from this spec"},
@@ -89,13 +95,18 @@ var Ops = []Op{
 	{"update_profile", "PATCH", "/api/bots/{id}/profile", "confirm", "Send only changed fields (name, descriptions, commands, menu); errors come per field"},
 	{"update_settings", "PATCH", "/api/bots/{id}/settings", "confirm", "Change env, variable renames and limits; applies after a restart"},
 	{"rename_group", "PATCH", "/api/groups/{gid}", "never", "Rename a group"},
+	{"create_web_access", "POST", "/api/access", "never", "Invite a person; returns a one-time link valid for 24 h; owner only"},
+	{"approve_web_passkey", "POST", "/api/access/credentials/{cid}/approve", "never", "Approve a passkey after comparing its four-word code; owner only"},
+	{"invite_web_access", "POST", "/api/access/{id}/invite", "never", "A new one-time link for another device of the same person; owner only"},
 	{"save_alert_rule", "POST", "/api/alert-rules", "write", "Add or change a rule (metric p95 | err_rate | cpu | rss | updates | silence | revenue_drop, condition, minutes)"},
 	{"create_full_backup", "POST", "/api/backups", "never", "Create a full archive encrypted by the core's master key (owner only)"},
 	{"create_bot", "POST", "/api/bots", "write", "Add a bot; the token is checked with getMe and never returned. Through MCP leave the token out — the owner is asked for it and the call returns {status waiting, id} for wait_action"},
 	{"create_broadcast", "POST", "/api/bots/{id}/broadcasts", "never", "Start a broadcast now or at starts_at (UTC); text, optional picture and link buttons"},
 	{"test_broadcast", "POST", "/api/bots/{id}/broadcasts/test", "write", "Send the message once to the owner's Telegram ID"},
 	{"cancel_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/cancel", "confirm", "Stop a broadcast for good"},
+	{"edit_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/edit", "never", "Change the text and buttons of delivered messages (within 48 h, not while sending); the picture stays"},
 	{"pause_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/pause", "write", "Pause sending; progress is kept"},
+	{"recall_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/recall", "never", "Delete delivered messages from users' chats (within 48 h); a paused broadcast is cancelled"},
 	{"resume_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/resume", "write", "Continue a paused broadcast"},
 	{"start_canary", "POST", "/api/bots/{id}/canary", "confirm", "Start a canary with a version for listed users and/or a share of users in private chats"},
 	{"promote_canary", "POST", "/api/bots/{id}/canary/promote", "confirm", "Move everyone to the canary's version (deploy with observation and autorollback)"},
@@ -110,6 +121,7 @@ var Ops = []Op{
 	{"schedule_maintenance", "POST", "/api/bots/{id}/maintenance", "confirm", "Plan maintenance (times in UTC; text with {start} and {end}; optionally switch to a version)"},
 	{"extend_maintenance", "POST", "/api/bots/{id}/maintenance/extend", "write", "Move the planned end (+15, +30, +60 minutes)"},
 	{"pause", "POST", "/api/bots/{id}/pause", "write", "Pause the bot: the process runs, users get the maintenance text, payments wait"},
+	{"refund_payment", "POST", "/api/bots/{id}/payments/{pid}/refund", "never", "Refund a payment in Stars (refundStarPayment); other currencies are refunded at the payment provider"},
 	{"upload_release", "POST", "/api/bots/{id}/releases", "write", "Upload a static linux/amd64 binary as a new version (does not deploy it). A local build is usually too big for a tool call; send it through gate with the MCP token — curl -H \"X-Panel: 1\" -H \"Authorization: Bearer <token>\" -F file=@bot http://127.0.0.1:47100/api/bots/<id>/releases — then deploy with deploy_release"},
 	{"deploy_release", "POST", "/api/bots/{id}/releases/{version}/switch", "confirm", "Switch the bot to a stored version; tgpanel.yaml of the version is applied first"},
 	{"restart", "POST", "/api/bots/{id}/restart", "write", "Restart the bot"},
@@ -134,6 +146,7 @@ var Ops = []Op{
 	{"read_notifications", "POST", "/api/notifications/read", "write", "Mark notifications read (all when ids is empty)"},
 	{"reject_secret_request", "POST", "/api/secret-requests/{rid}/reject", "never", "Reject a secret request (owner only)"},
 	{"answer_token_request", "POST", "/api/secret-requests/{rid}/token", "never", "Create the bot of a new-bot request with the owner's token, checked with getMe (owner only)"},
+	{"test_service_bot", "POST", "/api/server/service-bot/test", "never", "Send a test message to the owner; 409 not_started when the owner has not pressed Start"},
 	{"ban_user_everywhere", "POST", "/api/users/{uid}/ban", "never", "Ban a user in all bots at once"},
 	{"enroll", "POST", "/enroll", "never", "Request a device certificate (gate.exe with its enrollment certificate)"},
 	{"set_full_backup_settings", "PUT", "/api/backups/settings", "never", "Set UTC schedule and retention count (owner only)"},
@@ -148,5 +161,6 @@ var Ops = []Op{
 	{"set_token", "PUT", "/api/bots/{id}/token", "never", "Replace the token (checked with getMe). Neural networks use request_secret instead"},
 	{"order_groups", "PUT", "/api/groups/order", "never", "Reorder groups"},
 	{"set_mcp_mode", "PUT", "/api/mcp/groups/{gid}", "never", "Change a group MCP mode through the owner's panel (never MCP)"},
+	{"set_service_bot", "PUT", "/api/server/service-bot", "never", "Connect the service bot (token from BotFather, checked by getMe) and/or set the level; owner only"},
 	{"set_panel_settings", "PUT", "/api/settings", "never", "Change panel settings (owner only)"},
 }
