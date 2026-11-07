@@ -276,18 +276,28 @@
     align-items: center;
     margin-bottom: var(--s2);
   }
+  /* Rows of inputs share the box's width and wrap instead of running past
+     its edge (the secrets box is a third of the page wide). */
   .add,
   .kv {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--s2);
     margin: var(--s2) 0;
   }
+  .add input,
+  .kv input {
+    min-width: 0;
+  }
   .add input:first-child,
   .kv > :first-child {
-    width: 200px;
+    flex: 1 1 140px;
+    max-width: 200px;
   }
+  .add input:nth-child(2),
+  .add > span,
   .kv input:nth-child(2) {
-    flex: 1;
+    flex: 2 1 160px;
   }
   .file {
     border: var(--line);

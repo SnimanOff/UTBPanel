@@ -86,6 +86,7 @@
 {/if}
 {#if error}<p class="danger">{error}</p>{/if}
 
+<div class="stack">
 {#if link}
   <Box title={`Ссылка для «${link.name}»`}>
     <p class="mono url">{link.url}</p>
@@ -153,10 +154,13 @@
     {/each}
   </Box>
 {/each}
+</div>
 
 <style>
   h1 { margin-bottom: var(--s2); }
-  :global(.box) + :global(.box) { margin-top: var(--s3); }
+  /* Scoped to this page: a bare global rule pushed down every box after the
+     first in the grids of other pages. */
+  .stack > :global(.box) + :global(.box) { margin-top: var(--s3); }
   .row { display: flex; gap: var(--s3); align-items: center; flex-wrap: wrap; margin-bottom: var(--s2); }
   .grow { flex: 1; min-width: 220px; }
   .bots { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin: var(--s2) 0; }
