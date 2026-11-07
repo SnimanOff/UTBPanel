@@ -28,8 +28,10 @@ services="${2:-panel,core}"
 dc() { docker compose "$@"; }
 log() { echo "update: $*"; }
 
-image="$(sed -n 's/^IMAGE=//p' .env | tail -n 1)"
-image="${image:-ghcr.io/snimanoff/utbpanel}"
+# The published image. An installation built on the server has a local name
+# in IMAGE (e.g. "utbpanel"); it is switched to the registry here.
+image="${UPDATE_IMAGE:-ghcr.io/snimanoff/utbpanel}"
+was="$(sed -n 's/^IMAGE=//p' .env | tail -n 1)"
 
 setenv() { # NAME VALUE
   if grep -q "^$1=" .env; then
@@ -44,6 +46,15 @@ has() { case ",$services," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 cp .env ".env.before-$version"
 log "pulling $image:$version"
 docker pull -q "$image:$version" >/dev/null
+
+if [ "$was" != "$image" ]; then
+  # IMAGE is shared by all three services. Services not updated now get the
+  # same version too, so whenever compose recreates them it finds the image
+  # in the registry instead of a local tag.
+  log "IMAGE ${was:-<default>} → $image"
+  setenv IMAGE "$image"
+  for v in PANEL_VERSION CORE_VERSION EDGE_VERSION; do setenv "$v" "$version"; done
+fi
 
 if has panel; then
   setenv PANEL_VERSION "$version"

@@ -75,7 +75,7 @@ jobs:
           # it expires with the job, and the login is removed right after.
           printf '%s' "$GHCR_TOKEN" | ssh_ "docker login ghcr.io -u '${{ github.actor }}' --password-stdin >/dev/null"
           set +e
-          ssh_ "cd '$DIR' && sh -s -- '$VERSION' '$SERVICES'" < deploy/update.sh
+          ssh_ "cd '$DIR' && UPDATE_IMAGE='ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/utbpanel' sh -s -- '$VERSION' '$SERVICES'" < deploy/update.sh
           rc=$?
           ssh_ "docker logout ghcr.io >/dev/null 2>&1" || true
           exit $rc
