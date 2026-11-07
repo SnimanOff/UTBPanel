@@ -14,7 +14,9 @@ phase() { dc run --rm tester go test -count=1 -v -tags e2e -run "^$1$" ./e2e; }
 docker build -q -t utbpanel:e2e . >/dev/null
 dc down -v >/dev/null 2>&1 || true
 dc up -d edge core panel faketg
-trap 'dc logs --no-color core edge > /tmp/tge2e.log 2>&1; dc down -v >/dev/null 2>&1' EXIT
+trap 'rc=$?; dc logs --no-color core edge > /tmp/tge2e.log 2>&1
+  if [ "$rc" -ne 0 ]; then echo "---- core and edge logs (last 400 lines)"; tail -n 400 /tmp/tge2e.log; fi
+  dc down -v >/dev/null 2>&1' EXIT
 
 phase TestDelivery
 

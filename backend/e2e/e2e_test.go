@@ -21,6 +21,7 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/dbgate"
 	"github.com/SnimanOff/UTBPanel/backend/internal/deploy"
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
+	"github.com/SnimanOff/UTBPanel/backend/internal/logs"
 	"github.com/SnimanOff/UTBPanel/backend/internal/runner"
 	"github.com/SnimanOff/UTBPanel/backend/internal/users"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
@@ -255,6 +256,35 @@ func lastDeploy(t *testing.T, c *wire.Conn, id int64) core.DeployRecord {
 	return ds[0]
 }
 
+// dumpBot prints the bot's log and deploy history when the test failed:
+// the core's own stdout does not have them, and CI keeps nothing else.
+func dumpBot(t *testing.T, id int64) {
+	if !t.Failed() {
+		return
+	}
+	c := dial(t)
+	defer c.Close()
+	var lines []logs.Line
+	if err := c.Call(context.Background(), "logs.tail", core.LogsQuery{BotID: id, Limit: 400}, &lines); err != nil {
+		t.Logf("logs.tail: %v", err)
+	}
+	t.Logf("---- last %d log lines of bot %d", len(lines), id)
+	for _, l := range lines {
+		t.Logf("%s [%s] %s", l.Time.Format("15:04:05.000"), l.Stream, l.Text)
+	}
+	var ds []core.DeployRecord
+	if err := c.Call(context.Background(), "deploys.list", id, &ds); err != nil {
+		t.Logf("deploys.list: %v", err)
+	}
+	t.Log("---- deploys")
+	for _, d := range ds {
+		t.Logf("%+v", d)
+	}
+	var st runner.Status
+	c.Call(context.Background(), "bots.status", id, &st)
+	t.Logf("---- status %+v", st)
+}
+
 func groupMessage(user int, text string) string {
 	return fmt.Sprintf(`{"update_id":%d,"message":{"message_id":1,"date":0,"chat":{"id":-100%d,"type":"group"},"from":{"id":%d,"is_bot":false,"first_name":"A"},"text":%q}}`,
 		time.Now().UnixNano()%1e9, user, user, text)
@@ -266,6 +296,7 @@ func TestDeployRollback(t *testing.T) {
 	c := dial(t)
 	defer c.Close()
 	id := botID(t, c)
+	t.Cleanup(func() { dumpBot(t, id) })
 	for _, mode := range []string{"crash", "notready", "errors", "schema"} {
 		t.Run(mode, func(t *testing.T) {
 			upload(t, c, id, "bad-"+mode, mode)
