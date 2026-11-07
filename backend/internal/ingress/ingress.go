@@ -106,6 +106,9 @@ type Pipeline struct {
 	Unavailable func(ctx context.Context, u *Update) (edge.Reply, bool)
 	// Observe receives the outcome (metrics, step 12).
 	Observe []func(Outcome)
+	// Enqueue hands the update to an instance in polling mode (getUpdates);
+	// ok=false means the instance takes webhooks on its port.
+	Enqueue func(ctx context.Context, u *Update, timeout time.Duration) (rep edge.Reply, result string, latency time.Duration, ok bool)
 	// BotTimeout bounds the bot's answer.
 	BotTimeout time.Duration
 	// Gate holds new updates while deferred ones are being delivered; it
@@ -344,6 +347,15 @@ func (p *Pipeline) forward(ctx context.Context, u *Update) (edge.Reply, string, 
 	if p.Route != nil {
 		if port, ok := p.Route(u); ok {
 			t.Port, u.Instance = port, "canary"
+		}
+	}
+	if p.Enqueue != nil {
+		c := p.counter(u.BotID)
+		c.Add(1)
+		rep, res, lat, ok := p.Enqueue(ctx, u, p.BotTimeout)
+		c.Add(-1)
+		if ok {
+			return rep, res, lat
 		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, p.BotTimeout)

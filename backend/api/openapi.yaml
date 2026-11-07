@@ -929,11 +929,11 @@ paths:
   /api/bots/{id}/settings/{section}:
     parameters:
       - { $ref: "#/components/parameters/BotID" }
-      - { name: section, in: path, required: true, schema: { type: string, enum: [antiflood, texts, tz, stop, crash_updates] } }
+      - { name: section, in: path, required: true, schema: { type: string, enum: [antiflood, texts, tz, stop, crash_updates, updates] } }
     put:
       operationId: put_settings_section
       tags: [settings]
-      summary: Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates)
+      summary: Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates, getUpdates bridge 'updates' webhook or polling)
       x-mcp: confirm
       requestBody:
         required: true
@@ -2091,7 +2091,7 @@ components:
     BotConfigDocument:
       type: object
       additionalProperties: false
-      required: [env, rename, secrets, antiflood, closed, texts, tz, flags, profile, limits, stop, github, alerts, log_patterns, crash_updates]
+      required: [env, rename, secrets, antiflood, closed, texts, tz, flags, profile, limits, stop, github, alerts, log_patterns, crash_updates, updates]
       properties:
         version: { type: string, description: Opaque revision required when applying; omit in portable release files }
         group:
@@ -2170,6 +2170,7 @@ components:
             required: [name, pattern]
             properties: { name: { type: string }, pattern: { type: string }, regexp: { type: boolean } }
         crash_updates: { type: boolean, x-mcp: confirm }
+        updates: { type: string, enum: [webhook, polling], description: "The «Включить вебхук» switch. polling: a bot written for getUpdates is served from the panel webhook through its getUpdates calls; until an instance calls getUpdates its updates go to PORT, so webhook bots work the same. webhook: getUpdates is refused. Applies at once", x-mcp: confirm }
     BotConfigView:
       type: object
       required: [document, yaml]

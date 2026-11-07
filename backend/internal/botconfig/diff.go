@@ -65,7 +65,7 @@ func Diff(before, after Document) Difference {
 			return
 		}
 		level := "write"
-		for _, prefix := range []string{"env", "rename", "limits", "github", "stop", "crash_updates", "antiflood.enabled", "closed.enabled"} {
+		for _, prefix := range []string{"env", "rename", "limits", "github", "stop", "crash_updates", "updates", "antiflood.enabled", "closed.enabled"} {
 			if path == prefix || strings.HasPrefix(path, prefix+".") {
 				level = "confirm"
 			}

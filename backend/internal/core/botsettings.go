@@ -74,6 +74,16 @@ var sections = map[string]func(json.RawMessage) error{
 		var v bool
 		return json.Unmarshal(b, &v)
 	},
+	"updates": func(b json.RawMessage) error {
+		var v string
+		if err := json.Unmarshal(b, &v); err != nil {
+			return err
+		}
+		if v != "webhook" && v != UpdatesPolling {
+			return wire.Errorf(wire.CodeBadRequest, "режим приёма: webhook или polling")
+		}
+		return nil
+	},
 }
 
 // PutSetting stores a section and tells every cache about it.

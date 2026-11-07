@@ -49,7 +49,7 @@ type Hooks struct {
 	OnCall func(Call)
 	OnConn func(Conn)
 	// Intercept answers a Bot API method locally; ok=false passes it on.
-	Intercept func(botID int64, method string) (body []byte, status int, ok bool)
+	Intercept func(r *http.Request, botID int64, instance, method string) (body []byte, status int, ok bool)
 	// Line writes a [core] line into the bot's log.
 	Line func(botID int64, text string)
 }
@@ -334,7 +334,7 @@ func method(path string) string {
 func (h *handler) forward(w http.ResponseWriter, r *http.Request) {
 	m := method(r.URL.Path)
 	if h.p.Hooks.Intercept != nil && m != "" {
-		if body, status, ok := h.p.Hooks.Intercept(h.bot, m); ok {
+		if body, status, ok := h.p.Hooks.Intercept(r, h.bot, h.inst, m); ok {
 			io.Copy(io.Discard, r.Body)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(status)

@@ -46,6 +46,9 @@ type Settings struct {
 	// e.g. BOT_TOKEN → TELEGRAM_TOKEN.
 	Rename map[string]string `json:"rename,omitempty"`
 	Limits Limits            `json:"limits,omitzero"`
+	// Updates is "polling" with «Включить вебхук» on: the bot may call
+	// getUpdates instead of listening on PORT; empty or "webhook" otherwise.
+	Updates string `json:"updates,omitempty"`
 }
 
 // Bot is what the runner needs to know to start a bot.
@@ -74,6 +77,9 @@ type Hooks struct {
 	Prepare func(context.Context, Bot) error
 	// Readiness reports whether this instance requires an explicit SDK signal.
 	Readiness func(Bot) (usesSDK, ready bool)
+	// Polled reports whether a bot in polling mode called getUpdates since
+	// it started: its readiness instead of an open port.
+	Polled func(Bot) bool
 	// Output receives every line the bot prints.
 	Output func(Line)
 	// Event reports life cycle events (bot_started, bot_crashed…).

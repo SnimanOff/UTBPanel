@@ -148,13 +148,15 @@ type Document struct {
 	Alerts       []Alert              `json:"alerts" yaml:"alerts"`
 	LogPatterns  []logs.Pattern       `json:"log_patterns" yaml:"log_patterns"`
 	CrashUpdates bool                 `json:"crash_updates" yaml:"crash_updates"`
+	// Updates: polling with «Включить вебхук» on (getUpdates is served from the webhook), webhook otherwise.
+	Updates string `json:"updates" yaml:"updates"`
 }
 type Snapshot struct {
 	Document Document `cbor:"1,keyasint"`
 	Version  string   `cbor:"2,keyasint"`
 }
 
-var requiredFields = []string{"env", "rename", "secrets", "antiflood", "closed", "texts", "tz", "flags", "profile", "limits", "stop", "github", "alerts", "log_patterns", "crash_updates"}
+var requiredFields = []string{"env", "rename", "secrets", "antiflood", "closed", "texts", "tz", "flags", "profile", "limits", "stop", "github", "alerts", "log_patterns", "crash_updates", "updates"}
 
 // A settings document is a full replacement, so omitted sections must not
 // silently clear settings (especially secret declarations).
@@ -201,6 +203,9 @@ func Normalize(d *Document) {
 	}
 	if d.LogPatterns == nil {
 		d.LogPatterns = []logs.Pattern{}
+	}
+	if d.Updates == "" {
+		d.Updates = "webhook"
 	}
 	if d.Profile.Name == nil {
 		d.Profile.Name = map[string]string{}
@@ -321,6 +326,9 @@ func Validate(d Document) error {
 	}
 	if err := logs.Validate(d.LogPatterns); err != nil {
 		return err
+	}
+	if d.Updates != "webhook" && d.Updates != "polling" {
+		return fmt.Errorf("updates must be webhook or polling")
 	}
 	languages := map[string]bool{}
 	for key := range d.Profile.Name {

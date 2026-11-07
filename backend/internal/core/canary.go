@@ -209,6 +209,7 @@ func (c *Core) StopCanary(ctx context.Context, botID int64, reason string) error
 	c.dropCanaryStats(botID)
 	c.Runner.StopCanary(botID)
 	c.Proxy.Stop(botID, "canary")
+	c.moveCanaryQueue(botID)
 	c.DB.W.ExecContext(ctx, `DELETE FROM canaries WHERE bot_id = ?`, botID)
 	c.Logs.Add(botID, "core", "canary "+cn.Version+" stopped: "+reason, nowUTC())
 	c.Ev.Emit("canary", botID, events.Info, map[string]any{"action": "stopped", "version": cn.Version, "reason": reason})
@@ -217,6 +218,7 @@ func (c *Core) StopCanary(ctx context.Context, botID int64, reason string) error
 
 func (c *Core) registerCanary() {
 	c.Pipe.Route = c.route
+	c.Pipe.Enqueue = c.enqueue
 	c.Pipe.Observe = append(c.Pipe.Observe, c.observeCanary)
 	// A canary does not outlive the core: users are back on the main
 	// instance after a restart.

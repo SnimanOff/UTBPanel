@@ -100,6 +100,7 @@ type Core struct {
 	Bcast          *broadcast.Service
 	watch          watches
 	canaries       canaryRoutes
+	polls          polls
 	parsers        panicParsers
 	crashSet       crashSetting
 	patterns       *logs.Matcher
@@ -254,6 +255,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.GH = github.New()
 	c.registerGitHub()
 	c.registerCanary()
+	c.registerPolling()
 	c.registerCrashUpdates()
 	c.registerPatterns(ctx)
 	c.registerBotSettings()

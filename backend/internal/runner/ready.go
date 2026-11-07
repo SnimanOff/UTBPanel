@@ -16,6 +16,9 @@ func (r *Runner) waitReady(ctx context.Context, b Bot, done <-chan struct{}) err
 		sdkTimeout = time.Minute
 	}
 	sdkMode := false
+	// With the getUpdates webhook on, a bot is ready on its first getUpdates
+	// or when its port opens, whichever comes first.
+	polling := b.Settings.Updates == "polling" && r.cfg.Hooks.Polled != nil
 	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(b.Port))
 	for {
 		select {
@@ -37,6 +40,8 @@ func (r *Runner) waitReady(ctx context.Context, b Bot, done <-chan struct{}) err
 			if ready {
 				return nil
 			}
+		} else if polling && r.cfg.Hooks.Polled(b) {
+			return nil
 		} else {
 			conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
 			if err == nil {
@@ -54,6 +59,9 @@ func (r *Runner) waitReady(ctx context.Context, b Bot, done <-chan struct{}) err
 		if time.Now().After(deadline) {
 			if sdkMode {
 				return fmt.Errorf("runner: SDK ready signal not received after %v", sdkTimeout)
+			}
+			if polling {
+				return fmt.Errorf("runner: port %d not open and no getUpdates call after %v", b.Port, ReadyTimeout)
 			}
 			return fmt.Errorf("runner: port %d not open after %v", b.Port, ReadyTimeout)
 		}

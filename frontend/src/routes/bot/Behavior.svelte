@@ -1,6 +1,7 @@
 <script lang="ts">
   // How the panel answers users before the bot sees them: antiflood, closed
-  // mode with its list, texts and the zone of times in texts.
+  // mode with its list, texts, the zone of times in texts and the updates
+  // mode (webhook or getUpdates).
   import { api, errorText, type Schemas } from '../../lib/api/client'
   import { defaultTZ, pair, validZone, zones } from '../../lib/tz'
   import AlertRules from '../../lib/ui/AlertRules.svelte'
@@ -27,6 +28,7 @@
   let patterns = $state<Pat[]>([])
   let tz = $state(defaultTZ)
   let crashUpdates = $state(false)
+  let webhook = $state(false)
   let who = $state('')
   let note = $state('')
   let error = $state('')
@@ -40,6 +42,7 @@
       patterns = s.log_patterns ?? []
       tz = s.tz || defaultTZ
       crashUpdates = !!s.crash_updates
+      webhook = s.updates === 'polling'
       closed = await api.get<Schemas['ClosedState']>(`/api/bots/${botId}/closed`)
     } catch (e) {
       error = errorText(e)
@@ -66,6 +69,8 @@
   const saveFlood = () => section('antiflood', flood, 'Антифлуд сохранён')
   const saveTexts = () => section('texts', { unavailable }, 'Тексты сохранены')
   const saveTZ = () => (validZone(tz) ? section('tz', new Blob([JSON.stringify(tz)], { type: 'application/json' }), 'Часовой пояс сохранён') : (error = `Неизвестный пояс ${tz}`))
+  const saveUpdates = () =>
+    section('updates', new Blob([JSON.stringify(webhook ? 'polling' : 'webhook')], { type: 'application/json' }), webhook ? 'Вебхук для getUpdates включён' : 'Вебхук для getUpdates выключен')
   const saveClosed = () =>
     run(() => api.put(`/api/bots/${botId}/closed`, { enabled: closed.enabled, text: closed.text }), 'Закрытый режим сохранён')
 
@@ -161,6 +166,19 @@
     <p class="muted">Это сообщения пользователей: последние 20, 7 дней, только во вкладке «Паники». В архив переноса не попадают.</p>
   </Box>
 
+  <Box title="Приём апдейтов">
+    <label class="check switch">
+      <input type="checkbox" role="switch" bind:checked={webhook} onchange={saveUpdates} />
+      <span class="track" aria-hidden="true"></span>
+      Включить вебхук
+    </label>
+    {#if webhook}
+      <p class="muted">Бот под polling работает без переделки: ядро отдаёт ему апдейты с вебхука панели в ответ на его getUpdates. Боту под вебхук это не мешает: пока он не вызвал getUpdates, апдейты идут на его PORT как обычно.</p>
+    {:else}
+      <p class="muted">Апдейты идут только на PORT бота, getUpdates отклоняется. Включите для бота, написанного под polling.</p>
+    {/if}
+  </Box>
+
   <Box title="Часовой пояс текстов">
     <input list="zones" bind:value={tz} />
     <datalist id="zones">{#each zones as z}<option value={z}></option>{/each}</datalist>
@@ -189,6 +207,50 @@
   .check {
     flex-direction: row;
     align-items: center;
+  }
+  /* A checkbox drawn as a switch. */
+  .switch {
+    gap: var(--s2);
+    cursor: pointer;
+  }
+  .switch input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+  }
+  .track {
+    position: relative;
+    flex: none;
+    width: 34px;
+    height: 18px;
+    border: var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    transition: background 0.15s;
+  }
+  .track::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: var(--radius);
+    background: var(--muted);
+    transition: transform 0.15s;
+  }
+  .switch input:checked + .track {
+    background: var(--accent);
+    border-color: var(--accent-hi);
+  }
+  .switch input:checked + .track::after {
+    background: var(--text);
+    transform: translateX(16px);
+  }
+  .switch input:focus-visible + .track {
+    outline: 1px solid var(--accent-hi);
+    outline-offset: 2px;
   }
   .line {
     display: flex;

@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "146edf9ef2049c20d566918c785555f23c6377c393fc263d1911b3fd29e65241"
+const GeneratedHash = "0657d534000d89e329b1d612ac3ef1c37e88072e257b12c292a3b48b850e463d"
 
 // Op is one operation of the API.
 type Op struct {
@@ -157,7 +157,7 @@ var Ops = []Op{
 	{"set_flag", "PUT", "/api/bots/{id}/sdk/flags/{name}", "write", "Change an SDK flag without restarting the bot"},
 	{"select_sdk_metrics", "PUT", "/api/bots/{id}/sdk/metrics/selected", "write", "Select SDK metrics to show on the bot dashboard"},
 	{"set_secret", "PUT", "/api/bots/{id}/secrets/{name}", "never", "Set a secret (write-only). Neural networks use request_secret instead"},
-	{"put_settings_section", "PUT", "/api/bots/{id}/settings/{section}", "confirm", "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates)"},
+	{"put_settings_section", "PUT", "/api/bots/{id}/settings/{section}", "confirm", "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates, getUpdates bridge 'updates' webhook or polling)"},
 	{"set_token", "PUT", "/api/bots/{id}/token", "never", "Replace the token (checked with getMe). Neural networks use request_secret instead"},
 	{"order_groups", "PUT", "/api/groups/order", "never", "Reorder groups"},
 	{"set_mcp_mode", "PUT", "/api/mcp/groups/{gid}", "never", "Change a group MCP mode through the owner's panel (never MCP)"},

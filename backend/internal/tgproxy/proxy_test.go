@@ -41,7 +41,7 @@ func newEnv(t *testing.T, upstream *httptest.Server, extraRoots *x509.CertPool) 
 		Hooks: Hooks{
 			OnCall: func(c Call) { e.mu.Lock(); e.calls = append(e.calls, c); e.mu.Unlock() },
 			OnConn: func(c Conn) { e.mu.Lock(); e.conns = append(e.conns, c); e.mu.Unlock() },
-			Intercept: func(_ int64, m string) ([]byte, int, bool) {
+			Intercept: func(_ *http.Request, _ int64, _, m string) ([]byte, int, bool) {
 				if m == "setWebhook" {
 					return []byte(`{"ok":true,"result":true}`), 200, true
 				}

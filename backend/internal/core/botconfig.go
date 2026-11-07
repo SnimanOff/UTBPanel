@@ -43,7 +43,7 @@ func (c *Core) ConfigSnapshot(ctx context.Context, id int64) (botconfig.Snapshot
 		}
 	}
 	d := botconfig.Document{Antiflood: users.DefaultFlood()}
-	fields := map[string]any{"env": &d.Env, "rename": &d.Rename, "required_secrets": &d.Secrets, "antiflood": &d.Antiflood, "closed": &d.Closed, "texts": &d.Texts, "tz": &d.TZ, "profile_cache": &d.Profile, "limits": &d.Limits, "stop": &d.Stop, "log_patterns": &d.LogPatterns, "crash_updates": &d.CrashUpdates}
+	fields := map[string]any{"env": &d.Env, "rename": &d.Rename, "required_secrets": &d.Secrets, "antiflood": &d.Antiflood, "closed": &d.Closed, "texts": &d.Texts, "tz": &d.TZ, "profile_cache": &d.Profile, "limits": &d.Limits, "stop": &d.Stop, "log_patterns": &d.LogPatterns, "crash_updates": &d.CrashUpdates, "updates": &d.Updates}
 	for key, target := range fields {
 		if raw := m[key]; len(raw) > 0 {
 			if err := json.Unmarshal(raw, target); err != nil {
@@ -337,7 +337,7 @@ func (c *Core) ApplyConfig(ctx context.Context, in botconfig.ApplyRequest) (botc
 }
 
 func documentSettings(d botconfig.Document) map[string]any {
-	return map[string]any{"env": d.Env, "rename": d.Rename, "required_secrets": d.Secrets, "antiflood": d.Antiflood, "closed": d.Closed, "texts": d.Texts, "tz": d.TZ, "profile_cache": d.Profile, "limits": d.Limits, "stop": d.Stop, "log_patterns": d.LogPatterns, "crash_updates": d.CrashUpdates}
+	return map[string]any{"env": d.Env, "rename": d.Rename, "required_secrets": d.Secrets, "antiflood": d.Antiflood, "closed": d.Closed, "texts": d.Texts, "tz": d.TZ, "profile_cache": d.Profile, "limits": d.Limits, "stop": d.Stop, "log_patterns": d.LogPatterns, "crash_updates": d.CrashUpdates, "updates": d.Updates}
 }
 
 func (c *Core) registerConfig() {

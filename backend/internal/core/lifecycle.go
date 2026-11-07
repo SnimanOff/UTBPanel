@@ -53,6 +53,7 @@ func (c *Core) newRunner() *runner.Runner {
 		},
 		Hooks: runner.Hooks{
 			Readiness: func(b runner.Bot) (bool, bool) { return c.SDK.Readiness(b.ID, b.Instance) },
+			Polled:    func(b runner.Bot) bool { return c.polled(b.ID, b.Instance) },
 			Prepare:   func(_ context.Context, b runner.Bot) error { return c.prepareSDK(b) },
 			Output: func(l runner.Line) {
 				l.Text = c.Sec.Redact.Redact(l.Text)
@@ -81,6 +82,7 @@ func (c *Core) newRunner() *runner.Runner {
 			// Every bot gets its own proxy port: the bot is known from the
 			// port, no guessing by token.
 			Env: func(b runner.Bot, env map[string]string) {
+				c.startPolling(b.ID, b.Instance, b.Settings.Updates == UpdatesPolling)
 				env["TGPANEL_SDK"] = "unix://" + c.SDK.Path(b.ID, b.Instance)
 				port, inst := ProxyPort(b.Port), "main"
 				if b.Instance == "canary" {
