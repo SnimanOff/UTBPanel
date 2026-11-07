@@ -77,3 +77,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "${{ github.ref_name }}" --generate-notes --verify-tag
+
+  # Update the server to the new image (see deploy.yml for the secrets).
+  deploy:
+    needs: image
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/deploy.yml
+    with:
+      version: ${{ github.ref_name }}
+    secrets: inherit

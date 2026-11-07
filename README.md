@@ -130,6 +130,25 @@ docker compose exec -T core core upgrade < core
 вместе с текущим ядром. `TGPANEL_NO_SUPERVISOR=1` отключает его (тогда
 `core upgrade` недоступен).
 
+### Автоматический деплой (CI/CD)
+
+- Каждый пуш в `main` проверяет CI (`ci.yml`): тесты, линтер, фронтенд, e2e.
+- Тег `vX.Y.Z` собирает образ `ghcr.io/snimanoff/utbpanel:X.Y.Z`
+  (`release.yml`), после чего `deploy.yml` по SSH обновляет сервер
+  скриптом `deploy/update.sh`: панель пересоздаётся, ядро меняется на месте
+  через `core upgrade` (боты не останавливаются), привратник — только по
+  запросу. В `.env` записываются новые `*_VERSION`, прежний `.env`
+  остаётся рядом как `.env.before-<версия>`.
+- Любую выпущенную версию можно развернуть вручную: Actions → deploy →
+  Run workflow.
+
+Для деплоя в репозитории нужны секреты `DEPLOY_HOST`, `DEPLOY_USER`,
+`DEPLOY_SSH_KEY` (отдельный ключ, пользователь должен уметь запускать
+docker), `DEPLOY_KNOWN_HOSTS` (вывод `ssh-keyscan <host>`) и переменные
+`DEPLOY_PATH` (каталог с `docker-compose.yml`), при необходимости
+`DEPLOY_PORT`. В Settings → Environments → production можно включить
+подтверждение каждого деплоя.
+
 Бэкап и восстановление — разделы «Полный бэкап» и «Экспорт бота» ниже.
 
 ## Как писать бота под панель

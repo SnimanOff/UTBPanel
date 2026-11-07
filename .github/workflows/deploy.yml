@@ -1,0 +1,84 @@
+name: deploy
+
+# Updates the server to a published image (ghcr.io/snimanoff/utbpanel:<version>)
+# over SSH with deploy/update.sh. Runs after a release (release.yml) or by
+# hand from the Actions tab for any published version.
+#
+# Repository secrets:
+#   DEPLOY_HOST         server address
+#   DEPLOY_USER         SSH user that may run docker
+#   DEPLOY_SSH_KEY      private key of that user (a separate deploy key)
+#   DEPLOY_KNOWN_HOSTS  output of `ssh-keyscan <host>`, so the host is checked
+# Repository variables:
+#   DEPLOY_PATH         directory with docker-compose.yml and .env
+#   DEPLOY_PORT         SSH port, 22 when unset
+#
+# The "production" environment can require an approval before each deploy
+# (Settings → Environments → production → Required reviewers).
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Image version, e.g. 0.1.0"
+        type: string
+        required: true
+      services:
+        description: "Services to update"
+        type: string
+        default: "panel,core"
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: deploy
+      - name: ssh setup
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          test -n "$KEY" && test -n "$KNOWN" || { echo "::error::set DEPLOY_SSH_KEY and DEPLOY_KNOWN_HOSTS"; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+      - name: update the server
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          DIR: ${{ vars.DEPLOY_PATH }}
+          PORT: ${{ vars.DEPLOY_PORT || '22' }}
+          VERSION: ${{ inputs.version }}
+          SERVICES: ${{ inputs.services || 'panel,core' }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          test -n "$HOST" && test -n "$USER" && test -n "$DIR" || { echo "::error::set DEPLOY_HOST, DEPLOY_USER and the DEPLOY_PATH variable"; exit 1; }
+          VERSION="${VERSION#v}"
+          ssh_() { ssh -i ~/.ssh/deploy -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "$@"; }
+          # The job token reads the image even while the package is private;
+          # it expires with the job, and the login is removed right after.
+          printf '%s' "$GHCR_TOKEN" | ssh_ "docker login ghcr.io -u '${{ github.actor }}' --password-stdin >/dev/null"
+          set +e
+          ssh_ "cd '$DIR' && sh -s -- '$VERSION' '$SERVICES'" < deploy/update.sh
+          rc=$?
+          ssh_ "docker logout ghcr.io >/dev/null 2>&1" || true
+          exit $rc
+      - name: summary
+        if: always()
+        run: echo "Deploy of ${{ inputs.version }} (${{ inputs.services || 'panel,core' }}) — ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
