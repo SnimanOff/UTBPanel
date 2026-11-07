@@ -64,6 +64,46 @@ export const api = {
   del: <T>(path: string) => request<T>('DELETE', path),
 }
 
+/** Progress of an upload: bytes sent so far of the total. */
+export type UploadProgress = { loaded: number; total: number }
+
+/**
+ * POST with upload progress. fetch has no upload progress events, so this is
+ * XMLHttpRequest; errors are the same ApiError as from request().
+ */
+export function uploadWithProgress<T>(path: string, body: FormData, onprogress: (p: UploadProgress) => void, signal?: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', path)
+    xhr.withCredentials = true
+    xhr.setRequestHeader('X-Panel', '1')
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onprogress({ loaded: e.loaded, total: e.total })
+    }
+    xhr.onerror = () => reject(new ApiError(0, 'network', 'нет связи с gate'))
+    xhr.onabort = () => reject(new ApiError(0, 'aborted', 'загрузка отменена'))
+    xhr.onload = () => {
+      if (xhr.status === 204) return resolve(undefined as T)
+      const text = xhr.responseText
+      let data: any
+      try {
+        data = text ? JSON.parse(text) : undefined
+      } catch {
+        data = undefined
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        if (data && typeof data.code === 'string') {
+          return reject(new ApiError(xhr.status, data.code, data.message, data.telegram))
+        }
+        return reject(new ApiError(xhr.status, 'http', text.slice(0, 300) || xhr.statusText))
+      }
+      resolve(data as T)
+    }
+    signal?.addEventListener('abort', () => xhr.abort(), { once: true })
+    xhr.send(body)
+  })
+}
+
 /** Human-readable text of any error. */
 export function errorText(e: unknown): string {
   if (e instanceof ApiError) {

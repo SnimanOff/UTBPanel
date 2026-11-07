@@ -22,25 +22,38 @@
   }
 </script>
 
-<div class="secret">
-  <span class="name mono">{name}</span>
-  <input
-    type="password"
-    autocomplete="off"
-    placeholder={isSet ? 'задан — введите новое значение, чтобы заменить' : 'не задан'}
-    bind:value
-    onkeydown={(e) => e.key === 'Enter' && save()}
-  />
-  <button disabled={!value || saving} onclick={save}>Сохранить</button>
+<div class="wrap">
+  <div class="secret">
+    <span class="name mono" title={name}>{name}</span>
+    <input
+      type="password"
+      autocomplete="off"
+      aria-label={name}
+      title={isSet ? 'Значение задано. Введите новое, чтобы заменить' : undefined}
+      placeholder={isSet ? 'задан · новое заменит' : 'не задан'}
+      bind:value
+      onkeydown={(e) => e.key === 'Enter' && save()}
+    />
+    <button disabled={!value || saving} onclick={save}>Сохранить</button>
+  </div>
+  {#if error}<div class="error">{error}</div>{/if}
 </div>
-{#if error}<div class="error">{error}</div>{/if}
 
 <style>
+  /* Sized by the box it sits in, not the window: the token box is half
+     the page wide, the secrets list is full width. */
+  .wrap {
+    container-type: inline-size;
+  }
   .secret {
     display: grid;
-    grid-template-columns: 200px 1fr auto;
+    grid-template-columns: 200px minmax(0, 1fr) auto;
     gap: var(--s2);
     align-items: center;
+  }
+  .secret input {
+    min-width: 0;
+    width: 100%;
   }
   .name {
     overflow: hidden;
@@ -53,8 +66,22 @@
     white-space: pre-wrap;
   }
 
-  /* Phones: one column, rows of controls wrap. */
-  @media (max-width: 700px) {
+  /* Narrow box: the name above, the field and the button below. */
+  @container (max-width: 560px) {
+    .secret {
+      grid-template-columns: minmax(0, 1fr) auto;
+      row-gap: var(--s1);
+    }
+    .name {
+      grid-column: 1 / -1;
+    }
+    .error {
+      margin-left: 0;
+    }
+  }
+
+  /* Very narrow: everything in one column. */
+  @container (max-width: 320px) {
     .secret {
       grid-template-columns: 1fr;
     }
