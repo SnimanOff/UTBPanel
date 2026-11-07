@@ -81,8 +81,11 @@ Write-Host "папка: $Path"
 Step "4/4 Секреты и переменные в GitHub ($Repo)"
 function Saved($what) { if ($LASTEXITCODE -ne 0) { Fail "gh не сохранил $what" } else { Write-Host "сохранено: $what" } }
 Get-Content $key -Raw | gh secret set DEPLOY_SSH_KEY --repo $Repo; Saved 'DEPLOY_SSH_KEY'
-$known = @(ssh-keyscan -p $Port $hostName 2>$null | Where-Object { $_ -and -not $_.StartsWith('#') })
-if ($known.Count -eq 0) { Fail "ssh-keyscan не получил ключ сервера $hostName" }
+# The server's key from your own known_hosts: you already trust it, and the
+# ssh-keyscan of Windows cannot talk to newer OpenSSH servers.
+$lookup = if ($Port -eq 22) { $hostName } else { "[$hostName]:$Port" }
+$known = @(ssh-keygen -F $lookup 2>$null | Where-Object { $_ -and -not $_.StartsWith('#') })
+if ($known.Count -eq 0) { Fail "в ~\.ssh\known_hosts нет ключа сервера ${lookup}: зайдите на сервер по ssh один раз и запустите скрипт снова" }
 ($known -join "`n") | gh secret set DEPLOY_KNOWN_HOSTS --repo $Repo; Saved 'DEPLOY_KNOWN_HOSTS'
 gh secret set DEPLOY_HOST --repo $Repo --body $hostName; Saved 'DEPLOY_HOST'
 gh secret set DEPLOY_USER --repo $Repo --body $user; Saved 'DEPLOY_USER'
