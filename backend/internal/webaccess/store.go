@@ -37,6 +37,44 @@ type Access struct {
 	CreatedBy   string       `json:"created_by"`
 	Credentials []CredInfo   `json:"credentials"`
 	Invite      *InviteState `json:"invite,omitempty"`
+	// ExpiresAt ends the access; nil is for good.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	// Expired is ExpiresAt in the past (for the owner's list).
+	Expired bool `json:"expired,omitempty"`
+}
+
+// AccessDays are the terms an access can be given for; 0 is for good.
+var AccessDays = []int{0, 1, 7, 14, 30}
+
+// ValidDays reports whether days is one of AccessDays.
+func ValidDays(days int) bool {
+	for _, d := range AccessDays {
+		if d == days {
+			return true
+		}
+	}
+	return false
+}
+
+// Until is the end of an access given for days from now, nil for 0.
+func Until(days int) *time.Time {
+	if days == 0 {
+		return nil
+	}
+	t := time.Now().Add(time.Duration(days) * 24 * time.Hour).UTC().Truncate(time.Second)
+	return &t
+}
+
+// ExpiredAt reports whether the access has ended by now.
+func (a Access) ExpiredAt(now time.Time) bool {
+	return a.ExpiresAt != nil && !now.Before(*a.ExpiresAt)
+}
+
+func unixOrNil(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return t.Unix()
 }
 
 // CredInfo is a passkey as the owner sees it.
@@ -59,6 +97,8 @@ type InviteState struct {
 var (
 	ErrNotFound = errors.New("webaccess: not found")
 	ErrExpired  = errors.New("webaccess: the link is expired or used")
+	// ErrAccessEnded means the term of the access is over.
+	ErrAccessEnded = errors.New("webaccess: the access has ended")
 )
 
 // Store keeps accesses in panel.db.
@@ -84,8 +124,8 @@ func (s *Store) Create(ctx context.Context, a Access) (Access, string, error) {
 	now := time.Now()
 	var token string
 	err := s.DB.Tx(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `INSERT INTO web_access (name, role, all_bots, bots, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?)`,
-			a.Name, a.Role, a.AllBots, string(bots), now.Unix(), a.CreatedBy)
+		res, err := tx.ExecContext(ctx, `INSERT INTO web_access (name, role, all_bots, bots, created_at, created_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			a.Name, a.Role, a.AllBots, string(bots), now.Unix(), a.CreatedBy, unixOrNil(a.ExpiresAt))
 		if err != nil {
 			return err
 		}
@@ -104,13 +144,30 @@ func (s *Store) inviteTx(ctx context.Context, tx *sql.Tx, id int64) (string, err
 	return token, err
 }
 
+// SetExpiry changes the end of an access (nil: for good). Sessions of an
+// access that ends now stop at once: Lookup checks the term.
+func (s *Store) SetExpiry(ctx context.Context, id int64, until *time.Time) error {
+	res, err := s.DB.W.ExecContext(ctx, `UPDATE web_access SET expires_at = ? WHERE id = ?`, unixOrNil(until), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // Invite issues a new link for an existing access (another phone).
 func (s *Store) Invite(ctx context.Context, id int64) (string, error) {
-	if _, err := s.Get(ctx, id); err != nil {
+	a, err := s.Get(ctx, id)
+	if err != nil {
 		return "", err
 	}
+	if a.ExpiredAt(time.Now()) {
+		return "", ErrAccessEnded
+	}
 	var token string
-	err := s.DB.Tx(ctx, func(tx *sql.Tx) error {
+	err = s.DB.Tx(ctx, func(tx *sql.Tx) error {
 		var err error
 		token, err = s.inviteTx(ctx, tx, id)
 		return err
@@ -122,8 +179,14 @@ func scanAccess(row interface{ Scan(...any) error }) (Access, error) {
 	var a Access
 	var bots string
 	var created int64
-	if err := row.Scan(&a.ID, &a.Name, &a.Role, &a.AllBots, &bots, &created, &a.CreatedBy); err != nil {
+	var expires sql.NullInt64
+	if err := row.Scan(&a.ID, &a.Name, &a.Role, &a.AllBots, &bots, &created, &a.CreatedBy, &expires); err != nil {
 		return a, err
+	}
+	if expires.Valid {
+		t := time.Unix(expires.Int64, 0).UTC()
+		a.ExpiresAt = &t
+		a.Expired = a.ExpiredAt(time.Now())
 	}
 	if err := json.Unmarshal([]byte(bots), &a.Bots); err != nil {
 		return a, err
@@ -135,7 +198,7 @@ func scanAccess(row interface{ Scan(...any) error }) (Access, error) {
 	return a, nil
 }
 
-const accessCols = `id, name, role, all_bots, bots, created_at, created_by`
+const accessCols = `id, name, role, all_bots, bots, created_at, created_by, expires_at`
 
 // Get returns one access without its credentials.
 func (s *Store) Get(ctx context.Context, id int64) (Access, error) {
@@ -229,7 +292,11 @@ func (s *Store) InviteAccess(ctx context.Context, token string) (Access, error) 
 	if err != nil {
 		return Access{}, err
 	}
-	return s.Get(ctx, id)
+	a, err := s.Get(ctx, id)
+	if err == nil && a.ExpiredAt(time.Now()) {
+		return a, ErrExpired
+	}
+	return a, err
 }
 
 // Enroll spends the invite and stores a passkey waiting for approval. It
@@ -351,6 +418,10 @@ func (s *Store) Lookup(ctx context.Context, token string) (Access, []byte, error
 		return Access{}, nil, err
 	}
 	a, err := s.Get(ctx, id)
+	if err == nil && a.ExpiredAt(time.Now()) {
+		s.EndSession(ctx, token)
+		return a, cred, ErrAccessEnded
+	}
 	return a, cred, err
 }
 

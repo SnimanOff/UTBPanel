@@ -52,6 +52,11 @@
       <button class="primary" onclick={() => (adding = true)}>+ Бот</button>
     {/if}
     {#if session.web}<button onclick={() => session.logout()} title={session.name}>Выйти</button>{/if}
+    {#if session.version}
+      <span class="ver num" title={session.commit && session.commit !== 'none' ? `коммит ${session.commit}` : 'версия панели'}>
+        {session.version}
+      </span>
+    {/if}
   </div>
   {#if feedOpen}
     <div class="feed">
@@ -118,7 +123,13 @@
   }
   .right {
     display: flex;
+    align-items: center;
     gap: var(--s2);
+  }
+  .ver {
+    color: var(--muted);
+    font-size: var(--fs-s);
+    white-space: nowrap;
   }
   .bell.has {
     border-color: var(--danger);

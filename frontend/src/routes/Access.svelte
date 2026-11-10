@@ -18,7 +18,23 @@
   let role = $state<'view' | 'manage' | 'full'>('view')
   let allBots = $state(false)
   let picked = $state<Record<number, boolean>>({})
+  let days = $state<Days>(0)
   let busy = $state(false)
+
+  // Terms of an access, counted from now; 0 is for good.
+  type Days = 0 | 1 | 7 | 14 | 30
+  const terms: [Days, string][] = [[1, '1 день'], [7, '7 дней'], [14, '14 дней'], [30, '30 дней'], [0, 'бессрочно']]
+  const short: [Days, string][] = [[1, '1 д'], [7, '7 д'], [14, '14 д'], [30, '30 д'], [0, '∞']]
+
+  function term(a: Access): string {
+    if (!a.expires_at) return 'бессрочно'
+    if (a.expired) return `истёк ${utc(a.expires_at)}`
+    const left = new Date(a.expires_at).getTime() - Date.now()
+    const d = Math.floor(left / 86400000)
+    const h = Math.floor((left % 86400000) / 3600000)
+    return `до ${utc(a.expires_at)} (осталось ${d ? `${d} д ` : ''}${h} ч)`
+  }
+  const setTerm = (a: Access, d: Days) => act(() => api.put(`/api/access/${a.id}/expiry`, { days: d }))
 
   async function load() {
     try {
@@ -44,7 +60,7 @@
     try {
       const bots = Object.entries(picked).filter(([, v]) => v).map(([k]) => Number(k))
       const r = await api.post<{ url: string; expires_at: string; access: Access }>('/api/access', {
-        name: name.trim(), role, all_bots: allBots || role === 'full', bots,
+        name: name.trim(), role, all_bots: allBots || role === 'full', bots, days,
       })
       link = { url: r.url, expires_at: r.expires_at, name: r.access.name }
       name = ''
@@ -105,6 +121,12 @@
       <select bind:value={role}>
         {#each Object.entries(roles) as [k, v]}<option value={k}>{v}</option>{/each}
       </select>
+      <label class="inline">
+        срок
+        <select bind:value={days}>
+          {#each terms as [d, label]}<option value={d}>{label}</option>{/each}
+        </select>
+      </label>
     </div>
     {#if role !== 'full'}
       <label><input type="checkbox" bind:checked={allBots} /> все боты</label>
@@ -133,8 +155,15 @@
     {/snippet}
     <p class="muted">
       {roles[a.role]} · {a.all_bots ? 'все боты' : a.bots.map(botName).join(', ')}
-      {#if a.invite}· ссылка ждёт до {utc(a.invite.expires_at)}{/if}
+      {#if a.invite && !a.expired}· ссылка ждёт до {utc(a.invite.expires_at)}{/if}
     </p>
+    <div class="term">
+      <span class:danger={a.expired}>Доступ: {term(a)}</span>
+      <span class="muted small">{a.expired ? 'продлить на' : 'срок от сейчас'}:</span>
+      {#each short as [d, label]}
+        <button class="small" onclick={() => setTerm(a, d)} title={d ? `${d} дн. с этого момента` : 'без срока'}>{label}</button>
+      {/each}
+    </div>
     {#each a.credentials as c (c.id)}
       <div class="cred" class:waiting={!c.approved}>
         <span class="mono code">{c.code}</span>
@@ -170,4 +199,7 @@
   .code { font-size: var(--fs-m); }
   .device { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .small { font-size: var(--fs-s); }
+  .inline { display: flex; gap: var(--s2); align-items: center; }
+  .term { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; padding-bottom: var(--s2); border-bottom: var(--line); }
+  .term button { padding: 0 var(--s2); }
 </style>

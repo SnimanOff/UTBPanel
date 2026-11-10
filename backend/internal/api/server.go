@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/buildinfo"
 	"github.com/SnimanOff/UTBPanel/backend/internal/pki"
 	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 )
@@ -96,7 +97,7 @@ func New(ca *pki.CA, w *store.Writer, log *slog.Logger) *Server {
 	s := &Server{CA: ca, W: w, Log: log, Mux: NewMux()}
 	s.Mux.HandleFunc("GET /api/ping", func(w http.ResponseWriter, r *http.Request) {
 		c := CallerFrom(r.Context())
-		out := map[string]any{"pong": c.Name, "kind": string(c.Kind), "source": string(c.Source)}
+		out := map[string]any{"pong": c.Name, "kind": string(c.Kind), "source": string(c.Source), "version": buildinfo.Version, "commit": buildinfo.Commit}
 		if c.Scope != nil {
 			bots := []int64{}
 			for id := range c.Scope.Bots {

@@ -277,6 +277,10 @@ func (s *Service) caller(w http.ResponseWriter, r *http.Request) (api.Caller, bo
 		return api.Caller{}, false
 	}
 	a, cred, err := s.Store.Lookup(r.Context(), ck.Value)
+	if errors.Is(err, ErrAccessEnded) {
+		api.WriteError(w, http.StatusUnauthorized, "login_required", "срок доступа истёк: попросите владельца продлить его")
+		return api.Caller{}, false
+	}
 	if err != nil {
 		api.WriteError(w, http.StatusUnauthorized, "login_required", "сессия закончилась, войдите снова")
 		return api.Caller{}, false
@@ -429,6 +433,10 @@ func (s *Service) pending(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if state == "approved" {
+		if a, err := s.Store.Get(r.Context(), cred.AccessID); err == nil && a.ExpiredAt(time.Now()) {
+			api.WriteError(w, http.StatusForbidden, "access_expired", "срок доступа истёк: попросите владельца продлить его")
+			return
+		}
 		token, err := s.Store.Session(r.Context(), cred.ID, cred.AccessID, clientIP(r), 0)
 		if err != nil {
 			api.WriteError(w, http.StatusInternalServerError, "internal", err.Error())
@@ -478,6 +486,10 @@ func (s *Service) loginFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	if !cred.Approved {
 		api.WriteError(w, http.StatusForbidden, "not_approved", "владелец ещё не подтвердил этот ключ входа")
+		return
+	}
+	if a, err := s.Store.Get(r.Context(), cred.AccessID); err == nil && a.ExpiredAt(time.Now()) {
+		api.WriteError(w, http.StatusForbidden, "access_expired", "срок доступа истёк: попросите владельца продлить его")
 		return
 	}
 	count, err := s.RP.VerifyAssertion(in.Assertion, chal, cred.PublicKey, cred.Alg, cred.Count)

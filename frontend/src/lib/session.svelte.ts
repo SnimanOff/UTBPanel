@@ -12,6 +12,9 @@ class Session {
   kind = $state('')
   source = $state('')
   scope = $state<Scope | null>(null)
+  /** Version of the panel build (the release tag, "dev" for local builds). */
+  version = $state('')
+  commit = $state('')
 
   /** Sees only some bots or only some operations. */
   get limited() {
@@ -26,11 +29,13 @@ class Session {
 
   async load() {
     try {
-      const p = await api.get<{ pong: string; kind: string; source: string; scope?: Scope }>('/api/ping')
+      const p = await api.get<{ pong: string; kind: string; source: string; scope?: Scope; version?: string; commit?: string }>('/api/ping')
       this.name = p.pong
       this.kind = p.kind
       this.source = p.source
       this.scope = p.scope ?? null
+      this.version = p.version ?? ''
+      this.commit = p.commit ?? ''
       this.login = false
     } catch (e) {
       this.login = e instanceof ApiError && e.code === 'login_required'

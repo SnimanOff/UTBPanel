@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "d8992aac07f001ce10d1ead999044b83b69f93bffe5c7df68b82eb5456fb7a71"
+const GeneratedHash = "f6f963940d18f91ecea3867414643584d33d13642f993d277ee24c386de31027"
 
 // Op is one operation of the API.
 type Op struct {
@@ -153,6 +153,7 @@ var Ops = []Op{
 	{"test_service_bot", "POST", "/api/server/service-bot/test", "never", "Send a test message to the owner; 409 not_started when the owner has not pressed Start"},
 	{"ban_user_everywhere", "POST", "/api/users/{uid}/ban", "never", "Ban a user in all bots at once"},
 	{"enroll", "POST", "/enroll", "never", "Request a device certificate (gate.exe with its enrollment certificate)"},
+	{"set_web_access_expiry", "PUT", "/api/access/{id}/expiry", "never", "Give an access a new term from now (1, 7, 14 or 30 days, 0 for good); owner only"},
 	{"set_full_backup_settings", "PUT", "/api/backups/settings", "never", "Set UTC schedule and retention count (owner only)"},
 	{"order_bots", "PUT", "/api/bots/order", "never", "Put bots into a group in this order (0 = no group)"},
 	{"set_closed", "PUT", "/api/bots/{id}/closed", "confirm", "Turn closed mode on or off and set its text"},

@@ -26,6 +26,7 @@ func (s *Service) Register(mux *api.Mux) {
 	mux.HandleFunc("GET /api/access", owner(s.list))
 	mux.HandleFunc("POST /api/access", owner(s.create))
 	mux.HandleFunc("POST /api/access/{id}/invite", owner(s.reinvite))
+	mux.HandleFunc("PUT /api/access/{id}/expiry", owner(s.setExpiry))
 	mux.HandleFunc("DELETE /api/access/{id}", owner(s.remove))
 	mux.HandleFunc("POST /api/access/credentials/{cid}/approve", owner(s.approve))
 	mux.HandleFunc("DELETE /api/access/credentials/{cid}", owner(s.removeCred))
@@ -52,12 +53,16 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		Role    string  `json:"role"`
 		AllBots bool    `json:"all_bots"`
 		Bots    []int64 `json:"bots"`
+		Days    int     `json:"days"`
 	}
 	if !decode(w, r, &in) {
 		return
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	switch {
+	case !ValidDays(in.Days):
+		api.WriteError(w, http.StatusBadRequest, "bad_request", "срок: 1, 7, 14 или 30 дней, 0 — бессрочно")
+		return
 	case in.Name == "" || len(in.Name) > 60:
 		api.WriteError(w, http.StatusBadRequest, "bad_request", "имя: от 1 до 60 символов")
 		return
@@ -74,12 +79,12 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 	if in.AllBots {
 		in.Bots = nil
 	}
-	a, token, err := s.Store.Create(r.Context(), Access{Name: in.Name, Role: in.Role, AllBots: in.AllBots, Bots: in.Bots, CreatedBy: api.CallerFrom(r.Context()).Name})
+	a, token, err := s.Store.Create(r.Context(), Access{Name: in.Name, Role: in.Role, AllBots: in.AllBots, Bots: in.Bots, CreatedBy: api.CallerFrom(r.Context()).Name, ExpiresAt: Until(in.Days)})
 	if err != nil {
 		api.WriteError(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	audit.Annotate(r, "access.create", strconv.FormatInt(a.ID, 10), map[string]any{"name": a.Name, "role": a.Role, "all_bots": a.AllBots, "bots": a.Bots})
+	audit.Annotate(r, "access.create", strconv.FormatInt(a.ID, 10), map[string]any{"name": a.Name, "role": a.Role, "all_bots": a.AllBots, "bots": a.Bots, "days": in.Days})
 	api.WriteJSON(w, http.StatusCreated, map[string]any{"access": a, "url": s.inviteURL(token), "expires_at": time.Now().Add(InviteTTL).UTC()})
 }
 
@@ -93,7 +98,37 @@ func (s *Service) storeError(w http.ResponseWriter, err error) {
 		api.WriteError(w, http.StatusNotFound, "not_found", "нет такого доступа")
 		return
 	}
+	if errors.Is(err, ErrAccessEnded) {
+		api.WriteError(w, http.StatusConflict, "access_expired", "срок доступа истёк: сначала продлите его")
+		return
+	}
 	api.WriteError(w, http.StatusInternalServerError, "internal", err.Error())
+}
+
+// setExpiry gives an access a new term counted from now: 1, 7, 14 or 30
+// days, 0 for good.
+func (s *Service) setExpiry(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Days int `json:"days"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if !ValidDays(in.Days) {
+		api.WriteError(w, http.StatusBadRequest, "bad_request", "срок: 1, 7, 14 или 30 дней, 0 — бессрочно")
+		return
+	}
+	until := Until(in.Days)
+	if err := s.Store.SetExpiry(r.Context(), pathInt(r), until); err != nil {
+		s.storeError(w, err)
+		return
+	}
+	audit.Annotate(r, "access.expiry", r.PathValue("id"), map[string]any{"days": in.Days})
+	out := map[string]any{}
+	if until != nil {
+		out["expires_at"] = until
+	}
+	api.WriteJSON(w, http.StatusOK, out)
 }
 
 func (s *Service) reinvite(w http.ResponseWriter, r *http.Request) {

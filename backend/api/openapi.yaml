@@ -1803,6 +1803,7 @@ paths:
                 role: { type: string, enum: [view, manage, full], description: "full only with all_bots" }
                 all_bots: { type: boolean }
                 bots: { type: array, items: { type: integer } }
+                days: { type: integer, enum: [0, 1, 7, 14, 30], description: "term of the access, 0 for good" }
       responses:
         "201":
           description: Created
@@ -1834,6 +1835,32 @@ paths:
                 properties:
                   url: { type: string }
                   expires_at: { type: string, format: date-time }
+  /api/access/{id}/expiry:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    put:
+      operationId: set_web_access_expiry
+      tags: [keys]
+      summary: Give an access a new term from now (1, 7, 14 or 30 days, 0 for good); owner only
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [days]
+              properties:
+                days: { type: integer, enum: [0, 1, 7, 14, 30] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  expires_at: { type: string, format: date-time, description: absent for good }
   /api/access/{id}:
     parameters:
       - { name: id, in: path, required: true, schema: { type: integer } }
@@ -2060,6 +2087,8 @@ components:
               ip: { type: string }
               created_at: { type: string, format: date-time }
               last_used: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time, description: the end of the access; absent for good }
+        expired: { type: boolean }
     ServiceBot:
       type: object
       required: [configured, username, level, owner_tg_id]
