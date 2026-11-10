@@ -249,6 +249,79 @@ func (s *Store) SetConfig(botID int64, version string, raw []byte) error {
 	return os.WriteFile(filepath.Join(s.Dir(botID), version, ConfigName), raw, 0o640)
 }
 
+// CopyTo stores release version of bot from as a release of bot to (a test
+// run of one bot's build under another bot). The copy keeps the version name;
+// when the target already has that name with another file, the name gets the
+// first 8 hex digits of the SHA-256. The same file again returns the stored
+// release.
+func (s *Store) CopyTo(from int64, version string, to int64) (Release, error) {
+	if !versionRe.MatchString(version) {
+		return Release{}, os.ErrNotExist
+	}
+	rel, err := s.read(from, version)
+	if err != nil {
+		return Release{}, err
+	}
+	name := version
+	if old, err := s.read(to, name); err == nil {
+		if old.SHA256 == rel.SHA256 {
+			return old, nil
+		}
+		name = version + "-" + rel.SHA256[:8]
+		if old, err := s.read(to, name); err == nil && old.SHA256 == rel.SHA256 {
+			return old, nil
+		}
+	}
+	if err := os.MkdirAll(s.Dir(to), 0o750); err != nil {
+		return Release{}, err
+	}
+	src, err := os.Open(filepath.Join(s.Dir(from), version, "bot"))
+	if err != nil {
+		return Release{}, err
+	}
+	defer src.Close()
+	tmp, err := os.CreateTemp(s.Dir(to), ".copy-*")
+	if err != nil {
+		return Release{}, err
+	}
+	defer os.Remove(tmp.Name())
+	h := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(tmp, h), src); err != nil {
+		tmp.Close()
+		return Release{}, err
+	}
+	if err := tmp.Close(); err != nil {
+		return Release{}, err
+	}
+	if got := hex.EncodeToString(h.Sum(nil)); got != rel.SHA256 {
+		return Release{}, fmt.Errorf("deploy: %s of bot %d changed on disk (SHA-256 %s, want %s)", version, from, got[:12], rel.SHA256[:12])
+	}
+	dir := filepath.Join(s.Dir(to), name)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return Release{}, err
+	}
+	bin := filepath.Join(dir, "bot")
+	if err := os.Rename(tmp.Name(), bin); err != nil {
+		return Release{}, err
+	}
+	if err := os.Chmod(bin, 0o550); err != nil { //nolint:gosec // executable by the bot's group, see Chown
+		return Release{}, err
+	}
+	rel.Version, rel.Uploaded, rel.Current, rel.Previous, rel.Config = name, time.Now().UTC(), false, false, false
+	meta, _ := json.MarshalIndent(rel, "", "  ")
+	if err := os.WriteFile(filepath.Join(dir, "release.json"), meta, 0o640); err != nil {
+		return Release{}, err
+	}
+	if s.Chown != nil {
+		for _, p := range []string{dir, bin} {
+			if err := s.Chown(to, p); err != nil {
+				return Release{}, err
+			}
+		}
+	}
+	return rel, nil
+}
+
 // Exists reports whether a version is stored.
 func (s *Store) Exists(botID int64, version string) bool {
 	_, err := os.Stat(filepath.Join(s.Dir(botID), version, "bot"))

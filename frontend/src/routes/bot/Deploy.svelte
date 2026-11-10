@@ -2,12 +2,13 @@
   // Deploy: stored versions with their build data, upload, switch and
   // rollback by holding (a database backup is made before each), GitHub
   // Releases with autodeploy, and the deploy history.
-  import { api, errorText, uploadWithProgress, type Release, type Schemas } from '../../lib/api/client'
+  import { api, errorText, type Release, type Schemas } from '../../lib/api/client'
   import { store } from '../../lib/api/stores.svelte'
   import { bytes, utc } from '../../lib/format'
   import Box from '../../lib/ui/Box.svelte'
   import HoldButton from '../../lib/ui/HoldButton.svelte'
   import Canary from './Canary.svelte'
+  import Update from './Update.svelte'
 
   let { botId }: { botId: number } = $props()
   type GH = {
@@ -29,8 +30,6 @@
   let auto = $state(false)
   let token = $state('')
   let hookSecret = $state('')
-  let file = $state<HTMLInputElement>()
-  let version = $state('')
   let busy = $state(false)
   let error = $state('')
   let info = $state('')
@@ -102,68 +101,6 @@
     }
   }
 
-  // Upload with progress: a large binary goes through gate for minutes, and
-  // leaving the page cancels it, so the form shows how much is sent and
-  // asks before closing the tab.
-  type Sending = { loaded: number; total: number; started: number; abort: AbortController }
-  let sending = $state<Sending | null>(null)
-  let uploadError = $state('')
-  let uploaded = $state('')
-
-  const pctSent = (s: Sending) => (s.total ? Math.min(100, (s.loaded / s.total) * 100) : 0)
-  const speed = (s: Sending) => {
-    const sec = (performance.now() - s.started) / 1000
-    return sec > 0.5 ? s.loaded / sec : 0
-  }
-  function eta(s: Sending): string {
-    const v = speed(s)
-    if (!v) return ''
-    const left = Math.round((s.total - s.loaded) / v)
-    return left >= 60 ? `~${Math.floor(left / 60)} мин ${left % 60} с` : `~${left} с`
-  }
-
-  $effect(() => {
-    if (!sending) return
-    const warn = (e: BeforeUnloadEvent) => e.preventDefault()
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  })
-
-  async function upload(e: SubmitEvent) {
-    e.preventDefault()
-    const f = file?.files?.[0]
-    if (!f || sending) return
-    const fd = new FormData()
-    if (version.trim()) fd.append('version', version.trim())
-    fd.append('file', f)
-    uploadError = ''
-    uploaded = ''
-    const s: Sending = { loaded: 0, total: f.size, started: performance.now(), abort: new AbortController() }
-    sending = s
-    try {
-      const r = await uploadWithProgress<Release>(
-        `/api/bots/${botId}/releases`,
-        fd,
-        (p) => {
-          if (sending) {
-            sending.loaded = p.loaded
-            sending.total = p.total
-          }
-        },
-        s.abort.signal,
-      )
-      version = ''
-      if (file) file.value = ''
-      uploaded = `Загружена версия ${r.version} (${bytes(r.size)})`
-      store.refresh(botId)
-      await load()
-    } catch (err) {
-      uploadError = errorText(err)
-    } finally {
-      sending = null
-    }
-  }
-
   function saveGitHub(e: SubmitEvent) {
     e.preventDefault()
     run(async () => {
@@ -193,6 +130,8 @@
 
 {#if error}<p class="danger pre">{error}</p>{/if}
 {#if info}<p class="ok">{info}</p>{/if}
+
+<Update {botId} {releases} github={gh} onchange={load} />
 
 <Box title="Версии">
   <table>
@@ -256,33 +195,7 @@
       </div>
     </div>
   {/if}
-  <p class="muted">Хранятся 5 последних версий. Перед каждым переключением делается бэкап базы бота.</p>
-  <form class="line" onsubmit={upload}>
-    <input type="file" bind:this={file} disabled={!!sending} />
-    <input bind:value={version} placeholder="версия (необязательно)" disabled={!!sending} />
-    <button disabled={busy || !!sending}>Загрузить</button>
-  </form>
-  {#if sending}
-    {@const done = sending.loaded >= sending.total}
-    <div class="upload" aria-live="polite">
-      <div class="track" class:wait={done} role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(pctSent(sending))}>
-        <div style:width="{pctSent(sending)}%"></div>
-      </div>
-      <div class="line meta">
-        {#if done}
-          <span>Файл отправлен, сервер проверяет и сохраняет бинарник…</span>
-        {:else}
-          <span class="num">{Math.floor(pctSent(sending))}%</span>
-          <span class="num muted">{bytes(sending.loaded)} из {bytes(sending.total)}</span>
-          {#if speed(sending)}<span class="num muted">{bytes(speed(sending))}/с · осталось {eta(sending)}</span>{/if}
-          <button type="button" onclick={() => sending?.abort.abort()}>Отменить</button>
-        {/if}
-      </div>
-      <p class="muted small">Не закрывайте и не обновляйте страницу, пока идёт загрузка: это её прервёт.</p>
-    </div>
-  {/if}
-  {#if uploadError}<p class="danger pre">{uploadError}</p>{/if}
-  {#if uploaded}<p class="ok">{uploaded}</p>{/if}
+  <p class="muted">Хранятся 5 последних версий. Перед каждым переключением делается бэкап базы бота. Новая версия загружается в блоке «Обновление».</p>
 </Box>
 
 <div class="cols">
@@ -452,43 +365,6 @@
   }
   .ok {
     color: var(--accent-text);
-  }
-  .upload {
-    margin-top: var(--s2);
-  }
-  .track {
-    height: 8px;
-    background: var(--surface-2);
-    overflow: hidden;
-  }
-  .track div {
-    height: 100%;
-    background: var(--accent);
-    transition: width 0.2s linear;
-  }
-  /* Bytes are sent; the server's answer is pending. */
-  .track.wait div {
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    50% {
-      opacity: 0.45;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .track div {
-      transition: none;
-    }
-    .track.wait div {
-      animation: none;
-    }
-  }
-  .meta {
-    margin-top: var(--s1);
-    flex-wrap: wrap;
-  }
-  .small {
-    font-size: var(--fs-s);
   }
   .pre {
     white-space: pre-wrap;

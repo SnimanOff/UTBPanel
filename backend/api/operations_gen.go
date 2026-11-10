@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "0657d534000d89e329b1d612ac3ef1c37e88072e257b12c292a3b48b850e463d"
+const GeneratedHash = "d8992aac07f001ce10d1ead999044b83b69f93bffe5c7df68b82eb5456fb7a71"
 
 // Op is one operation of the API.
 type Op struct {
@@ -20,6 +20,7 @@ var Ops = []Op{
 	{"closed_remove", "DELETE", "/api/bots/{id}/closed/allow/{uid}", "write", "Remove a user from the closed mode list"},
 	{"reset_flag", "DELETE", "/api/bots/{id}/sdk/flags/{name}", "write", "Restore a flag default from the bot code"},
 	{"delete_secret", "DELETE", "/api/bots/{id}/secrets/{name}", "confirm", "Delete a secret"},
+	{"stop_trial", "DELETE", "/api/bots/{id}/trial", "write", "End the test run and stop the test bot; the bot itself is not touched"},
 	{"delete_group", "DELETE", "/api/groups/{gid}", "never", "Delete a group; its bots move to \"No group\""},
 	{"discard_bot_import", "DELETE", "/api/imports/bots/{import}", "never", "Remove temporary import files; an already imported bot stays"},
 	{"delete_service_bot", "DELETE", "/api/server/service-bot", "never", "Disconnect the service bot; owner only"},
@@ -68,6 +69,7 @@ var Ops = []Op{
 	{"list_secrets", "GET", "/api/bots/{id}/secrets", "read", "Names of the bot's secrets; values are never returned"},
 	{"get_services", "GET", "/api/bots/{id}/services", "read", "External services the bot connects to (through the proxy) with error rates and traffic"},
 	{"get_settings", "GET", "/api/bots/{id}/settings", "read", "Settings of the bot (env, renames, limits)"},
+	{"get_trial", "GET", "/api/bots/{id}/trial", "read", "The test run of a new version on a test bot (or null) and the test bot used last time"},
 	{"list_users", "GET", "/api/bots/{id}/users", "read", "Users of the bot; search by id or username, filter all | banned | blocked"},
 	{"list_devices", "GET", "/api/devices", "never", "Devices waiting for approval"},
 	{"list_groups", "GET", "/api/groups", "read", "Groups in order"},
@@ -131,6 +133,8 @@ var Ops = []Op{
 	{"mark_service_known", "POST", "/api/bots/{id}/services/known", "write", "Mark an address as known (no more \"new address\" notifications)"},
 	{"start", "POST", "/api/bots/{id}/start", "write", "Start the bot"},
 	{"stop", "POST", "/api/bots/{id}/stop", "confirm", "Stop the bot; updates wait at Telegram"},
+	{"start_trial", "POST", "/api/bots/{id}/trial", "confirm", "Run a stored version on a test bot (its own token and database) to check it in Telegram before the deploy; copy_config gives the test bot the variables and secrets of the bot except BOT_TOKEN and WEBHOOK_SECRET; a new run replaces the previous one"},
+	{"promote_trial", "POST", "/api/bots/{id}/trial/promote", "confirm", "Deploy the tested version to the bot (stop the current version, start the new one; backup, observation and autorollback) and end the test run"},
 	{"ban_user", "POST", "/api/bots/{id}/users/{uid}/ban", "confirm", "Ban a user in this bot (reason required; hours 0 = forever)"},
 	{"unban_user", "POST", "/api/bots/{id}/users/{uid}/unban", "write", "Lift a ban"},
 	{"approve_device", "POST", "/api/devices/{id}/approve", "never", "Approve a device after comparing the code (owner only)"},

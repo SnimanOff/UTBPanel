@@ -105,6 +105,7 @@ func (s *Service) Register(mux *api.Mux) {
 	mux.HandleFunc("GET /api/bots/{id}/profile", s.getProfile)
 	s.registerBroadcasts(mux)
 	s.registerCanary(mux)
+	s.registerTrial(mux)
 	mux.HandleFunc("PATCH /api/bots/{id}/profile", s.setProfile)
 	mux.HandleFunc("POST /api/bots/{id}/maintenance", s.schedule)
 	mux.HandleFunc("POST /api/bots/{id}/maintenance/extend", s.extend)

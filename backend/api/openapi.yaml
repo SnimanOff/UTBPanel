@@ -578,6 +578,70 @@ paths:
       x-mcp: confirm
       responses:
         "204": { description: Done }
+  /api/bots/{id}/trial:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_trial
+      tags: [releases]
+      summary: The test run of a new version on a test bot (or null) and the test bot used last time
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TrialInfo" } } } }
+    post:
+      operationId: start_trial
+      tags: [releases]
+      summary: "Run a stored version on a test bot (its own token and database) to check it in Telegram before the deploy; copy_config gives the test bot the variables and secrets of the bot except BOT_TOKEN and WEBHOOK_SECRET; a new run replaces the previous one"
+      x-mcp: confirm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, test_bot_id]
+              properties:
+                version: { type: string }
+                test_bot_id: { type: integer }
+                copy_config: { type: boolean, default: true }
+      responses:
+        "200": { description: Started (error is set when the test bot did not start), content: { application/json: { schema: { $ref: "#/components/schemas/Trial" } } } }
+        "409": { description: The test bot is busy with another test run }
+    delete:
+      operationId: stop_trial
+      tags: [releases]
+      summary: End the test run and stop the test bot; the bot itself is not touched
+      x-mcp: write
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keep_test_bot: { type: boolean, description: "leave the test bot running" }
+      responses:
+        "204": { description: Done }
+  /api/bots/{id}/trial/promote:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: promote_trial
+      tags: [releases]
+      summary: Deploy the tested version to the bot (stop the current version, start the new one; backup, observation and autorollback) and end the test run
+      x-mcp: confirm
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config_version:
+                  type: string
+                  description: settings_version from get_release_config, as for deploy_release
+                keep_test_bot: { type: boolean, description: "leave the test bot running" }
+      responses:
+        "204": { description: Done }
+        "409": { description: The diff of tgpanel.yaml needs confirmation (config_confirm) or settings changed since it was read (conflict) }
   /api/bots/{id}/panics:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -2536,6 +2600,29 @@ components:
         finished_at: { type: string, format: date-time }
         result: { type: string, enum: [running, observing, ok, failed, rolled_back] }
         error: { type: string }
+    Trial:
+      type: object
+      required: [bot_id, version, test_bot_id, test_bot, test_username, test_version, copied, started_at, actor, process, restarts]
+      properties:
+        bot_id: { type: integer }
+        version: { type: string, description: the version of the bot under test }
+        test_bot_id: { type: integer }
+        test_bot: { type: string }
+        test_username: { type: string }
+        test_version: { type: string, description: the name of the copy in the test bot's versions }
+        copied: { type: boolean, description: the test bot got the variables and secrets of the bot }
+        started_at: { type: string, format: date-time }
+        actor: { type: string }
+        error: { type: string, description: why the test bot did not start }
+        process: { $ref: "#/components/schemas/Status" }
+        restarts: { type: integer, description: crashes of the test bot since the run started }
+        restarts0: { type: integer }
+    TrialInfo:
+      type: object
+      properties:
+        trial:
+          anyOf: [{ $ref: "#/components/schemas/Trial" }, { type: "null" }]
+        last_test_bot: { type: integer }
     DeploySummary:
       type: object
       required: [minutes, updates, errors, err_rate, p95_ms, crashes, cpu_avg, rss_max]
