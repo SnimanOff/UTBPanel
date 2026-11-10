@@ -287,7 +287,7 @@
       </p>
       {#if trial && !trial.error}
         <div class="line">
-          <HoldButton danger={false} disabled={busy} onconfirm={() => trial && deploy(trial.version, true)}>
+          <HoldButton danger={false} disabled={busy} onconfirm={() => { if (trial) deploy(trial.version, true) }}>
             Всё работает — обновить до {trial.version}
           </HoldButton>
         </div>
@@ -320,7 +320,7 @@
       {/if}
       <div class="line">
         {#if !pending.cfg.error}
-          <HoldButton disabled={busy} onconfirm={() => pending && deployNow(pending.version, pending.viaTrial, pending.cfg.settings_version)}>
+          <HoldButton disabled={busy} onconfirm={() => { if (pending) deployNow(pending.version, pending.viaTrial, pending.cfg.settings_version) }}>
             Применить и обновить
           </HoldButton>
         {/if}
