@@ -4,7 +4,7 @@
   import { api, errorText } from '../lib/api/client'
   import { store } from '../lib/api/stores.svelte'
   import { uptime } from '../lib/format'
-  import { router } from '../lib/router.svelte'
+  import { link, router } from '../lib/router.svelte'
   import HoldButton from '../lib/ui/HoldButton.svelte'
   import StatusSquare from '../lib/ui/StatusSquare.svelte'
   import Tabs from '../lib/ui/Tabs.svelte'
@@ -73,6 +73,9 @@
     {#if bot.status?.running}<span class="num muted">аптайм {uptime(bot.status.started)}</span>{/if}
     {#if bot.maintenance}<span class="maint">{bot.maintenance}</span>{/if}
     {#if bot.canary}<span class="canary">{bot.canary}</span>{/if}
+    {#if bot.test_for}
+      <a class="canary" href="/bots/{bot.test_for}/deploy" use:link>тестовый бот для {store.byId(bot.test_for)?.name ?? `#${bot.test_for}`}</a>
+    {/if}
     {#if (bot.status?.restarts ?? 0) > 0}<span class="num muted">рестартов {bot.status.restarts}</span>{/if}
     <span class="grow"></span>
     {#if running}

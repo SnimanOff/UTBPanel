@@ -2,7 +2,10 @@ import { api, errorText, type BotView, type Group } from './client'
 
 /** Shared state: bots and groups, loaded once and refreshed on demand. */
 class BotsStore {
-  bots = $state<BotView[]>([])
+  /** Every bot, the hidden test bots too (pages open them by id). */
+  all = $state<BotView[]>([])
+  /** The bots of the lists: without test bots attached to other bots. */
+  bots = $derived(this.all.filter((b) => !b.test_for))
   groups = $state<Group[]>([])
   /** Panics in the last 24 h by bot id (badges). */
   panics = $state<Record<string, number>>({})
@@ -11,7 +14,7 @@ class BotsStore {
   private loading?: Promise<void>
 
   byId(id: number): BotView | undefined {
-    return this.bots.find((b) => b.id === id)
+    return this.all.find((b) => b.id === id)
   }
 
   load(): Promise<void> {
@@ -22,7 +25,7 @@ class BotsStore {
           // A person with some bots does not see groups.
           api.get<Group[]>('/api/groups').catch(() => [] as Group[]),
         ])
-        this.bots = bots
+        this.all = bots
         this.groups = groups
         this.loadPanics()
         this.error = ''
@@ -42,9 +45,9 @@ class BotsStore {
 
   /** Replace one bot after an action. */
   put(b: BotView) {
-    const i = this.bots.findIndex((x) => x.id === b.id)
-    if (i >= 0) this.bots[i] = b
-    else this.bots.push(b)
+    const i = this.all.findIndex((x) => x.id === b.id)
+    if (i >= 0) this.all[i] = b
+    else this.all.push(b)
   }
 
   async refresh(id: number) {

@@ -36,6 +36,8 @@ func broadcastError(err error) error {
 	switch {
 	case errors.Is(err, broadcast.ErrEmpty):
 		return wire.Errorf(wire.CodeBadRequest, "нужен текст или картинка")
+	case errors.Is(err, broadcast.ErrDeleteAfter):
+		return wire.Errorf(wire.CodeBadRequest, "автоудаление: от 1 до 47 часов — Telegram даёт удалять сообщения только 48 часов")
 	case errors.Is(err, broadcast.ErrNotFound):
 		return wire.Errorf(wire.CodeNotFound, "нет такой рассылки")
 	case errors.Is(err, broadcast.ErrTooLate):
@@ -62,7 +64,7 @@ func (c *Core) registerBroadcasts() {
 	}
 	c.Mux.Handle("broadcast.create", wire.Func(func(ctx context.Context, _ *wire.Conn, in BroadcastReq) (broadcast.B, error) {
 		var out broadcast.B
-		err := c.Journal.Do(ctx, in.Actor, "broadcast.create", in.B.BotID, map[string]any{"audience": in.B.Audience, "starts_at": in.B.StartsAt}, func() error {
+		err := c.Journal.Do(ctx, in.Actor, "broadcast.create", in.B.BotID, map[string]any{"audience": in.B.Audience, "starts_at": in.B.StartsAt, "delete_after": in.B.DeleteAfter}, func() error {
 			if err := c.botExists(ctx, in.B.BotID); err != nil {
 				return err
 			}

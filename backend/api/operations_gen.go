@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "f6f963940d18f91ecea3867414643584d33d13642f993d277ee24c386de31027"
+const GeneratedHash = "ea1e13dadc4447f99e4ec0d3ee04b6b765eb20d10fce5180df66c6ef7021d735"
 
 // Op is one operation of the API.
 type Op struct {
@@ -20,6 +20,7 @@ var Ops = []Op{
 	{"closed_remove", "DELETE", "/api/bots/{id}/closed/allow/{uid}", "write", "Remove a user from the closed mode list"},
 	{"reset_flag", "DELETE", "/api/bots/{id}/sdk/flags/{name}", "write", "Restore a flag default from the bot code"},
 	{"delete_secret", "DELETE", "/api/bots/{id}/secrets/{name}", "confirm", "Delete a secret"},
+	{"detach_test_bot", "DELETE", "/api/bots/{id}/test-bot", "never", "Detach the test bot and delete it with its data; a test run on it ends"},
 	{"stop_trial", "DELETE", "/api/bots/{id}/trial", "write", "End the test run and stop the test bot; the bot itself is not touched"},
 	{"delete_group", "DELETE", "/api/groups/{gid}", "never", "Delete a group; its bots move to \"No group\""},
 	{"discard_bot_import", "DELETE", "/api/imports/bots/{import}", "never", "Remove temporary import files; an already imported bot stays"},
@@ -69,7 +70,7 @@ var Ops = []Op{
 	{"list_secrets", "GET", "/api/bots/{id}/secrets", "read", "Names of the bot's secrets; values are never returned"},
 	{"get_services", "GET", "/api/bots/{id}/services", "read", "External services the bot connects to (through the proxy) with error rates and traffic"},
 	{"get_settings", "GET", "/api/bots/{id}/settings", "read", "Settings of the bot (env, renames, limits)"},
-	{"get_trial", "GET", "/api/bots/{id}/trial", "read", "The test run of a new version on a test bot (or null) and the test bot used last time"},
+	{"get_trial", "GET", "/api/bots/{id}/trial", "read", "The test run of a new version (or null) and the attached test bot (or null) with its process"},
 	{"list_users", "GET", "/api/bots/{id}/users", "read", "Users of the bot; search by id or username, filter all | banned | blocked"},
 	{"list_devices", "GET", "/api/devices", "never", "Devices waiting for approval"},
 	{"list_groups", "GET", "/api/groups", "read", "Groups in order"},
@@ -133,7 +134,7 @@ var Ops = []Op{
 	{"mark_service_known", "POST", "/api/bots/{id}/services/known", "write", "Mark an address as known (no more \"new address\" notifications)"},
 	{"start", "POST", "/api/bots/{id}/start", "write", "Start the bot"},
 	{"stop", "POST", "/api/bots/{id}/stop", "confirm", "Stop the bot; updates wait at Telegram"},
-	{"start_trial", "POST", "/api/bots/{id}/trial", "confirm", "Run a stored version on a test bot (its own token and database) to check it in Telegram before the deploy; copy_config gives the test bot the variables and secrets of the bot except BOT_TOKEN and WEBHOOK_SECRET; a new run replaces the previous one"},
+	{"start_trial", "POST", "/api/bots/{id}/trial", "confirm", "Run a stored version on the attached test bot (its own token and database) to check it in Telegram before the deploy; copy_config gives the test bot the variables and secrets of the bot except BOT_TOKEN and WEBHOOK_SECRET; a new run replaces the previous one"},
 	{"promote_trial", "POST", "/api/bots/{id}/trial/promote", "confirm", "Deploy the tested version to the bot (stop the current version, start the new one; backup, observation and autorollback) and end the test run"},
 	{"ban_user", "POST", "/api/bots/{id}/users/{uid}/ban", "confirm", "Ban a user in this bot (reason required; hours 0 = forever)"},
 	{"unban_user", "POST", "/api/bots/{id}/users/{uid}/unban", "write", "Lift a ban"},
@@ -163,6 +164,7 @@ var Ops = []Op{
 	{"select_sdk_metrics", "PUT", "/api/bots/{id}/sdk/metrics/selected", "write", "Select SDK metrics to show on the bot dashboard"},
 	{"set_secret", "PUT", "/api/bots/{id}/secrets/{name}", "never", "Set a secret (write-only). Neural networks use request_secret instead"},
 	{"put_settings_section", "PUT", "/api/bots/{id}/settings/{section}", "confirm", "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates, getUpdates bridge 'updates' webhook or polling)"},
+	{"attach_test_bot", "PUT", "/api/bots/{id}/test-bot", "never", "Attach a separate Telegram bot (its token from BotFather) as the test bot for test runs; an attached one gets the new token"},
 	{"set_token", "PUT", "/api/bots/{id}/token", "never", "Replace the token (checked with getMe). Neural networks use request_secret instead"},
 	{"order_groups", "PUT", "/api/groups/order", "never", "Reorder groups"},
 	{"set_mcp_mode", "PUT", "/api/mcp/groups/{gid}", "never", "Change a group MCP mode through the owner's panel (never MCP)"},

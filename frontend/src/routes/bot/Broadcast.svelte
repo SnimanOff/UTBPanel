@@ -24,6 +24,11 @@
   let days = $state(30)
   let when = $state<'now' | 'at'>('now')
   let at = $state(new Date(Date.now() + 3600e3).toISOString().slice(0, 16))
+  // Delete the messages at all recipients this many hours after the start.
+  // Telegram lets a bot delete its messages for 48 hours, so 36 h is the
+  // longest choice: a long broadcast still finishes within the limit.
+  let deleteAfter = $state(0)
+  const deleteChoices: [number, string][] = [[0, 'не удалять'], [1, 'через 1 час'], [3, 'через 3 часа'], [6, 'через 6 часов'], [12, 'через 12 часов'], [24, 'через 24 часа'], [36, 'через 36 часов']]
   let estimate = $state<number | null>(null)
   let tz = $state(defaultTZ)
   let history = $state<B[]>([])
@@ -110,6 +115,7 @@
       buttons: buttons.filter((b) => b.text.trim() && b.url.trim()),
       audience,
       active_days: audience === 'active' ? days : 0,
+      delete_after: deleteAfter,
     }
     if (when === 'at') data.starts_at = new Date(at + ':00Z').toISOString()
     if (!photo) return data
@@ -194,6 +200,15 @@
       {#if when === 'at'}<span class="muted num">{pair(atDate, tz)}</span>{/if}
     </div>
     <div class="line">
+      <label>
+        Автоудаление
+        <select bind:value={deleteAfter}>
+          {#each deleteChoices as [h, label]}<option value={h}>{label}</option>{/each}
+        </select>
+      </label>
+      {#if deleteAfter}<span class="muted">сообщение пропадёт у всех получателей через {deleteAfter} ч после начала рассылки</span>{/if}
+    </div>
+    <div class="line">
       <button disabled={busy || (!text.trim() && !photo)} onclick={sendMe}>Отправить мне</button>
       <span class="grow"></span>
       <HoldButton danger={false} disabled={busy || (!text.trim() && !photo) || text.length > max || estimate === 0} onconfirm={launch}>
@@ -227,6 +242,9 @@
           <td>
             {states[b.state] ?? b.state}
             {#if b.state === 'scheduled'}<span class="muted num">{utc(b.starts_at)}</span>{/if}
+            {#if b.delete_at && !b.revision}
+              <div class="muted" title="Автоудаление через {b.delete_after} ч после начала">удалится {utc(b.delete_at)}</div>
+            {/if}
             {#if b.revision}
               <div class="muted">
                 {revisions[b.revision] ?? b.revision}: <span class="num">{b.rev_done ?? 0}</span>{#if b.rev_failed} · ошибок <span class="num">{b.rev_failed}</span>{/if}

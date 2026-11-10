@@ -15,6 +15,42 @@ func (s *Service) registerTrial(mux *api.Mux) {
 	mux.HandleFunc("POST /api/bots/{id}/trial", s.startTrial)
 	mux.HandleFunc("POST /api/bots/{id}/trial/promote", s.trialOp("trial.promote"))
 	mux.HandleFunc("DELETE /api/bots/{id}/trial", s.trialOp("trial.stop"))
+	mux.HandleFunc("PUT /api/bots/{id}/test-bot", s.attachTestBot)
+	mux.HandleFunc("DELETE /api/bots/{id}/test-bot", s.detachTestBot)
+}
+
+// attachTestBot makes a separate Telegram bot the test bot of this one.
+func (s *Service) attachTestBot(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		Token string `json:"token"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	var b core.Bot
+	if err := s.Call(r.Context(), "testbot.attach", core.TestBotReq{BotID: id, Token: in.Token, Actor: api.Actor(r.Context())}, &b); err != nil {
+		WriteCoreError(w, err)
+		return
+	}
+	audit.Annotate(r, "testbot.attach", "@"+b.Username, nil)
+	api.WriteJSON(w, http.StatusOK, b)
+}
+
+func (s *Service) detachTestBot(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if err := s.Call(r.Context(), "testbot.detach", core.TestBotReq{BotID: id, Actor: api.Actor(r.Context())}, nil); err != nil {
+		WriteCoreError(w, err)
+		return
+	}
+	audit.Annotate(r, "testbot.detach", "", nil)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Service) getTrial(w http.ResponseWriter, r *http.Request) {

@@ -42,13 +42,18 @@ type Bot struct {
 	// Canary: "канарейка v2 · 10 %", empty when none.
 	Canary string        `cbor:"10,keyasint,omitempty" json:"canary,omitempty"`
 	SDK    *sdkhost.Info `cbor:"11,keyasint,omitempty" json:"sdk,omitempty"`
+	// TestFor is the bot this one tests new versions of (a hidden test bot),
+	// 0 for an ordinary bot.
+	TestFor int64 `cbor:"12,keyasint,omitempty" json:"test_for,omitempty"`
 }
 
 // CreateBot is the request to add a bot.
 type CreateBot struct {
-	Name  string        `cbor:"1,keyasint"`
-	Token string        `cbor:"2,keyasint"`
-	Actor journal.Actor `cbor:"9,keyasint"`
+	Name  string `cbor:"1,keyasint"`
+	Token string `cbor:"2,keyasint"`
+	// TestFor makes the bot the test bot of that bot (see testbot.go).
+	TestFor int64         `cbor:"3,keyasint,omitempty"`
+	Actor   journal.Actor `cbor:"9,keyasint"`
 }
 
 // SetToken replaces a bot token.
@@ -73,12 +78,12 @@ func mustCBOR(raw []byte) []byte {
 	return b
 }
 
-const botColumns = `id, name, username, tg_id, state, port, current_version, created_at`
+const botColumns = `id, name, username, tg_id, state, port, current_version, created_at, test_for`
 
 func scanBot(row interface{ Scan(...any) error }) (Bot, error) {
 	var b Bot
 	var created string
-	err := row.Scan(&b.ID, &b.Name, &b.Username, &b.TgID, &b.State, &b.Port, &b.Version, &created)
+	err := row.Scan(&b.ID, &b.Name, &b.Username, &b.TgID, &b.State, &b.Port, &b.Version, &created, &b.TestFor)
 	b.CreatedAt, _ = store.ParseTime(created)
 	return b, err
 }
@@ -200,8 +205,8 @@ func (c *Core) CreateBot(ctx context.Context, in CreateBot) (Bot, error) {
 		if err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, `INSERT INTO bots (name, username, tg_id, state, port, created_at) VALUES (?, ?, ?, 'stopped', ?, ?)`,
-			in.Name, me.Username, me.ID, port, store.Now())
+		res, err := tx.ExecContext(ctx, `INSERT INTO bots (name, username, tg_id, state, port, created_at, test_for) VALUES (?, ?, ?, 'stopped', ?, ?, ?)`,
+			in.Name, me.Username, me.ID, port, store.Now(), in.TestFor)
 		if err != nil {
 			if strings.Contains(err.Error(), "UNIQUE") {
 				return wire.Errorf("exists", "a bot named %q already exists", in.Name)
@@ -215,7 +220,7 @@ func (c *Core) CreateBot(ctx context.Context, in CreateBot) (Bot, error) {
 		if err := c.Sec.SetTx(ctx, tx, id, secrets.WebhookSecretName, secrets.KindValue, []byte(randomSecret())); err != nil {
 			return err
 		}
-		b = Bot{ID: id, Name: in.Name, Username: me.Username, TgID: me.ID, State: StateStopped, Port: port, CreatedAt: time.Now().UTC()}
+		b = Bot{ID: id, Name: in.Name, Username: me.Username, TgID: me.ID, State: StateStopped, Port: port, CreatedAt: time.Now().UTC(), TestFor: in.TestFor}
 		return nil
 	})
 	if err != nil {

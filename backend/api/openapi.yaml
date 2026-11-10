@@ -583,14 +583,14 @@ paths:
     get:
       operationId: get_trial
       tags: [releases]
-      summary: The test run of a new version on a test bot (or null) and the test bot used last time
+      summary: The test run of a new version (or null) and the attached test bot (or null) with its process
       x-mcp: read
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TrialInfo" } } } }
     post:
       operationId: start_trial
       tags: [releases]
-      summary: "Run a stored version on a test bot (its own token and database) to check it in Telegram before the deploy; copy_config gives the test bot the variables and secrets of the bot except BOT_TOKEN and WEBHOOK_SECRET; a new run replaces the previous one"
+      summary: "Run a stored version on the attached test bot (its own token and database) to check it in Telegram before the deploy; copy_config gives the test bot the variables and secrets of the bot except BOT_TOKEN and WEBHOOK_SECRET; a new run replaces the previous one"
       x-mcp: confirm
       requestBody:
         required: true
@@ -598,14 +598,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [version, test_bot_id]
+              required: [version]
               properties:
                 version: { type: string }
-                test_bot_id: { type: integer }
+                test_bot_id: { type: integer, description: "optional; must be the attached test bot" }
                 copy_config: { type: boolean, default: true }
       responses:
         "200": { description: Started (error is set when the test bot did not start), content: { application/json: { schema: { $ref: "#/components/schemas/Trial" } } } }
-        "409": { description: The test bot is busy with another test run }
+        "400": { description: No test bot is attached (no_test_bot) }
     delete:
       operationId: stop_trial
       tags: [releases]
@@ -642,6 +642,32 @@ paths:
       responses:
         "204": { description: Done }
         "409": { description: The diff of tgpanel.yaml needs confirmation (config_confirm) or settings changed since it was read (conflict) }
+  /api/bots/{id}/test-bot:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    put:
+      operationId: attach_test_bot
+      tags: [releases]
+      summary: Attach a separate Telegram bot (its token from BotFather) as the test bot for test runs; an attached one gets the new token
+      x-mcp: never
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "200": { description: The test bot, content: { application/json: { schema: { $ref: "#/components/schemas/Bot" } } } }
+        "409": { description: This bot is already in the panel (exists) }
+    delete:
+      operationId: detach_test_bot
+      tags: [releases]
+      summary: Detach the test bot and delete it with its data; a test run on it ends
+      x-mcp: never
+      responses:
+        "204": { description: Done }
   /api/bots/{id}/panics:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -2347,6 +2373,7 @@ components:
         maintenance: { type: string }
         canary: { type: string }
         sdk: { $ref: "#/components/schemas/SDKInfo" }
+        test_for: { type: integer, description: the bot this one is the test bot of (hidden from the list) }
     SDKInfo:
       type: object
       required: [version, modules, connected]
@@ -2584,6 +2611,7 @@ components:
         audience: { type: string, enum: [all, active] }
         active_days: { type: integer }
         starts_at: { type: string, format: date-time }
+        delete_after: { type: integer, minimum: 0, maximum: 47, description: "Delete the messages this many hours after the start, 0 = never (Telegram allows 48 h)" }
     LinkButton:
       type: object
       required: [text, url]
@@ -2616,6 +2644,8 @@ components:
         rev_done: { type: integer }
         rev_failed: { type: integer }
         revisable_until: { type: string, format: date-time, description: Edit and recall work until then }
+        delete_after: { type: integer, description: Recall automatically this many hours after the start }
+        delete_at: { type: string, format: date-time, description: When the automatic recall happens }
     DeployRecord:
       type: object
       required: [id, from, to, actor, started_at, result]
@@ -2651,7 +2681,9 @@ components:
       properties:
         trial:
           anyOf: [{ $ref: "#/components/schemas/Trial" }, { type: "null" }]
-        last_test_bot: { type: integer }
+        test_bot:
+          anyOf: [{ $ref: "#/components/schemas/Bot" }, { type: "null" }]
+        test_bot_status: { $ref: "#/components/schemas/Status" }
     DeploySummary:
       type: object
       required: [minutes, updates, errors, err_rate, p95_ms, crashes, cpu_avg, rss_max]

@@ -36,6 +36,8 @@ func readBroadcast(w http.ResponseWriter, r *http.Request, b *broadcast.B) bool 
 		Audience   string             `json:"audience"`
 		ActiveDays int                `json:"active_days"`
 		StartsAt   *string            `json:"starts_at"`
+		// DeleteAfter recalls the broadcast this many hours after its start.
+		DeleteAfter int `json:"delete_after"`
 	}
 	bad := func(msg string) bool {
 		api.WriteError(w, http.StatusBadRequest, "bad_request", msg)
@@ -69,7 +71,11 @@ func readBroadcast(w http.ResponseWriter, r *http.Request, b *broadcast.B) bool 
 			return bad("кнопка: нужен текст и ссылка http(s):// или tg://")
 		}
 	}
+	if in.DeleteAfter < 0 || in.DeleteAfter > broadcast.MaxDeleteAfter {
+		return bad("автоудаление: от 1 до 47 часов — Telegram даёт удалять сообщения только 48 часов")
+	}
 	b.Text, b.ParseMode, b.Buttons, b.Audience, b.ActiveDays = in.Text, in.ParseMode, in.Buttons, in.Audience, in.ActiveDays
+	b.DeleteAfter = in.DeleteAfter
 	if in.StartsAt != nil && *in.StartsAt != "" {
 		t, err := time.Parse(time.RFC3339, *in.StartsAt)
 		if err != nil {

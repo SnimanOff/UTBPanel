@@ -63,10 +63,14 @@ type B struct {
 	RevFailed int    `cbor:"24,keyasint" json:"rev_failed"`
 	// RevisableUntil: edit and recall work until then (48 h after start).
 	RevisableUntil time.Time `cbor:"25,keyasint,omitzero" json:"revisable_until,omitzero"`
-	cursor         int64
-	revCursor      int64
-	sent           []sentMessage // delivered since the last save
-	fileID         string
+	// DeleteAfter recalls the broadcast this many hours after it started,
+	// 0 = never; DeleteAt is when (from the start, or the planned start).
+	DeleteAfter int       `cbor:"26,keyasint,omitempty" json:"delete_after,omitempty"`
+	DeleteAt    time.Time `cbor:"27,keyasint,omitzero" json:"delete_at,omitzero"`
+	cursor      int64
+	revCursor   int64
+	sent        []sentMessage // delivered since the last save
+	fileID      string
 }
 
 // Sender is the part of the Telegram client broadcasts use.
@@ -97,18 +101,20 @@ var (
 	ErrEmpty    = errors.New("broadcast: no text")
 	ErrNotFound = errors.New("broadcast: not found")
 	ErrState    = errors.New("broadcast: not possible in this state")
+	// ErrDeleteAfter: the auto-delete delay is out of range.
+	ErrDeleteAfter = errors.New("broadcast: delete_after must be 0..47 hours")
 )
 
 const columns = `id, bot_id, text, parse_mode, photo, photo_name, photo_file_id, buttons, audience, active_days, starts_at, state, kind,
 	created_by, created_at, COALESCE(started_at, ''), COALESCE(finished_at, ''), cursor, total, sent, blocked, failed, errors,
-	revision, rev_cursor, rev_done, rev_failed`
+	revision, rev_cursor, rev_done, rev_failed, delete_after`
 
 func scan(row interface{ Scan(...any) error }) (B, error) {
 	var b B
 	var buttons, errs, starts, created, started, finished string
 	err := row.Scan(&b.ID, &b.BotID, &b.Text, &b.ParseMode, &b.Photo, &b.PhotoName, &b.fileID, &buttons, &b.Audience, &b.ActiveDays,
 		&starts, &b.State, &b.Kind, &b.CreatedBy, &created, &started, &finished, &b.cursor, &b.Total, &b.Sent, &b.Blocked, &b.Failed, &errs,
-		&b.Revision, &b.revCursor, &b.RevDone, &b.RevFailed)
+		&b.Revision, &b.revCursor, &b.RevDone, &b.RevFailed, &b.DeleteAfter)
 	if err != nil {
 		return b, err
 	}
@@ -120,6 +126,13 @@ func scan(row interface{ Scan(...any) error }) (B, error) {
 	b.FinishedAt, _ = store.ParseTime(finished)
 	if !b.StartedAt.IsZero() && b.Sent > 0 && b.Revision != Deleted && b.Kind == "" {
 		b.RevisableUntil = b.StartedAt.Add(RevisableFor)
+	}
+	if b.DeleteAfter > 0 {
+		from := b.StartedAt
+		if from.IsZero() {
+			from = b.StartsAt
+		}
+		b.DeleteAt = from.Add(time.Duration(b.DeleteAfter) * time.Hour)
 	}
 	if b.Buttons == nil {
 		b.Buttons = []Button{}
@@ -141,15 +154,18 @@ func (s *Service) Create(ctx context.Context, b B) (B, error) {
 	if b.Audience != "active" {
 		b.Audience, b.ActiveDays = "all", 0
 	}
+	if b.DeleteAfter < 0 || b.DeleteAfter > MaxDeleteAfter {
+		return b, ErrDeleteAfter
+	}
 	now := time.Now().UTC()
 	if b.StartsAt.IsZero() || b.StartsAt.Before(now) {
 		b.StartsAt = now
 	}
 	buttons, _ := json.Marshal(nonNil(b.Buttons))
-	res, err := s.DB.W.ExecContext(ctx, `INSERT INTO broadcasts (bot_id, text, parse_mode, photo, photo_name, buttons, audience, active_days, starts_at, state, kind, created_by, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	res, err := s.DB.W.ExecContext(ctx, `INSERT INTO broadcasts (bot_id, text, parse_mode, photo, photo_name, buttons, audience, active_days, starts_at, state, kind, created_by, created_at, delete_after)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		b.BotID, b.Text, b.ParseMode, b.Photo, b.PhotoName, string(buttons), b.Audience, b.ActiveDays,
-		store.FormatTime(b.StartsAt), Scheduled, b.Kind, b.CreatedBy, store.FormatTime(now))
+		store.FormatTime(b.StartsAt), Scheduled, b.Kind, b.CreatedBy, store.FormatTime(now), b.DeleteAfter)
 	if err != nil {
 		return b, err
 	}
@@ -310,6 +326,7 @@ func (s *Service) Tick(ctx context.Context) {
 	for _, id := range ids {
 		s.launch(ctx, id, s.send)
 	}
+	s.autoRecall(ctx)
 	// Revisions run under the negative id: a paused broadcast may be
 	// recalled while nothing sends it.
 	rows, err = s.DB.R.QueryContext(ctx, `SELECT id FROM broadcasts WHERE revision IN (?, ?)`, Editing, Deleting)

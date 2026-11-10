@@ -118,6 +118,13 @@ func (c *Core) DeleteBot(ctx context.Context, id int64) error {
 	if err := c.botExists(ctx, id); err != nil {
 		return err
 	}
+	// The attached test bot goes with its bot.
+	if tb, _ := c.TestBotOf(ctx, id); tb != nil {
+		if err := c.DeleteBot(ctx, tb.ID); err != nil {
+			return err
+		}
+	}
+	c.kvDelete(ctx, trialKey(id))
 	c.Runner.Stop(ctx, id)
 	if tok, err := c.Token(ctx, id); err == nil {
 		if err := c.TG.DeleteWebhook(ctx, tok, false); err != nil {

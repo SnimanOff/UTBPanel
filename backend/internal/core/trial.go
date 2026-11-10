@@ -64,15 +64,15 @@ type Trial struct {
 	Restarts0 int `cbor:"13,keyasint" json:"restarts0"`
 }
 
-// TrialInfo is the trial of a bot (nil when none) and the test bot the
-// panel should offer by default.
+// TrialInfo is the trial of a bot (nil when none) and its attached test
+// bot (nil when none) with that bot's process now.
 type TrialInfo struct {
-	Trial       *Trial `cbor:"1,keyasint" json:"trial"`
-	LastTestBot int64  `cbor:"2,keyasint" json:"last_test_bot,omitempty"`
+	Trial         *Trial         `cbor:"1,keyasint" json:"trial"`
+	TestBot       *Bot           `cbor:"2,keyasint" json:"test_bot"`
+	TestBotStatus *runner.Status `cbor:"3,keyasint,omitempty" json:"test_bot_status,omitempty"`
 }
 
-func trialKey(id int64) string    { return "trial:" + strconv.FormatInt(id, 10) }
-func trialBotKey(id int64) string { return "trial_bot:" + strconv.FormatInt(id, 10) }
+func trialKey(id int64) string { return "trial:" + strconv.FormatInt(id, 10) }
 
 func (c *Core) kvSet(ctx context.Context, key, value string) error {
 	_, err := c.DB.W.ExecContext(ctx, `INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`, key, value)
@@ -113,8 +113,13 @@ func (c *Core) TrialOf(ctx context.Context, botID int64) (TrialInfo, error) {
 	if err := c.botExists(ctx, botID); err != nil {
 		return out, err
 	}
-	if v, err := c.kvGet(ctx, trialBotKey(botID)); err == nil {
-		out.LastTestBot, _ = strconv.ParseInt(v, 10, 64)
+	tb, err := c.TestBotOf(ctx, botID)
+	if err != nil {
+		return out, err
+	}
+	if tb != nil {
+		st := c.Runner.Status(tb.ID)
+		out.TestBot, out.TestBotStatus = tb, &st
 	}
 	t, err := c.loadTrial(ctx, botID)
 	if err != nil || t == nil {
@@ -124,26 +129,6 @@ func (c *Core) TrialOf(ctx context.Context, botID int64) (TrialInfo, error) {
 	t.Restarts = max(0, t.Process.Restarts-t.Restarts0)
 	out.Trial = t
 	return out, nil
-}
-
-// trialOwner returns the bot whose trial runs on testBotID, 0 when none.
-func (c *Core) trialOwner(ctx context.Context, testBotID int64) int64 {
-	rows, err := c.DB.R.QueryContext(ctx, `SELECT key, value FROM kv WHERE key LIKE 'trial:%'`)
-	if err != nil {
-		return 0
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var k, v string
-		if rows.Scan(&k, &v) != nil {
-			continue
-		}
-		var t Trial
-		if json.Unmarshal([]byte(v), &t) == nil && t.TestBotID == testBotID {
-			return t.BotID
-		}
-	}
-	return 0
 }
 
 // trialKeep are the secrets of the test bot itself: never copied over and
@@ -211,12 +196,21 @@ func (c *Core) StartTrial(ctx context.Context, in TrialReq) (*Trial, error) {
 	if err != nil {
 		return nil, err
 	}
-	if in.TestBotID == 0 || in.TestBotID == in.BotID {
-		return nil, wire.Errorf(wire.CodeBadRequest, "выберите другой бот как тестовый")
+	if b.TestFor != 0 {
+		return nil, wire.Errorf(wire.CodeBadRequest, "%s сам тестовый бот", b.Name)
 	}
-	tb, err := c.Bot(ctx, in.TestBotID)
+	// Only the attached test bot: its variables and secrets get replaced,
+	// which must never happen to a bot with real users.
+	tbp, err := c.TestBotOf(ctx, in.BotID)
 	if err != nil {
-		return nil, wire.Errorf(wire.CodeNotFound, "тестового бота %d нет", in.TestBotID)
+		return nil, err
+	}
+	if tbp == nil {
+		return nil, wire.Errorf("no_test_bot", "сначала привяжите тестового бота: отдельный бот из @BotFather")
+	}
+	tb := *tbp
+	if in.TestBotID != 0 && in.TestBotID != tb.ID {
+		return nil, wire.Errorf(wire.CodeBadRequest, "тест идёт только на привязанном тестовом боте @%s", tb.Username)
 	}
 	if in.Version == "" {
 		return nil, wire.Errorf(wire.CodeBadRequest, "укажите версию")
@@ -227,17 +221,8 @@ func (c *Core) StartTrial(ctx context.Context, in TrialReq) (*Trial, error) {
 	if _, err := c.Sec.Decrypt(ctx, tb.ID, secrets.TokenName); err != nil {
 		return nil, wire.Errorf(wire.CodeBadRequest, "у тестового бота %s нет токена", tb.Name)
 	}
-	if owner := c.trialOwner(ctx, tb.ID); owner != 0 && owner != in.BotID {
-		return nil, wire.Errorf("conflict", "на боте %s уже идёт тест другого бота (%d)", tb.Name, owner)
-	}
-	if t, _ := c.loadTrial(ctx, tb.ID); t != nil {
-		return nil, wire.Errorf("conflict", "бот %s сам сейчас тестируется на другом боте", tb.Name)
-	}
-	if owner := c.trialOwner(ctx, in.BotID); owner != 0 {
-		return nil, wire.Errorf("conflict", "бот %s сейчас служит тестовым для бота %d", b.Name, owner)
-	}
-	// A new trial of the same bot replaces the old one; a different test
-	// bot of the old trial is stopped.
+	// A new trial of the same bot replaces the old one; a test bot of an
+	// older trial that is not attached any more is stopped.
 	if old, _ := c.loadTrial(ctx, in.BotID); old != nil && old.TestBotID != tb.ID {
 		c.Runner.Stop(ctx, old.TestBotID)
 	}
@@ -262,7 +247,6 @@ func (c *Core) StartTrial(ctx context.Context, in TrialReq) (*Trial, error) {
 	}
 	cur, prev, _ := c.versions(ctx, tb.ID)
 	c.Releases.Prune(tb.ID, cur, prev)
-	c.kvSet(ctx, trialBotKey(in.BotID), strconv.FormatInt(tb.ID, 10))
 	t := &Trial{
 		BotID: in.BotID, Version: in.Version, TestBotID: tb.ID, TestBot: tb.Name, TestUser: tb.Username,
 		TestVersion: rel.Version, Copied: in.CopyConfig, StartedAt: nowUTC(),

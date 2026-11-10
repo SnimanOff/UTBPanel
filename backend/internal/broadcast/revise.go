@@ -82,6 +82,51 @@ func (s *Service) Recall(ctx context.Context, id int64) error {
 	return err
 }
 
+// MaxDeleteAfter is the longest auto-delete delay in hours: Telegram lets a
+// bot delete its messages for 48 hours, and a long broadcast needs a margin.
+const MaxDeleteAfter = 47
+
+// autoRecall recalls broadcasts whose auto-delete time has come. A running
+// broadcast is recalled once it ends; a paused one is cancelled. A recall
+// that cannot happen (too late, nothing sent) switches auto-delete off, so
+// it is not retried every tick.
+func (s *Service) autoRecall(ctx context.Context) {
+	rows, err := s.DB.R.QueryContext(ctx, `SELECT id FROM broadcasts WHERE delete_after > 0 AND state IN (?, ?, ?) AND revision IN ('', ?)`,
+		Done, Paused, Cancelled, Edited)
+	if err != nil {
+		return
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	_ = rows.Close()
+	now := time.Now()
+	for _, id := range ids {
+		b, err := s.Get(ctx, id)
+		if err != nil || b.DeleteAt.IsZero() || now.Before(b.DeleteAt) {
+			continue
+		}
+		if b.Sent == 0 {
+			s.DB.W.ExecContext(ctx, `UPDATE broadcasts SET delete_after = 0 WHERE id = ?`, id)
+			continue
+		}
+		if err := s.Recall(ctx, id); err != nil {
+			if s.Log != nil {
+				s.Log.Warn("auto-delete of a broadcast failed", "id", id, "err", err)
+			}
+			s.DB.W.ExecContext(ctx, `UPDATE broadcasts SET delete_after = 0 WHERE id = ?`, id)
+			continue
+		}
+		if s.Event != nil {
+			s.Event(b.BotID, "broadcast_auto_delete", map[string]any{"id": id, "hours": b.DeleteAfter, "sent": b.Sent})
+		}
+	}
+}
+
 // Prune forgets message ids older than RevisableFor.
 func (s *Service) Prune(ctx context.Context) {
 	if _, err := s.DB.W.ExecContext(ctx, `DELETE FROM broadcast_messages WHERE sent_at < ?`, time.Now().Add(-RevisableFor).Unix()); err != nil && s.Log != nil {

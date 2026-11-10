@@ -21,9 +21,10 @@
   }: { botId: number; releases: Release[]; github: { repo: string } | null; onchange: () => void | Promise<void> } = $props()
 
   let trial = $state<Trial | null>(null)
-  let lastTestBot = $state(0)
+  // The separate bot attached for test runs (hidden from the bot list).
+  let testBot = $state<Schemas['Bot'] | null>(null)
+  let testToken = $state('')
   let version = $state('')
-  let testBot = $state(0)
   let copyConfig = $state(true)
   let busy = $state(false)
   let error = $state('')
@@ -34,23 +35,17 @@
   const fromGitHub = $derived(!!github?.repo && (!current || current.source === 'github'))
   // Versions stored after the current one: the candidates for the update.
   const fresh = $derived(releases.filter((r) => !r.current && (!current || r.uploaded > current.uploaded)))
-  const others = $derived(store.bots.filter((b) => b.id !== botId))
 
   $effect(() => {
     // The newest fresh version by default; keep the choice while it exists.
     if (!fresh.some((r) => r.version === version)) version = fresh[0]?.version ?? ''
-  })
-  $effect(() => {
-    if (testBot && others.some((b) => b.id === testBot)) return
-    const guess = others.find((b) => b.id === lastTestBot) ?? others.find((b) => /test|тест/i.test(`${b.name} ${b.username}`))
-    testBot = guess?.id ?? 0
   })
 
   async function loadTrial() {
     try {
       const r = await api.get<Schemas['TrialInfo']>(`/api/bots/${botId}/trial`)
       trial = r.trial ?? null
-      lastTestBot = r.last_test_bot ?? 0
+      testBot = r.test_bot ?? null
     } catch (e) {
       error = errorText(e)
     }
@@ -131,9 +126,24 @@
   const checkGitHub = () => run(() => api.post(`/api/bots/${botId}/github/check`), 'GitHub проверен')
 
   // ── 2. Test run ───────────────────────────────────────────────────────
-  const startTrial = (v = version, bot = testBot, copy = copyConfig) =>
+  const attachTestBot = (e: SubmitEvent) => {
+    e.preventDefault()
+    return run(async () => {
+      const b = await api.put<Schemas['Bot']>(`/api/bots/${botId}/test-bot`, { token: testToken.trim() })
+      testToken = ''
+      info = `Тестовый бот @${b.username} привязан`
+      store.load()
+    })
+  }
+  const detachTestBot = () =>
     run(async () => {
-      const t = await api.post<Trial>(`/api/bots/${botId}/trial`, { version: v, test_bot_id: bot, copy_config: copy })
+      await api.del(`/api/bots/${botId}/test-bot`)
+      store.load()
+    }, 'Тестовый бот отвязан и удалён из панели')
+
+  const startTrial = (v = version, copy = copyConfig) =>
+    run(async () => {
+      const t = await api.post<Trial>(`/api/bots/${botId}/trial`, { version: v, copy_config: copy })
       if (t.error) throw new Error(`Тестовый бот не запустился: ${t.error}`)
     }, `Версия ${v} запущена на тестовом боте`)
   const stopTrial = () => run(() => api.del(`/api/bots/${botId}/trial`), 'Тест завершён, тестовый бот остановлен')
@@ -243,7 +253,7 @@
           </div>
           <p class="small">Напишите тестовому боту в Telegram и проверьте, что всё работает.</p>
           <div class="line">
-            <button disabled={busy} onclick={() => trial && startTrial(trial.version, trial.test_bot_id, trial.copied)}>Перезапустить тест</button>
+            <button disabled={busy} onclick={() => { if (trial) startTrial(trial.version, trial.copied) }}>Перезапустить тест</button>
             <button disabled={busy} onclick={stopTrial}>Отменить тест</button>
           </div>
           {#if version && version !== trial.version}
@@ -251,31 +261,42 @@
             <div class="line"><button disabled={busy} onclick={() => startTrial()}>Тестировать {version}</button></div>
           {/if}
         </div>
-      {:else if !others.length}
-        <p class="muted">Добавьте в панель второго бота со своим токеном — он будет тестовым.</p>
+      {:else if !testBot}
+        <p class="small">
+          Создайте в <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> отдельного бота для
+          тестов и вставьте его токен. В общем списке ботов он не появится и удалится вместе с этим ботом.
+        </p>
+        <form class="line" onsubmit={attachTestBot}>
+          <input type="password" bind:value={testToken} placeholder="токен тестового бота" autocomplete="off" disabled={busy} />
+          <button class="primary" disabled={busy || !testToken.trim()}>Привязать</button>
+        </form>
       {:else}
-        <label class="pick">
-          Тестовый бот
-          <select bind:value={testBot} disabled={busy}>
-            <option value={0} disabled>— выберите —</option>
-            {#each others as b (b.id)}
-              <option value={b.id}>{b.name}{b.username ? ` (@${b.username})` : ''}{b.status.running ? ' · работает' : ''}</option>
-            {/each}
-          </select>
-        </label>
+        <p>
+          Тестовый бот <a href="https://t.me/{testBot.username}" target="_blank" rel="noopener">@{testBot.username}</a>
+          · <a class="small" href="/bots/{testBot.id}/logs" use:link>логи</a>
+        </p>
         <label class="check">
           <input type="checkbox" bind:checked={copyConfig} disabled={busy} />
           дать ему переменные и секреты этого бота (кроме токена)
         </label>
-        <p class="muted small">
-          Тестовый бот остановится, получит копию версии и запустится со своим токеном и своей базой.
-          {#if copyConfig}Его переменные и секреты будут заменены.{/if}
-        </p>
+        <p class="muted small">Он получит копию версии и запустится со своим токеном и своей базой.</p>
         <div class="line">
-          <button class="primary" disabled={busy || !version || !testBot} onclick={() => startTrial()}>
+          <button class="primary" disabled={busy || !version} onclick={() => startTrial()}>
             Запустить тест{version ? ` ${version}` : ''}
           </button>
         </div>
+      {/if}
+      {#if testBot}
+        <details class="small">
+          <summary class="muted">заменить или отвязать тестового бота</summary>
+          <form class="line" onsubmit={attachTestBot}>
+            <input type="password" bind:value={testToken} placeholder="новый токен" autocomplete="off" disabled={busy} />
+            <button disabled={busy || !testToken.trim()}>Заменить</button>
+          </form>
+          <div class="line">
+            <HoldButton disabled={busy} onconfirm={detachTestBot}>Отвязать и удалить</HoldButton>
+          </div>
+        </details>
       {/if}
     </section>
 
