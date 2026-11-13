@@ -95,4 +95,15 @@ if [ -n "$down" ]; then
   echo "update: not running: $down (previous settings: .env.before-$version)" >&2
   exit 1
 fi
+
+# Old images of the panel are not needed: each one is ~190 MB and every
+# update leaves one more. Kept: the versions in .env (compose recreates
+# services from them) and images of running containers (a core upgraded in
+# place still runs from its old image; docker refuses to remove those).
+keep=" $(sed -n 's/^\(PANEL\|CORE\|EDGE\)_VERSION=//p' .env | tr '\n' ' ') "
+docker images "$image" --format '{{.Tag}}' | while read -r tag; do
+  case "$keep" in *" $tag "*) continue ;; esac
+  if docker rmi "$image:$tag" >/dev/null 2>&1; then log "removed old image $image:$tag"; fi
+done || true
+docker image prune -f >/dev/null 2>&1 || true
 log "done"
