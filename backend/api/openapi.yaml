@@ -1307,7 +1307,7 @@ paths:
     get:
       operationId: get_audience
       tags: [users]
-      summary: Languages, Premium share and sources of the bot's users
+      summary: Activity, languages, Premium share and sources of the bot's users
       x-mcp: read
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Audience" } } } }
@@ -2778,6 +2778,17 @@ components:
         premium: { type: integer }
         languages: { type: array, items: { $ref: "#/components/schemas/Share" } }
         sources: { type: array, items: { $ref: "#/components/schemas/Share" } }
+        activity:
+          type: object
+          description: Exclusive segments. Block status takes priority. The activity window includes today and the preceding 29 UTC days.
+          required: [regular, recent, one_day, inactive, blocked, untracked]
+          properties:
+            regular: { type: integer, description: Active on at least three distinct days in the window }
+            recent: { type: integer, description: Last seen in the window with fewer than three recorded active days }
+            one_day: { type: integer, description: Seen on a single UTC day before the window }
+            inactive: { type: integer, description: Seen on multiple UTC days and last seen before the window }
+            blocked: { type: integer, description: Currently recorded as having blocked the bot }
+            untracked: { type: integer, description: No recorded updates }
     ServerMetrics:
       type: object
       required: [period, step, points, bots, procs]

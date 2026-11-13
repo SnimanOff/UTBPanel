@@ -112,10 +112,11 @@ type Share struct {
 
 // Audience is the breakdown of a bot's users.
 type Audience struct {
-	Total     int64   `cbor:"1,keyasint" json:"total"`
-	Premium   int64   `cbor:"2,keyasint" json:"premium"`
-	Languages []Share `cbor:"3,keyasint" json:"languages"`
-	Sources   []Share `cbor:"4,keyasint" json:"sources"`
+	Total     int64             `cbor:"1,keyasint" json:"total"`
+	Premium   int64             `cbor:"2,keyasint" json:"premium"`
+	Languages []Share           `cbor:"3,keyasint" json:"languages"`
+	Sources   []Share           `cbor:"4,keyasint" json:"sources"`
+	Activity  *AudienceActivity `cbor:"5,keyasint,omitempty" json:"activity,omitempty"`
 }
 
 func (t *Tracker) shares(ctx context.Context, q string, args ...any) ([]Share, error) {
@@ -135,11 +136,10 @@ func (t *Tracker) shares(ctx context.Context, q string, args ...any) ([]Share, e
 	return out, rows.Err()
 }
 
-// Audience returns languages, Premium share and sources.
+// Audience returns activity, languages, Premium share and sources.
 func (t *Tracker) Audience(ctx context.Context, botID int64) (Audience, error) {
 	var a Audience
-	err := t.DB.R.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(g.is_premium), 0) FROM bot_users b
-		LEFT JOIN tg_users g ON g.user_id = b.user_id WHERE b.bot_id = ?`, botID).Scan(&a.Total, &a.Premium)
+	err := t.audienceActivity(ctx, botID, time.Now(), &a)
 	if err != nil {
 		return a, err
 	}

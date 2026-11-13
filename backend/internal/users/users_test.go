@@ -115,3 +115,54 @@ func TestListAndAudience(t *testing.T) {
 		t.Fatalf("%+v %v", a, err)
 	}
 }
+
+func TestAudienceActivity(t *testing.T) {
+	ctx := context.Background()
+	tr := newTracker(t)
+	now := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+	activityDays := [][]int{
+		{29, 1, 0},   // regular: oldest day in the window counts
+		{30, 1, 0},   // recent: oldest day is outside the window
+		{29, 29, 29}, // recent: several updates on the same day
+		{30, 30},     // one active day before the window
+		{200, 31},    // previously active, even though only one day is left in the bitmap
+		{2, 1, 0},    // currently blocked
+	}
+	for i, days := range activityDays {
+		for _, ago := range days {
+			u := upd(int64(i+1), "hi", now.AddDate(0, 0, -ago))
+			u.Premium = i == 0
+			tr.Account(ctx, u)
+		}
+	}
+	otherBot := upd(8, "hi", now)
+	otherBot.BotID = 2
+	tr.Account(ctx, otherBot)
+	if err := tr.Flush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tr.DB.W.Exec(`UPDATE bot_users SET blocked_at = ? WHERE bot_id = 1 AND user_id = 6`, store.FormatTime(now)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tr.DB.W.Exec(`INSERT INTO bot_users (bot_id, user_id, first_seen, last_seen, banned) VALUES (1, 7, ?, ?, 1)`,
+		store.FormatTime(now), store.FormatTime(now)); err != nil {
+		t.Fatal(err)
+	}
+
+	var a Audience
+	if err := tr.audienceActivity(ctx, 1, now, &a); err != nil {
+		t.Fatal(err)
+	}
+	want := AudienceActivity{Regular: 1, Recent: 2, OneDay: 1, Inactive: 1, Blocked: 1, Untracked: 1}
+	if a.Total != 7 || a.Premium != 1 || *a.Activity != want {
+		t.Fatalf("total=%d premium=%d activity=%+v, want total=7 premium=1 activity=%+v", a.Total, a.Premium, *a.Activity, want)
+	}
+
+	var empty Audience
+	if err := tr.audienceActivity(ctx, 3, now, &empty); err != nil {
+		t.Fatal(err)
+	}
+	if empty.Total != 0 || empty.Premium != 0 || *empty.Activity != (AudienceActivity{}) {
+		t.Fatalf("empty bot has audience: %+v, activity: %+v", empty, *empty.Activity)
+	}
+}

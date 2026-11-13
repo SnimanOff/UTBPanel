@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "ea1e13dadc4447f99e4ec0d3ee04b6b765eb20d10fce5180df66c6ef7021d735"
+const GeneratedHash = "954b38170ed2b63c16bb74b7c151ee02ac345316f268b5a831744f0e41677d9a"
 
 // Op is one operation of the API.
 type Op struct {
@@ -34,7 +34,7 @@ var Ops = []Op{
 	{"get_bot_config_schema", "GET", "/api/bot-config/schema", "read", "JSON Schema of the portable settings document derived from OpenAPI"},
 	{"list_bots", "GET", "/api/bots", "read", "Bots with statuses, groups and versions"},
 	{"get_bot", "GET", "/api/bots/{id}", "read", "One bot"},
-	{"get_audience", "GET", "/api/bots/{id}/audience", "read", "Languages, Premium share and sources of the bot's users"},
+	{"get_audience", "GET", "/api/bots/{id}/audience", "read", "Activity, languages, Premium share and sources of the bot's users"},
 	{"list_broadcasts", "GET", "/api/bots/{id}/broadcasts", "read", "History of broadcasts with results, newest first"},
 	{"estimate_broadcast", "GET", "/api/bots/{id}/broadcasts/estimate", "read", "Number of recipients for an audience"},
 	{"get_broadcast", "GET", "/api/bots/{id}/broadcasts/{bid}", "read", "One broadcast with its progress"},

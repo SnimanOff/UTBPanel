@@ -17,6 +17,7 @@
   let page = $state(0)
   let list = $state<List>({ users: [], total: 0 })
   let aud = $state<Audience>()
+  let audienceError = $state('')
   let error = $state('')
 
   async function load() {
@@ -34,7 +35,14 @@
     load()
   })
   $effect(() => {
-    api.get<Audience>(`/api/bots/${botId}/audience`).then((a) => (aud = a), () => {})
+    let current = true
+    aud = undefined
+    audienceError = ''
+    api.get<Audience>(`/api/bots/${botId}/audience`).then(
+      (a) => { if (current) aud = a },
+      (e) => { if (current) audienceError = errorText(e) },
+    )
+    return () => { current = false }
   })
 
   let banFor = $state<number | null>(null)
@@ -70,11 +78,64 @@
   }
 
   const pages = $derived(Math.max(1, Math.ceil(list.total / PAGE)))
-  const pct = (n: number, of: number) => (of ? Math.round((n / of) * 100) : 0) + '%'
+  const number = new Intl.NumberFormat('ru-RU')
+  const percent = new Intl.NumberFormat('ru-RU', { style: 'percent', maximumFractionDigits: 1 })
+  const pct = (n: number, of: number) => percent.format(of ? n / of : 0)
+  const activity = $derived(aud?.activity)
+  const segments = $derived(activity ? [
+    { label: 'Регулярные · 3+ дня', count: activity.regular, color: 'var(--accent-hi)' },
+    { label: 'Активные · 1–2 дня', count: activity.recent, color: '#679ac6' },
+    { label: 'Разовые, не вернулись', count: activity.one_day, color: 'var(--warn)' },
+    { label: 'Ранее активные', count: activity.inactive, color: 'var(--muted)' },
+    { label: 'Заблокировали бота', count: activity.blocked, color: 'var(--danger-text)' },
+    ...(activity.untracked > 0
+      ? [{ label: 'Без данных об активности', count: activity.untracked, color: 'var(--border)' }]
+      : []),
+  ] : [])
 </script>
 
 <div class="layout">
-  <div>
+  <aside>
+    <Box title="Аудитория">
+      {#if aud}
+        <div class="row"><span class="muted">Всего</span><span class="num">{number.format(aud.total)}</span></div>
+        {#if aud.total > 0}
+          {#if activity}
+            <h3>Активность за 30 дней · UTC</h3>
+            <div class="distribution" aria-hidden="true">
+              {#each segments as segment (segment.label)}
+                <span style:background={segment.color} style:flex-grow={segment.count}></span>
+              {/each}
+            </div>
+            <ul class="segments">
+              {#each segments as segment (segment.label)}
+                <li>
+                  <span class="swatch" style:background={segment.color} aria-hidden="true"></span>
+                  <span>{segment.label}</span>
+                  <span class="num">{number.format(segment.count)}</span>
+                  <span class="num muted">{pct(segment.count, aud.total)}</span>
+                </li>
+              {/each}
+            </ul>
+            <p class="muted note">Разовые и ранее активные не заходили 30 дней. У разовых был только один день активности.</p>
+          {/if}
+          <div class="row"><span class="muted">Premium</span><span class="num">{pct(aud.premium, aud.total)}</span></div>
+          <details>
+            <summary>Языки и источники</summary>
+            <h3>Языки</h3>
+            {#each aud.languages as l}<div class="row"><span>{l.key}</span><span class="num">{pct(l.count, aud.total)}</span></div>{/each}
+            <h3>Источники</h3>
+            {#each aud.sources as s}<div class="row"><span>{s.key}</span><span class="num">{s.count}</span></div>{:else}<p class="muted">—</p>{/each}
+          </details>
+        {/if}
+      {:else if audienceError}
+        <p class="danger">Не удалось загрузить аудиторию: {audienceError}</p>
+      {:else}
+        <span class="muted">Загрузка…</span>
+      {/if}
+    </Box>
+  </aside>
+  <div class="users">
     <div class="bar">
       <form onsubmit={(e) => (e.preventDefault(), (page = 0), load())}>
         <input bind:value={q} placeholder="id или @username" />
@@ -88,6 +149,7 @@
       <span class="muted num">{list.total}</span>
     </div>
     {#if error}<p class="danger">{error}</p>{/if}
+    <div class="table-scroll">
     <table>
       <thead>
         <tr><th>ID</th><th>Username</th><th>Источник</th><th>Язык</th><th>Premium</th><th>Первый визит</th><th>Последний</th><th>Апдейтов</th><th></th></tr>
@@ -142,6 +204,7 @@
         {/each}
       </tbody>
     </table>
+    </div>
     {#if pages > 1}
       <div class="pager">
         <button disabled={page === 0} onclick={() => page--}>←</button>
@@ -151,26 +214,32 @@
     {/if}
     <div class="payments"><Payments {botId} bind:user={payUser} /></div>
   </div>
-  {#if aud}
-    <Box title="Аудитория">
-      <div class="row"><span class="muted">всего</span><span class="num">{aud.total}</span></div>
-      <div class="row"><span class="muted">Premium</span><span class="num">{pct(aud.premium, aud.total)}</span></div>
-      <h3>Языки</h3>
-      {#each aud.languages as l}<div class="row"><span>{l.key}</span><span class="num">{pct(l.count, aud.total)}</span></div>{/each}
-      <h3>Источники</h3>
-      {#each aud.sources as s}<div class="row"><span>{s.key}</span><span class="num">{s.count}</span></div>{:else}<p class="muted">—</p>{/each}
-    </Box>
-  {/if}
 </div>
 
 <style>
   .layout {
     display: grid;
-    grid-template-columns: 1fr 260px;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-areas: 'users audience';
     gap: var(--s3);
+    align-items: start;
+  }
+  aside {
+    grid-area: audience;
+    min-width: 0;
+  }
+  .users {
+    grid-area: users;
+  }
+  .table-scroll {
+    overflow-x: auto;
+  }
+  .table-scroll table {
+    display: table;
   }
   .bar {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--s3);
     align-items: center;
     margin-bottom: var(--s2);
@@ -228,25 +297,66 @@
   .row {
     display: flex;
     justify-content: space-between;
+    gap: var(--s2);
     padding: 2px 0;
+    overflow-wrap: anywhere;
   }
   h3 {
     font-size: var(--fs-s);
     color: var(--muted);
     margin: var(--s3) 0 var(--s1);
   }
+  .distribution {
+    display: flex;
+    height: 8px;
+    background: var(--surface-2);
+  }
+  .distribution span {
+    flex-basis: 0;
+  }
+  .segments {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: var(--s1) var(--s2);
+    margin: var(--s2) 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--fs-s);
+  }
+  .segments li {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: center;
+  }
+  .segments .num {
+    text-align: right;
+  }
+  .swatch {
+    width: 8px;
+    height: 8px;
+  }
+  .note {
+    font-size: var(--fs-s);
+    margin: var(--s2) 0;
+  }
+  details {
+    margin-top: var(--s2);
+    border-top: var(--line);
+    padding-top: var(--s2);
+  }
+  summary {
+    color: var(--muted);
+    cursor: pointer;
+  }
 
-  /* Phones: one column, rows of controls wrap. */
-  @media (max-width: 700px) {
-    .layout > * {
-      min-width: 0;
-    }
+  @media (max-width: 900px) {
     .layout {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: 'audience' 'users';
     }
-    .bar {
-      flex-wrap: wrap;
-    }
+  }
+  @media (max-width: 700px) {
     .filters {
       flex-wrap: wrap;
     }
