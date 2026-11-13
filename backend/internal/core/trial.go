@@ -245,8 +245,7 @@ func (c *Core) StartTrial(ctx context.Context, in TrialReq) (*Trial, error) {
 			return nil, err
 		}
 	}
-	cur, prev, _ := c.versions(ctx, tb.ID)
-	c.Releases.Prune(tb.ID, cur, prev)
+	c.pruneReleases(ctx, tb.ID)
 	t := &Trial{
 		BotID: in.BotID, Version: in.Version, TestBotID: tb.ID, TestBot: tb.Name, TestUser: tb.Username,
 		TestVersion: rel.Version, Copied: in.CopyConfig, StartedAt: nowUTC(),

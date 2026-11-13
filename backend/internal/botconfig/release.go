@@ -31,6 +31,7 @@ type ReleaseFile struct {
 	LogPatterns  *[]logs.Pattern       `yaml:"log_patterns"`
 	CrashUpdates *bool                 `yaml:"crash_updates"`
 	Updates      *string               `yaml:"updates"`
+	Releases     *Releases             `yaml:"releases"`
 }
 
 // ParseRelease reads tgpanel.yaml; unknown sections are refused.
@@ -101,6 +102,10 @@ func (f ReleaseFile) Over(base Document) (Document, error) {
 	}
 	if f.Updates != nil {
 		d.Updates = *f.Updates
+	}
+	if f.Releases != nil {
+		r := *f.Releases
+		d.Releases = &r
 	}
 	Normalize(&d)
 	return d, Validate(d)

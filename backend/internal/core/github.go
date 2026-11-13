@@ -275,8 +275,7 @@ func (c *Core) importRelease(ctx context.Context, g GitHubSource, r github.Relea
 			return fmt.Errorf("tgpanel.yaml: %v", err)
 		}
 	}
-	cur, prev, _ := c.versions(ctx, g.BotID)
-	c.Releases.Prune(g.BotID, cur, prev)
+	c.pruneReleases(ctx, g.BotID)
 	c.DB.W.ExecContext(ctx, `UPDATE github_sources SET last_tag = ?, last_error = '' WHERE bot_id = ?`, r.Tag, g.BotID)
 	c.Logs.Add(g.BotID, "core", "new release "+rel.Version+" from GitHub", nowUTC())
 	c.Ev.Emit("github_release", g.BotID, events.Info, map[string]any{"version": rel.Version, "repo": g.Repo, "auto_deploy": g.AutoDeploy})

@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "954b38170ed2b63c16bb74b7c151ee02ac345316f268b5a831744f0e41677d9a"
+const GeneratedHash = "cc70bcaf2021be0ef3fd86a991396a44f481a1185f14e0465b6909918cc75372"
 
 // Op is one operation of the API.
 type Op struct {
@@ -163,7 +163,7 @@ var Ops = []Op{
 	{"set_flag", "PUT", "/api/bots/{id}/sdk/flags/{name}", "write", "Change an SDK flag without restarting the bot"},
 	{"select_sdk_metrics", "PUT", "/api/bots/{id}/sdk/metrics/selected", "write", "Select SDK metrics to show on the bot dashboard"},
 	{"set_secret", "PUT", "/api/bots/{id}/secrets/{name}", "never", "Set a secret (write-only). Neural networks use request_secret instead"},
-	{"put_settings_section", "PUT", "/api/bots/{id}/settings/{section}", "confirm", "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates, getUpdates bridge 'updates' webhook or polling)"},
+	{"put_settings_section", "PUT", "/api/bots/{id}/settings/{section}", "confirm", "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates, getUpdates bridge 'updates' webhook or polling, releases). releases takes ReleaseSettings fields; omitted fields keep their current values"},
 	{"attach_test_bot", "PUT", "/api/bots/{id}/test-bot", "never", "Attach a separate Telegram bot (its token from BotFather) as the test bot for test runs; an attached one gets the new token"},
 	{"set_token", "PUT", "/api/bots/{id}/token", "never", "Replace the token (checked with getMe). Neural networks use request_secret instead"},
 	{"order_groups", "PUT", "/api/groups/order", "never", "Reorder groups"},

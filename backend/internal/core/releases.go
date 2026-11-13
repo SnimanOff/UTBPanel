@@ -133,8 +133,7 @@ func (c *Core) Deploy(ctx context.Context, in SwitchVersion) (int64, error) {
 			return fail(err)
 		}
 	}
-	cur, prev, _ := c.versions(ctx, in.BotID)
-	c.Releases.Prune(in.BotID, cur, prev)
+	c.pruneReleases(ctx, in.BotID)
 	if started && b.Version != "" && in.Actor.Source != journal.SourceAutorollback {
 		// The record stays "observing" for a minute; autorollback decides.
 		c.Ev.Emit("deploy", in.BotID, events.Info, map[string]any{"id": id, "from": b.Version, "version": in.Version, "result": "observing"})
@@ -217,8 +216,7 @@ func (c *Core) registerReleases() {
 			return checkErr(err)
 		})
 		if err == nil {
-			cur, prev, _ := c.versions(ctx, in.BotID)
-			c.Releases.Prune(in.BotID, cur, prev)
+			c.pruneReleases(ctx, in.BotID)
 			c.Logs.Add(in.BotID, "core", "uploaded version "+r.Version, nowUTC())
 		}
 		return r, err

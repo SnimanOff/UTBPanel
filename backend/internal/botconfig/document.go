@@ -150,6 +150,9 @@ type Document struct {
 	CrashUpdates bool                 `json:"crash_updates" yaml:"crash_updates"`
 	// Updates: polling with «Включить вебхук» on (getUpdates is served from the webhook), webhook otherwise.
 	Updates string `json:"updates" yaml:"updates"`
+	// Releases: kept versions and the watch after a deploy. Omitted keeps
+	// the current values, so older documents and release files still apply.
+	Releases *Releases `json:"releases,omitempty" yaml:"releases,omitempty"`
 }
 type Snapshot struct {
 	Document Document `cbor:"1,keyasint"`
@@ -326,6 +329,11 @@ func Validate(d Document) error {
 	}
 	if err := logs.Validate(d.LogPatterns); err != nil {
 		return err
+	}
+	if d.Releases != nil {
+		if err := d.Releases.Validate(); err != nil {
+			return err
+		}
 	}
 	if d.Updates != "webhook" && d.Updates != "polling" {
 		return fmt.Errorf("updates must be webhook or polling")

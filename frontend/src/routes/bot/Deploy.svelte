@@ -33,13 +33,22 @@
   let busy = $state(false)
   let error = $state('')
   let info = $state('')
+  // Release settings: kept versions and the watch after a deploy.
+  type RS = Schemas['ReleaseSettings']
+  const rsDefault: RS = { keep: 5, autorollback: true, window: 60, ready_after: 15, max_crashes: 2, err_share: 0.2, min_updates: 10 }
+  let rs = $state<RS>({ ...rsDefault })
+  let errPct = $state(20)
 
   async function load() {
     try {
-      ;[releases, deploys] = await Promise.all([
+      let settings: Record<string, any>
+      ;[releases, deploys, settings] = await Promise.all([
         api.get<Release[]>(`/api/bots/${botId}/releases`),
         api.get<Schemas['DeployRecord'][]>(`/api/bots/${botId}/deploys`),
+        api.get<Record<string, any>>(`/api/bots/${botId}/settings`),
       ])
+      rs = { ...rsDefault, ...(settings.releases ?? {}) }
+      errPct = Math.round(rs.err_share * 100)
       reports = await api.get<Schemas['DeployReport'][]>(`/api/bots/${botId}/deploy-reports`)
       const g = await api.get<{ github: GH | null }>(`/api/bots/${botId}/github`)
       gh = g.github
@@ -113,6 +122,11 @@
   }
   const dropToken = () => run(() => api.put(`/api/bots/${botId}/github`, { repo, asset_mask: mask, auto_deploy: auto, token: '' }), 'Токен удалён')
   const check = () => run(() => api.post(`/api/bots/${botId}/github/check`), 'Проверено')
+
+  function saveReleases(e: SubmitEvent) {
+    e.preventDefault()
+    run(() => api.put(`/api/bots/${botId}/settings/releases`, { ...rs, err_share: errPct / 100 }), 'Настройки релизов сохранены')
+  }
 
   type Sum = Schemas['DeploySummary']
   const rows: [string, (s: Sum) => string][] = [
@@ -195,7 +209,7 @@
       </div>
     </div>
   {/if}
-  <p class="muted">Хранятся 5 последних версий. Перед каждым переключением делается бэкап базы бота. Новая версия загружается в блоке «Обновление».</p>
+  <p class="muted">Хранятся {rs.keep} последних версий (текущая и предыдущая — всегда). Перед каждым переключением делается бэкап базы бота. Новая версия загружается в блоке «Обновление».</p>
 </Box>
 
 <div class="cols">
@@ -227,6 +241,25 @@
         <code class="sel">{hookSecret}</code>
       {/if}
     {/if}
+  </Box>
+
+  <Box title="Настройки релизов">
+    <form onsubmit={saveReleases}>
+      <label>Хранить версий <input type="number" min="2" max="50" bind:value={rs.keep} /></label>
+      <label class="check"><input type="checkbox" bind:checked={rs.autorollback} /> авто-откат после деплоя</label>
+      <div class="grid2">
+        <label>Наблюдение, с <input type="number" min="10" max="3600" bind:value={rs.window} /></label>
+        <label>Запуск не дольше, с <input type="number" min="1" max="300" bind:value={rs.ready_after} /></label>
+        <label>Падений до отката <input type="number" min="1" max="20" bind:value={rs.max_crashes} /></label>
+        <label>Ошибок до отката, % <input type="number" min="1" max="100" bind:value={errPct} /></label>
+        <label>Доля ошибок считается от, апдейтов <input type="number" min="1" max="10000" bind:value={rs.min_updates} /></label>
+      </div>
+      <div class="line"><button class="primary" disabled={busy}>Сохранить</button></div>
+    </form>
+    <p class="muted">
+      {rs.autorollback ? 'Пороги нарушены за время наблюдения — версия откатывается, канарейка отменяется.' : 'Авто-откат выключен: деплой с нарушенными порогами только помечается ошибкой.'}
+      Версия, которая не запустилась, откатывается всегда.
+    </p>
   </Box>
 
   <Box title="История деплоев">
@@ -349,6 +382,12 @@
   .check {
     flex-direction: row;
     align-items: center;
+  }
+  .grid2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
+    gap: var(--s2);
+    align-items: end;
   }
   .line {
     display: flex;

@@ -122,9 +122,10 @@ func (c *Core) checkCanary(ctx context.Context, botID int64) {
 	if err != nil || cn == nil {
 		return
 	}
-	rules := c.rules
-	if rules.Window == 0 {
-		rules = deploy.DefaultRules
+	rules, autorollback := c.deployRules(ctx, botID)
+	if !autorollback {
+		// No automatic cancel: errors never reach the share.
+		rules.ErrShare = 1
 	}
 	s := c.canaryStatsOf(botID)
 	s.mu.Lock()

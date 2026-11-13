@@ -20,6 +20,10 @@ info:
       Uploading only stores it; deploying switches the bot to it, backs up
       the bot database first, watches the bot for a minute and rolls back on
       crashes or errors. A canary sends a share of users to a new version.
+      A test run (`start_trial`) runs a version on a separate test bot first.
+      Each bot has release settings (`releases` in the settings document):
+      how many versions are kept, whether autorollback is on, the watch
+      window and its thresholds.
     - **Groups and MCP modes.** Bots live in groups. Each group has an MCP
       mode set by the owner: `off`, `read` (default) or `full`. Bots without
       a group and operations without a bot are read-only.
@@ -60,6 +64,12 @@ info:
       `deploy_release`.
     - *Change settings.* `get_bot_config` → edit → `diff_config` →
       `apply_config` → `wait_action` when it is pending.
+    - *Tune releases.* Read `releases` from `get_bot_config`, then
+      `put_settings_section(section=releases, body={...})` with only the
+      fields to change (e.g. `{"keep": 10, "window": 120}`) and `wait_action`.
+    - *Test a version first.* `get_trial` shows the attached test bot (the
+      owner attaches it in the panel), `start_trial`, check it in Telegram,
+      then `promote_trial` or `stop_trial`.
     - *The bot needs a key.* `request_secret` with a hint where the owner
       finds it, then `wait_action`; restart the bot after it is set.
 servers:
@@ -1019,11 +1029,11 @@ paths:
   /api/bots/{id}/settings/{section}:
     parameters:
       - { $ref: "#/components/parameters/BotID" }
-      - { name: section, in: path, required: true, schema: { type: string, enum: [antiflood, texts, tz, stop, crash_updates, updates] } }
+      - { name: section, in: path, required: true, schema: { type: string, enum: [antiflood, texts, tz, stop, crash_updates, updates, releases] } }
     put:
       operationId: put_settings_section
       tags: [settings]
-      summary: Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates, getUpdates bridge 'updates' webhook or polling)
+      summary: "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates, getUpdates bridge 'updates' webhook or polling, releases). releases takes ReleaseSettings fields; omitted fields keep their current values"
       x-mcp: confirm
       requestBody:
         required: true
@@ -2289,7 +2299,21 @@ components:
             required: [name, pattern]
             properties: { name: { type: string }, pattern: { type: string }, regexp: { type: boolean } }
         crash_updates: { type: boolean, x-mcp: confirm }
+        releases: { $ref: "#/components/schemas/ReleaseSettings", x-mcp: confirm }
         updates: { type: string, enum: [webhook, polling], description: "The «Включить вебхук» switch. polling: a bot written for getUpdates is served from the panel webhook through its getUpdates calls; until an instance calls getUpdates its updates go to PORT, so webhook bots work the same. webhook: getUpdates is refused. Applies at once", x-mcp: confirm }
+    ReleaseSettings:
+      type: object
+      additionalProperties: false
+      description: Versions and the watch after a deploy. Omitted in a document or tgpanel.yaml keeps the current values.
+      required: [keep, autorollback, window, ready_after, max_crashes, err_share, min_updates]
+      properties:
+        keep: { type: integer, minimum: 2, maximum: 50, default: 5, description: Stored versions per bot; current and previous always stay }
+        autorollback: { type: boolean, default: true, description: Roll back when the watch fails and cancel a canary with too many errors; off only reports. A version that does not start is always rolled back }
+        window: { type: integer, minimum: 10, maximum: 3600, default: 60, description: Seconds the bot is watched after a deploy }
+        ready_after: { type: integer, minimum: 1, maximum: 300, default: 15, description: Seconds the new version has to start; not longer than window }
+        max_crashes: { type: integer, minimum: 1, maximum: 20, default: 2, description: Crashes within the window that fail the deploy }
+        err_share: { type: number, exclusiveMinimum: 0, maximum: 1, default: 0.2, description: Share of errors and timeouts that fails the deploy (and cancels a canary) }
+        min_updates: { type: integer, minimum: 1, maximum: 10000, default: 10, description: The error share counts from this many updates }
     BotConfigView:
       type: object
       required: [document, yaml]

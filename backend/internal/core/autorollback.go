@@ -26,7 +26,7 @@ type observation struct {
 
 	mu      sync.Mutex
 	ok, bad int
-	result  string        // "ok" or "rolled_back"
+	result  string        // "ok", "rolled_back" or "failed" (autorollback off)
 	done    chan struct{} // closed when result is set
 }
 
@@ -69,10 +69,7 @@ func (c *Core) observe(ob *observation) {
 			c.watch.mu.Unlock()
 		})
 	}()
-	rules := c.rules
-	if rules.Window == 0 {
-		rules = deploy.DefaultRules
-	}
+	rules, autorollback := c.deployRules(context.Background(), ob.botID)
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	for range t.C {
@@ -96,6 +93,16 @@ func (c *Core) observe(ob *observation) {
 			close(ob.done)
 			return
 		case deploy.Rollback:
+			if !autorollback {
+				// The bot turned autorollback off: report and leave the version.
+				msg := reason + "; авто-откат выключен"
+				c.DB.W.Exec(`UPDATE deploys SET result = 'failed', error = ?, finished_at = ? WHERE id = ?`, msg, store.Now(), ob.deployID)
+				c.Logs.Add(ob.botID, "core", "version "+ob.to+" failed the observation: "+msg, nowUTC())
+				c.Ev.Emit("deploy", ob.botID, events.Error, map[string]any{"id": ob.deployID, "from": ob.from, "version": ob.to, "result": "failed", "error": msg})
+				ob.result = "failed"
+				close(ob.done)
+				return
+			}
 			c.rollback(context.Background(), ob, reason)
 			ob.result = "rolled_back"
 			close(ob.done)
@@ -170,7 +177,7 @@ func (c *Core) paymentsSince(ctx context.Context, botID int64, since time.Time) 
 	return out
 }
 
-// waitDeploy waits for the observation of a deploy: "ok" or "rolled_back".
+// waitDeploy waits for the observation of a deploy: "ok", "rolled_back" or "failed".
 func (c *Core) waitDeploy(ctx context.Context, deployID int64) string {
 	c.watch.mu.Lock()
 	ob := c.watch.ids[deployID]

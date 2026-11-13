@@ -51,6 +51,11 @@ func (c *Core) ConfigSnapshot(ctx context.Context, id int64) (botconfig.Snapshot
 			}
 		}
 	}
+	releases, err := botconfig.ParseReleases(m["releases"])
+	if err != nil {
+		return botconfig.Snapshot{}, fmt.Errorf("settings releases: %w", err)
+	}
+	d.Releases = &releases
 	info, err := c.Sec.List(ctx, id)
 	if err != nil {
 		return botconfig.Snapshot{}, err
@@ -139,6 +144,9 @@ func (c *Core) ApplyConfig(ctx context.Context, in botconfig.ApplyRequest) (botc
 	}
 	d := in.Document
 	botconfig.Normalize(&d)
+	if d.Releases == nil {
+		d.Releases = current.Document.Releases // omitted keeps the current values
+	}
 	if err := botconfig.Validate(d); err != nil {
 		return out, wire.Errorf(wire.CodeBadRequest, "%v", err)
 	}
@@ -337,7 +345,11 @@ func (c *Core) ApplyConfig(ctx context.Context, in botconfig.ApplyRequest) (botc
 }
 
 func documentSettings(d botconfig.Document) map[string]any {
-	return map[string]any{"env": d.Env, "rename": d.Rename, "required_secrets": d.Secrets, "antiflood": d.Antiflood, "closed": d.Closed, "texts": d.Texts, "tz": d.TZ, "profile_cache": d.Profile, "limits": d.Limits, "stop": d.Stop, "log_patterns": d.LogPatterns, "crash_updates": d.CrashUpdates, "updates": d.Updates}
+	m := map[string]any{"env": d.Env, "rename": d.Rename, "required_secrets": d.Secrets, "antiflood": d.Antiflood, "closed": d.Closed, "texts": d.Texts, "tz": d.TZ, "profile_cache": d.Profile, "limits": d.Limits, "stop": d.Stop, "log_patterns": d.LogPatterns, "crash_updates": d.CrashUpdates, "updates": d.Updates}
+	if d.Releases != nil {
+		m["releases"] = *d.Releases
+	}
+	return m
 }
 
 func (c *Core) registerConfig() {

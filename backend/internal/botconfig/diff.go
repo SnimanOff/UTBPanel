@@ -25,6 +25,10 @@ func Diff(before, after Document) Difference {
 	after.Version = ""
 	before.Group = nil
 	after.Group = nil
+	// An omitted releases section keeps the current one.
+	if after.Releases == nil {
+		after.Releases = before.Releases
+	}
 	a, _ := json.Marshal(before)
 	b, _ := json.Marshal(after)
 	var left, right map[string]any
@@ -65,7 +69,7 @@ func Diff(before, after Document) Difference {
 			return
 		}
 		level := "write"
-		for _, prefix := range []string{"env", "rename", "limits", "github", "stop", "crash_updates", "updates", "antiflood.enabled", "closed.enabled"} {
+		for _, prefix := range []string{"env", "rename", "limits", "github", "stop", "crash_updates", "updates", "releases", "antiflood.enabled", "closed.enabled"} {
 			if path == prefix || strings.HasPrefix(path, prefix+".") {
 				level = "confirm"
 			}

@@ -355,12 +355,21 @@ func (s *Store) List(botID int64, current, previous string) ([]Release, error) {
 
 // Prune keeps the newest Keep releases; current and previous always stay.
 func (s *Store) Prune(botID int64, current, previous string) error {
+	return s.PruneKeep(botID, Keep, current, previous)
+}
+
+// PruneKeep keeps the newest keep releases (Keep when keep < 1); current
+// and previous always stay.
+func (s *Store) PruneKeep(botID int64, keep int, current, previous string) error {
+	if keep < 1 {
+		keep = Keep
+	}
 	rs, err := s.List(botID, current, previous)
 	if err != nil {
 		return err
 	}
 	// Current and previous always stay; the newest others fill the rest.
-	room := Keep
+	room := keep
 	for _, r := range rs {
 		if r.Current || r.Previous {
 			room--

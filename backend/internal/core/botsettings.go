@@ -1,10 +1,12 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/botconfig"
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/logs"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
@@ -74,6 +76,18 @@ var sections = map[string]func(json.RawMessage) error{
 		var v bool
 		return json.Unmarshal(b, &v)
 	},
+	"releases": func(b json.RawMessage) error {
+		var v botconfig.Releases
+		dec := json.NewDecoder(bytes.NewReader(b))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&v); err != nil {
+			return err
+		}
+		if err := v.Validate(); err != nil {
+			return wire.Errorf(wire.CodeBadRequest, "%v", err)
+		}
+		return nil
+	},
 	"updates": func(b json.RawMessage) error {
 		var v string
 		if err := json.Unmarshal(b, &v); err != nil {
@@ -100,6 +114,21 @@ func (c *Core) PutSetting(ctx context.Context, in SettingPut) error {
 	raw := json.RawMessage(in.Value)
 	if !json.Valid(raw) {
 		return wire.Errorf(wire.CodeBadRequest, "value is not JSON")
+	}
+	if in.Key == "releases" {
+		// Fields left out keep their current values; the full section is stored.
+		r := c.releaseSettings(ctx, in.BotID)
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&r); err != nil {
+			return wire.Errorf(wire.CodeBadRequest, "releases: %v", err)
+		}
+		merged, err := json.Marshal(r)
+		if err != nil {
+			return err
+		}
+		raw = merged
+		in.Value = string(merged)
 	}
 	if err := check(raw); err != nil {
 		if _, isWire := err.(*wire.Error); isWire {
