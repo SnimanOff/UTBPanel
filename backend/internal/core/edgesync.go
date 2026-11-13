@@ -62,6 +62,7 @@ func (c *Core) EdgeSettings(ctx context.Context) (edge.Settings, error) {
 		}
 		doc.Bots[b.ID] = bs
 	}
+	doc.Pages = c.edgePages(ctx)
 	return doc, nil
 }
 

@@ -36,6 +36,8 @@ type BotSettings struct {
 type Settings struct {
 	Version int64                 `cbor:"1,keyasint" json:"version"`
 	Bots    map[int64]BotSettings `cbor:"2,keyasint" json:"bots"`
+	// Pages are static one-file pages: host (<sub>.<domain>) → HTML.
+	Pages map[string][]byte `cbor:"3,keyasint" json:"pages,omitempty"`
 }
 
 // Socket methods between edge and core.
@@ -141,7 +143,7 @@ func (e *Edge) registerSettings() {
 			e.Log.Error("saving edge settings failed", "err", err)
 			return 0, err
 		}
-		e.Log.Info("settings from core", "version", d.Version, "bots", len(d.Bots))
+		e.Log.Info("settings from core", "version", d.Version, "bots", len(d.Bots), "pages", len(d.Pages))
 		return d.Version, nil
 	}))
 }

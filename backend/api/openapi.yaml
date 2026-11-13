@@ -1932,6 +1932,44 @@ paths:
       responses:
         "204": { description: Done }
 
+  /api/pages:
+    get:
+      operationId: list_pages
+      tags: [system]
+      summary: Static pages at https://<sub>.<DOMAIN>:<webhook port>/ (one HTML file each), without their HTML
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PageInfo" } } } } }
+  /api/pages/{sub}:
+    parameters:
+      - { name: sub, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: get_page
+      tags: [system]
+      summary: One static page with its HTML
+      x-mcp: read
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Page" } } } }
+    put:
+      operationId: put_page
+      tags: [system]
+      summary: Create or replace a static page (one HTML file with inline CSS and JS, up to 512 KB, 20 pages and 4 MB in all); sub in the body renames it
+      x-mcp: write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [html], properties: { html: { type: string }, sub: { type: string } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PageInfo" } } } }
+    delete:
+      operationId: delete_page
+      tags: [system]
+      summary: Delete a static page
+      x-mcp: confirm
+      responses:
+        "204": { description: Done }
+
   /api/server/service-bot:
     get:
       operationId: get_service_bot
@@ -2129,6 +2167,18 @@ components:
               last_used: { type: string, format: date-time }
         expires_at: { type: string, format: date-time, description: the end of the access; absent for good }
         expired: { type: boolean }
+    PageInfo:
+      type: object
+      required: [sub, size, updated_at, url]
+      properties:
+        sub: { type: string }
+        size: { type: integer }
+        updated_at: { type: string }
+        url: { type: string }
+    Page:
+      allOf:
+        - { $ref: "#/components/schemas/PageInfo" }
+        - { type: object, required: [html], properties: { html: { type: string } } }
     ServiceBot:
       type: object
       required: [configured, username, level, owner_tg_id]

@@ -109,7 +109,10 @@ func (e *Edge) certHost(_ context.Context, host string) error {
 	if _, _, ok := e.settings.appBot(host); ok {
 		return nil
 	}
-	return errors.New("edge: host is not the panel domain or a bot's Mini App")
+	if _, ok := e.settings.page(host); ok {
+		return nil
+	}
+	return errors.New("edge: host is not the panel domain, a bot's Mini App or a page")
 }
 
 const appUnavailable = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Недоступно</title><p style="font:16px system-ui;margin:2em">%s</p>`

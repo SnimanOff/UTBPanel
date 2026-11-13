@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "b6f309f028e4fdd780d0aa91b275e308b4ad5447e820aa00f2f3bb2eb666c20e"
+const GeneratedHash = "9cef03a016d3167991422e23574dcbf661d1651cdee02d931c26b7e60089cc0e"
 
 // Op is one operation of the API.
 type Op struct {
@@ -24,6 +24,7 @@ var Ops = []Op{
 	{"stop_trial", "DELETE", "/api/bots/{id}/trial", "write", "End the test run and stop the test bot; the bot itself is not touched"},
 	{"delete_group", "DELETE", "/api/groups/{gid}", "never", "Delete a group; its bots move to \"No group\""},
 	{"discard_bot_import", "DELETE", "/api/imports/bots/{import}", "never", "Remove temporary import files; an already imported bot stays"},
+	{"delete_page", "DELETE", "/api/pages/{sub}", "confirm", "Delete a static page"},
 	{"delete_service_bot", "DELETE", "/api/server/service-bot", "never", "Disconnect the service bot; owner only"},
 	{"list_web_access", "GET", "/api/access", "never", "Passkey accesses (phones and people with some bots); owner only"},
 	{"list_alert_rules", "GET", "/api/alert-rules", "read", "Threshold rules; ?bot=id for one bot (0 = rules for all bots)"},
@@ -81,6 +82,8 @@ var Ops = []Op{
 	{"list_notifications", "GET", "/api/notifications", "read", "The notification feed, newest first (repeats glued with a count)"},
 	{"problem_bots", "GET", "/api/notifications/problems", "read", "Bots with an unread, unresolved error of the last day"},
 	{"notifications_stream", "GET", "/api/notifications/stream", "never", "Server-Sent Events of new notifications (interface and gate.exe)"},
+	{"list_pages", "GET", "/api/pages", "read", "Static pages at https://<sub>.<DOMAIN>:<webhook port>/ (one HTML file each), without their HTML"},
+	{"get_page", "GET", "/api/pages/{sub}", "read", "One static page with its HTML"},
 	{"panics_summary", "GET", "/api/panics/summary", "read", "Panics in the last 24 h per bot id"},
 	{"ping", "GET", "/api/ping", "read", "Check the connection and see the key name"},
 	{"list_waiting_secret_requests", "GET", "/api/secret-requests", "never", "Waiting secret requests of all bots and new-bot tokens (owner only)"},
@@ -168,6 +171,7 @@ var Ops = []Op{
 	{"set_token", "PUT", "/api/bots/{id}/token", "never", "Replace the token (checked with getMe). Neural networks use request_secret instead"},
 	{"order_groups", "PUT", "/api/groups/order", "never", "Reorder groups"},
 	{"set_mcp_mode", "PUT", "/api/mcp/groups/{gid}", "never", "Change a group MCP mode through the owner's panel (never MCP)"},
+	{"put_page", "PUT", "/api/pages/{sub}", "write", "Create or replace a static page (one HTML file with inline CSS and JS, up to 512 KB, 20 pages and 4 MB in all); sub in the body renames it"},
 	{"set_service_bot", "PUT", "/api/server/service-bot", "never", "Connect the service bot (token from BotFather, checked by getMe) and/or set the level; owner only"},
 	{"set_panel_settings", "PUT", "/api/settings", "never", "Change panel settings (owner only)"},
 }

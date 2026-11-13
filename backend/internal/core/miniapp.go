@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -69,6 +68,9 @@ func (c *Core) checkMiniApp(ctx context.Context, botID int64, sub string) error 
 	if err == nil {
 		return wire.Errorf("conflict", "поддомен %q уже у бота #%d", sub, other)
 	}
+	if c.pageTaken(ctx, sub) {
+		return wire.Errorf("conflict", "поддомен %q занят страницей", sub)
+	}
 	return nil
 }
 
@@ -93,14 +95,7 @@ func (c *Core) miniAppHost(sub string) string {
 
 // MiniAppURL is the public address of the bot's Mini App, "" when it has none.
 func (c *Core) MiniAppURL(ctx context.Context, id int64) string {
-	host := c.miniAppHost(c.miniAppSub(ctx, id))
-	if host == "" {
-		return ""
-	}
-	if c.Cfg.WebhookPort != 0 && c.Cfg.WebhookPort != 443 {
-		host = net.JoinHostPort(host, strconv.Itoa(c.Cfg.WebhookPort))
-	}
-	return "https://" + host
+	return c.publicURL(c.miniAppHost(c.miniAppSub(ctx, id)))
 }
 
 // appClient asks bots for Mini App pages: no redirects followed (the browser

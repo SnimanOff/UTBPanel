@@ -277,6 +277,7 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	serviceBot := &servicebot.Service{DB: db, Core: p.Core, Notes: notes, Log: log, WriteErr: bots.WriteCoreError,
 		Owner: func(ctx context.Context) int64 { return p.Settings.Get(ctx).OwnerTgID }}
 	serviceBot.Register(p.API.Mux)
+	p.registerPages(p.API.Mux)
 	p.Go(serviceBot.Run)
 	dbAPI := &dbgate.API{Core: p.Core, WriteErr: bots.WriteCoreError}
 	dbAPI.RegisterAPI(p.API.Mux)

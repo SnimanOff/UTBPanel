@@ -46,6 +46,10 @@ func (e *Edge) handler() http.Handler {
 				e.app(w, r, ip, id, bs)
 				return
 			}
+			if html, ok := e.settings.page(host); ok {
+				e.servePage(w, r, ip, html)
+				return
+			}
 		}
 		switch {
 		case strings.HasPrefix(r.URL.Path, "/hook/") && r.Method == http.MethodPost:
