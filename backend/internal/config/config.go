@@ -46,11 +46,14 @@ type Edge struct {
 
 // Core runs bots and owns secrets.
 type Core struct {
-	Common          `yaml:",inline"`
-	DataDir         string        `yaml:"data_dir" env:"CORE_DATA_DIR"`
-	KeysDir         string        `yaml:"keys_dir" env:"KEYS_DIR"`
-	HostProc        string        `yaml:"host_proc" env:"HOST_PROC"`
-	WebhookPort     int           `yaml:"webhook_port" env:"WEBHOOK_PORT"` // public edge port in WEBHOOK_URL
+	Common      `yaml:",inline"`
+	DataDir     string `yaml:"data_dir" env:"CORE_DATA_DIR"`
+	KeysDir     string `yaml:"keys_dir" env:"KEYS_DIR"`
+	HostProc    string `yaml:"host_proc" env:"HOST_PROC"`
+	WebhookPort int    `yaml:"webhook_port" env:"WEBHOOK_PORT"` // public edge port in WEBHOOK_URL
+	// Domain is the edge's Let's Encrypt domain; Mini Apps of bots live on
+	// its subdomains. Empty = no Mini Apps.
+	Domain          string        `yaml:"domain" env:"DOMAIN"`
 	BotPortFirst    int           `yaml:"bot_port_first" env:"BOT_PORT_FIRST"`
 	BotPortLast     int           `yaml:"bot_port_last" env:"BOT_PORT_LAST"`
 	SDKReadyTimeout time.Duration `yaml:"sdk_ready_timeout" env:"SDK_READY_TIMEOUT"`

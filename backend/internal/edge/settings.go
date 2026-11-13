@@ -28,6 +28,8 @@ type BotSettings struct {
 	MaintenanceTemplate string    `cbor:"6,keyasint" json:"maintenance_template,omitempty"`
 	StartsAt            time.Time `cbor:"7,keyasint" json:"starts_at,omitempty"`
 	EndsAt              time.Time `cbor:"8,keyasint" json:"ends_at,omitempty"`
+	// App is the host of the bot's Mini App (<sub>.<domain>); empty = none.
+	App string `cbor:"9,keyasint" json:"app,omitempty"`
 }
 
 // Settings is the whole document pushed by the core.

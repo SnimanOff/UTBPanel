@@ -84,6 +84,14 @@ func (c *Core) newRunner() *runner.Runner {
 			Env: func(b runner.Bot, env map[string]string) {
 				c.startPolling(b.ID, b.Instance, b.Settings.Updates == UpdatesPolling)
 				env["TGPANEL_SDK"] = "unix://" + c.SDK.Path(b.ID, b.Instance)
+				// A value in the bot's env wins over the panel's address.
+				if env[EnvMiniAppURL] == "" {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					if u := c.MiniAppURL(ctx, b.ID); u != "" {
+						env[EnvMiniAppURL] = u
+					}
+					cancel()
+				}
 				port, inst := ProxyPort(b.Port), "main"
 				if b.Instance == "canary" {
 					inst = "canary"

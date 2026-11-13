@@ -143,7 +143,16 @@ func (c *Core) DeleteBot(ctx context.Context, id int64) error {
 
 func (c *Core) registerSettings() {
 	c.Mux.Handle("bots.settings", wire.Func(func(ctx context.Context, _ *wire.Conn, id int64) (map[string]json.RawMessage, error) {
-		return c.Settings(ctx, id)
+		m, err := c.Settings(ctx, id)
+		if err != nil {
+			return m, err
+		}
+		// Read-only: where the Mini App lives, or why it cannot.
+		if u := c.MiniAppURL(ctx, id); u != "" {
+			m["mini_app_url"], _ = json.Marshal(u)
+		}
+		m["mini_app_domain"], _ = json.Marshal(c.Cfg.Domain)
+		return m, nil
 	}))
 	c.Mux.Handle("bots.settings.update", wire.Func(func(ctx context.Context, _ *wire.Conn, in SettingsUpdate) (struct{}, error) {
 		return struct{}{}, c.Journal.Do(ctx, in.Actor, "bots.settings.update", in.BotID, nil, func() error {

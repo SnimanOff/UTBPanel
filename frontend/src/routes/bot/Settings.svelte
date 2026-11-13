@@ -25,13 +25,16 @@
   let saved = $state('')
   let restartNeeded = $state(false)
   let configRevision = $state(0)
+  let miniApp = $state('')
+  let miniAppURL = $state('')
+  let miniAppDomain = $state('')
   let newName = $state('')
   let newValue = $state('')
   let fileName = $state('')
   let fileInput = $state<HTMLInputElement>()
   // A notification about a requested secret opens the tab with ?secret=NAME.
   const asked = new URLSearchParams(location.search).get('secret') ?? ''
-  const standard = ['BOT_TOKEN', 'PORT', 'WEBHOOK_URL', 'WEBHOOK_SECRET', 'DATABASE_URL', 'DATA_DIR']
+  const standard = ['BOT_TOKEN', 'PORT', 'WEBHOOK_URL', 'WEBHOOK_SECRET', 'DATABASE_URL', 'DATA_DIR', 'MINI_APP_URL']
 
   async function load() {
     try {
@@ -39,6 +42,9 @@
       const s = await api.get<Record<string, any>>(`/api/bots/${bot.id}/settings`)
       env = Object.entries((s.env ?? {}) as Record<string, string>)
       renames = Object.entries((s.rename ?? {}) as Record<string, string>)
+      miniApp = (s.mini_app ?? '') as string
+      miniAppURL = (s.mini_app_url ?? '') as string
+      miniAppDomain = (s.mini_app_domain ?? '') as string
     } catch (e) {
       error = errorText(e)
     }
@@ -113,6 +119,19 @@
       const r = Object.fromEntries(renames.filter(([k, v]) => k.trim() && v.trim()).map(([k, v]) => [k.trim(), v.trim()]))
       await api.patch(`/api/bots/${bot.id}/settings`, { env: e, rename: r })
       done('Переменные сохранены')
+    } catch (err) {
+      error = errorText(err)
+    }
+  }
+
+  async function saveMiniApp(e: SubmitEvent) {
+    e.preventDefault()
+    try {
+      // A bare string would go as text: send it as a JSON string.
+      const body = new Blob([JSON.stringify(miniApp.trim().toLowerCase())], { type: 'application/json' })
+      await api.put(`/api/bots/${bot.id}/settings/mini_app`, body)
+      done(miniApp.trim() ? 'Поддомен сохранён' : 'Mini App выключен')
+      load()
     } catch (err) {
       error = errorText(err)
     }
@@ -229,6 +248,24 @@
     {/each}
     <button onclick={() => renames.push(['BOT_TOKEN', ''])}>+ переназначить</button>
     <div class="save"><button class="primary" onclick={saveEnv}>Сохранить переменные</button></div>
+  </Box>
+
+  <Box title="Mini App">
+    {#if !miniAppDomain}
+      <p class="muted small">Нужен домен: задайте DOMAIN в .env. Mini App открывается только по HTTPS с настоящим сертификатом.</p>
+    {:else}
+      <form class="add" onsubmit={saveMiniApp}>
+        <input class="mono" bind:value={miniApp} placeholder="поддомен" pattern="[a-z0-9]([a-z0-9\-]*[a-z0-9])?" maxlength="63" />
+        <span class="muted">.{miniAppDomain}</span>
+        <button>Сохранить</button>
+      </form>
+      {#if miniAppURL}<p class="small">Адрес: <span class="mono">{miniAppURL}</span></p>{/if}
+      <p class="muted small">
+        Бот получит адрес в MINI_APP_URL после рестарта и отдаёт страницы на своём PORT. Нужна DNS-запись поддомена на этот
+        сервер (или *.{miniAppDomain}). Бот сам проверяет initData: страницы открыты всему интернету. Пустое поле выключает Mini
+        App.
+      </p>
+    {/if}
   </Box>
 
   <Box title="Бот">

@@ -88,6 +88,15 @@ var sections = map[string]func(json.RawMessage) error{
 		}
 		return nil
 	},
+	// mini_app is the subdomain of the bot's Mini App; "" turns it off.
+	// The domain and uniqueness are checked in PutSetting.
+	sectionMiniApp: func(b json.RawMessage) error {
+		var v string
+		if err := json.Unmarshal(b, &v); err != nil {
+			return wire.Errorf(wire.CodeBadRequest, "mini_app: строка с поддоменом, например \"lotus-sup\", или \"\"")
+		}
+		return checkSubdomain(v)
+	},
 	"updates": func(b json.RawMessage) error {
 		var v string
 		if err := json.Unmarshal(b, &v); err != nil {
@@ -135,6 +144,13 @@ func (c *Core) PutSetting(ctx context.Context, in SettingPut) error {
 			return err
 		}
 		return wire.Errorf(wire.CodeBadRequest, "%v", err)
+	}
+	if in.Key == sectionMiniApp {
+		var sub string
+		json.Unmarshal(raw, &sub)
+		if err := c.checkMiniApp(ctx, in.BotID, sub); err != nil {
+			return err
+		}
 	}
 	if err := c.SetSetting(ctx, in.BotID, in.Key, raw); err != nil {
 		return err

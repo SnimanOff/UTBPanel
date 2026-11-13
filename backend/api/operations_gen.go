@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "cc70bcaf2021be0ef3fd86a991396a44f481a1185f14e0465b6909918cc75372"
+const GeneratedHash = "b6f309f028e4fdd780d0aa91b275e308b4ad5447e820aa00f2f3bb2eb666c20e"
 
 // Op is one operation of the API.
 type Op struct {
@@ -69,7 +69,7 @@ var Ops = []Op{
 	{"list_secret_requests", "GET", "/api/bots/{id}/secret-requests", "read", "Secret requests of the bot from the last day with their states"},
 	{"list_secrets", "GET", "/api/bots/{id}/secrets", "read", "Names of the bot's secrets; values are never returned"},
 	{"get_services", "GET", "/api/bots/{id}/services", "read", "External services the bot connects to (through the proxy) with error rates and traffic"},
-	{"get_settings", "GET", "/api/bots/{id}/settings", "read", "Settings of the bot (env, renames, limits)"},
+	{"get_settings", "GET", "/api/bots/{id}/settings", "read", "Settings of the bot (env, renames, limits, mini_app). Read-only mini_app_url is the Mini App address, mini_app_domain the panel domain (empty: no Mini Apps)"},
 	{"get_trial", "GET", "/api/bots/{id}/trial", "read", "The test run of a new version (or null) and the attached test bot (or null) with its process"},
 	{"list_users", "GET", "/api/bots/{id}/users", "read", "Users of the bot; search by id or username, filter all | banned | blocked"},
 	{"list_devices", "GET", "/api/devices", "never", "Devices waiting for approval"},
@@ -163,7 +163,7 @@ var Ops = []Op{
 	{"set_flag", "PUT", "/api/bots/{id}/sdk/flags/{name}", "write", "Change an SDK flag without restarting the bot"},
 	{"select_sdk_metrics", "PUT", "/api/bots/{id}/sdk/metrics/selected", "write", "Select SDK metrics to show on the bot dashboard"},
 	{"set_secret", "PUT", "/api/bots/{id}/secrets/{name}", "never", "Set a secret (write-only). Neural networks use request_secret instead"},
-	{"put_settings_section", "PUT", "/api/bots/{id}/settings/{section}", "confirm", "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates, getUpdates bridge 'updates' webhook or polling, releases). releases takes ReleaseSettings fields; omitted fields keep their current values"},
+	{"put_settings_section", "PUT", "/api/bots/{id}/settings/{section}", "confirm", "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates, getUpdates bridge 'updates' webhook or polling, releases, mini_app). releases takes ReleaseSettings fields; omitted fields keep their current values. mini_app is a subdomain label such as \"lotus-sup\" (\"\" turns it off): the bot's pages are served at https://<label>.<DOMAIN>:8443, the bot gets the address in MINI_APP_URL after a restart and must check initData itself"},
 	{"attach_test_bot", "PUT", "/api/bots/{id}/test-bot", "never", "Attach a separate Telegram bot (its token from BotFather) as the test bot for test runs; an attached one gets the new token"},
 	{"set_token", "PUT", "/api/bots/{id}/token", "never", "Replace the token (checked with getMe). Neural networks use request_secret instead"},
 	{"order_groups", "PUT", "/api/groups/order", "never", "Reorder groups"},

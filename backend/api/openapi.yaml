@@ -67,6 +67,10 @@ info:
     - *Tune releases.* Read `releases` from `get_bot_config`, then
       `put_settings_section(section=releases, body={...})` with only the
       fields to change (e.g. `{"keep": 10, "window": 120}`) and `wait_action`.
+    - *Publish a Mini App.* `put_settings_section(section=mini_app, body="lotus-sup")`,
+      `wait_action`, then `restart`: the bot gets MINI_APP_URL
+      (https://lotus-sup.<DOMAIN>:8443) and serves its pages on PORT. Needs
+      DOMAIN and a DNS record for the subdomain.
     - *Test a version first.* `get_trial` shows the attached test bot (the
       owner attaches it in the panel), `start_trial`, check it in Telegram,
       then `promote_trial` or `stop_trial`.
@@ -826,7 +830,7 @@ paths:
     get:
       operationId: get_settings
       tags: [settings]
-      summary: Settings of the bot (env, renames, limits)
+      summary: "Settings of the bot (env, renames, limits, mini_app). Read-only mini_app_url is the Mini App address, mini_app_domain the panel domain (empty: no Mini Apps)"
       x-mcp: read
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: object } } } }
@@ -1029,11 +1033,11 @@ paths:
   /api/bots/{id}/settings/{section}:
     parameters:
       - { $ref: "#/components/parameters/BotID" }
-      - { name: section, in: path, required: true, schema: { type: string, enum: [antiflood, texts, tz, stop, crash_updates, updates, releases] } }
+      - { name: section, in: path, required: true, schema: { type: string, enum: [antiflood, texts, tz, stop, crash_updates, updates, releases, mini_app] } }
     put:
       operationId: put_settings_section
       tags: [settings]
-      summary: "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates, getUpdates bridge 'updates' webhook or polling, releases). releases takes ReleaseSettings fields; omitted fields keep their current values"
+      summary: "Replace one section of the settings (antiflood, texts for users, time zone, behaviour on stop, crash updates, getUpdates bridge 'updates' webhook or polling, releases, mini_app). releases takes ReleaseSettings fields; omitted fields keep their current values. mini_app is a subdomain label such as \"lotus-sup\" (\"\" turns it off): the bot's pages are served at https://<label>.<DOMAIN>:8443, the bot gets the address in MINI_APP_URL after a restart and must check initData itself"
       x-mcp: confirm
       requestBody:
         required: true

@@ -34,12 +34,19 @@ const MethodUpdate = "ingress.update"
 // coreTimeout: after it the core counts as unavailable for this update.
 var coreTimeout = 2 * time.Second
 
-// handler routes the public port: POST /hook/<bot_id> → core,
-// POST /gh/<bot_id> → core (GitHub releases), everything else 404 without a body. There is
-// no UI or API on this port.
+// handler routes the public port: a bot's Mini App host → the bot through
+// the core (app.go), POST /hook/<bot_id> → core, POST /gh/<bot_id> → core
+// (GitHub releases), everything else 404 without a body. There is no UI or
+// API of the panel on this port.
 func (e *Edge) handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := clientIP(r)
+		if host := hostName(r); e.Cfg.Domain != "" && host != e.Cfg.Domain {
+			if id, bs, ok := e.settings.appBot(host); ok {
+				e.app(w, r, ip, id, bs)
+				return
+			}
+		}
 		switch {
 		case strings.HasPrefix(r.URL.Path, "/hook/") && r.Method == http.MethodPost:
 			e.hook(w, r, ip)

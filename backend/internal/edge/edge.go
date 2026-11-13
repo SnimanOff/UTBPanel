@@ -43,9 +43,12 @@ type Edge struct {
 	GH       *github.Client
 	settings settings
 	limiter  limiter
-	certPEM  []byte
-	queue    queue
-	replies  *updrules.Limiter
+	// appLimiter and appSlots bound Mini App traffic (app.go).
+	appLimiter limiter
+	appSlots   chan struct{}
+	certPEM    []byte
+	queue      queue
+	replies    *updrules.Limiter
 
 	cmu      sync.Mutex
 	counters map[string]int64
@@ -66,7 +69,8 @@ func New(cfg config.Edge, log *slog.Logger) (*Edge, error) {
 		return nil, err
 	}
 	e := &Edge{Cfg: cfg, Log: log, Mux: wire.NewMux(), telegram: cfg.TelegramPrefixes(),
-		limiter: limiter{max: 60}, counters: map[string]int64{}}
+		limiter: limiter{max: 60}, appLimiter: limiter{max: appPerMinute},
+		appSlots: make(chan struct{}, maxAppInflight), counters: map[string]int64{}}
 	e.settings.path = filepath.Join(cfg.DataDir, "settings")
 	e.queue.dir = filepath.Join(cfg.DataDir, "queue")
 	e.queue.recover()

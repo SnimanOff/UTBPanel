@@ -73,7 +73,7 @@ func (e *Edge) tlsSetup() (*tls.Config, []byte, *autocert.Manager, error) {
 	if e.Cfg.Domain != "" {
 		m := &autocert.Manager{
 			Prompt:     autocert.AcceptTOS,
-			HostPolicy: autocert.HostWhitelist(e.Cfg.Domain),
+			HostPolicy: e.certHost, // the domain and bots' Mini App hosts
 			Cache:      autocert.DirCache(filepath.Join(e.Cfg.DataDir, "certs")),
 		}
 		cfg := m.TLSConfig()

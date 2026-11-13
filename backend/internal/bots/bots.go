@@ -626,7 +626,7 @@ func (s *Service) orderGroups(w http.ResponseWriter, r *http.Request) {
 }
 
 // putSection replaces one section of the settings document: antiflood,
-// texts, tz, stop, crash_updates, updates, releases.
+// texts, tz, stop, crash_updates, updates, releases, mini_app.
 func (s *Service) putSection(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
