@@ -259,6 +259,48 @@ func TestRestartAfterCrashAndLoop(t *testing.T) {
 	}
 }
 
+func TestStopWaitsForCrashRestartLaunch(t *testing.T) {
+	e := newEnv(t)
+	b := e.addBot(t, 1, Settings{})
+	preparing := make(chan struct{})
+	release := make(chan struct{})
+	unblock := sync.OnceFunc(func() { close(release) })
+	defer unblock()
+	e.r.cfg.Hooks.Prepare = func(context.Context, Bot) error {
+		close(preparing)
+		<-release
+		return nil
+	}
+	s := e.r.sup(b.ID)
+	s.backoff = 0
+	e.r.crashed(&proc{bot: b, started: time.Now()}, 3)
+	select {
+	case <-preparing:
+	case <-time.After(5 * time.Second):
+		t.Fatal("scheduled restart did not reach process preparation")
+	}
+
+	stopped := make(chan error, 1)
+	go func() { stopped <- e.r.Stop(t.Context(), b.ID) }()
+	select {
+	case err := <-stopped:
+		t.Fatalf("Stop returned before the restart could be stopped: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	unblock()
+	select {
+	case err := <-stopped:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Stop did not complete after the launch")
+	}
+	if e.r.IsRunning(b.ID) || state(t, e.db, b.ID) != Stopped {
+		t.Fatal("the restart survived Stop")
+	}
+}
+
 func TestStopKillsStubborn(t *testing.T) {
 	old := StopTimeout
 	StopTimeout = 300 * time.Millisecond
