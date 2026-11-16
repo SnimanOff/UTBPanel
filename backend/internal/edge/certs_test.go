@@ -5,14 +5,13 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -118,15 +117,15 @@ func TestWarmCertificateServesECDSAClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixtureDir := t.TempDir()
-	_, certPEM, err := selfSigned(fixtureDir, host)
+	cert, certPEM, err := selfSigned(t.TempDir(), host)
 	if err != nil {
 		t.Fatal(err)
 	}
-	keyPEM, err := os.ReadFile(filepath.Join(fixtureDir, "selfsigned.key"))
+	key, err := x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: key})
 	ctx := t.Context()
 	if err := manager.Cache.Put(ctx, host, append(keyPEM, certPEM...)); err != nil {
 		t.Fatal(err)
