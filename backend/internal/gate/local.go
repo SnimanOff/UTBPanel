@@ -14,6 +14,12 @@ func (g *Gate) local(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprintf(w, enrollPage, html.EscapeString(g.cfg.Block.KeyName))
 	case "/__gate/server":
+		// Changing the panel address is state-changing: a foreign page on
+		// another localhost port must not be able to do it.
+		if r.Method == http.MethodPost && !g.sameOrigin(r) {
+			http.Error(w, "foreign origin", http.StatusForbidden)
+			return
+		}
 		g.serverPage(w, r)
 	case "/__gate/enroll.json":
 		st := g.EnrollState()
