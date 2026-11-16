@@ -43,11 +43,9 @@ type Edge struct {
 	Domain      string   `yaml:"domain" env:"DOMAIN"` // Let's Encrypt; empty = self-signed
 	TelegramIPs []string `yaml:"telegram_ips" env:"TELEGRAM_IPS"`
 	MaxBody     ByteSize `yaml:"max_body" env:"EDGE_MAX_BODY"`
-	// ACMEEmail is the contact address of the Let's Encrypt account: expiry
-	// notices and the only way for the CA to reach the owner.
+	// ACMEEmail is the optional contact address for ACME account registration.
 	ACMEEmail string `yaml:"acme_email" env:"ACME_EMAIL"`
-	// ACMEStaging asks the staging CA instead of the production one: no rate
-	// limits while testing, but browsers do not trust the certificates.
+	// ACMEStaging uses the staging CA and its separate cache for testing.
 	ACMEStaging bool `yaml:"acme_staging" env:"ACME_STAGING"`
 }
 
@@ -344,8 +342,8 @@ func (c Edge) Validate() error {
 			errs = append(errs, fmt.Errorf("domain: %w", err))
 		} else if c.PublicAddr == "" {
 			errs = append(errs, errors.New("public_addr: required with DOMAIN: Telegram reaches the webhook by this name"))
-		} else if net.ParseIP(c.PublicAddr) != nil {
-			errs = append(errs, errors.New("public_addr: with DOMAIN set it must be the same domain name, not an IP address: webhooks go to this name, and the certificate is issued for DOMAIN"))
+		} else if !strings.EqualFold(c.PublicAddr, c.Domain) {
+			errs = append(errs, fmt.Errorf("public_addr: %q must match domain %q for webhook TLS", c.PublicAddr, c.Domain))
 		}
 	}
 	return errors.Join(errs...)

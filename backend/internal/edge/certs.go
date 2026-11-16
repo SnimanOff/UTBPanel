@@ -22,8 +22,7 @@ func (e *Edge) warmAllCerts(ctx context.Context) {
 	}
 }
 
-// warmNewCerts asks for the certificates of hosts that appeared after a
-// settings update, so that a new page works on its first visit.
+// warmNewCerts starts issuance for hosts that appeared in a settings update.
 func (e *Edge) warmNewCerts(before map[string]bool) {
 	for _, host := range e.settings.hosts() {
 		if before[host] {
@@ -47,7 +46,13 @@ func (e *Edge) warmCert(ctx context.Context, host string) {
 		return
 	}
 	defer func() { <-e.warmSem }()
-	if _, err := acm.GetCertificate(&tls.ClientHelloInfo{ServerName: host}); err != nil {
+	// autocert selects its RSA cache entry when the hello offers no ECDSA
+	// cipher suite. Warm the ECDSA entry that modern browsers use.
+	hello := &tls.ClientHelloInfo{
+		ServerName:   host,
+		CipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
+	}
+	if _, err := acm.GetCertificate(hello); err != nil {
 		e.Log.Warn("certificate warm-up failed", "host", host, "err", err)
 		return
 	}

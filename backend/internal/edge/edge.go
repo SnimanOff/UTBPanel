@@ -52,9 +52,10 @@ type Edge struct {
 
 	cmu      sync.Mutex
 	counters map[string]int64
-	// certWarnMu and certWarnLast keep one failing name from flooding the log.
-	certWarnMu   sync.Mutex
-	certWarnLast map[string]time.Time
+
+	certWarnMu    sync.Mutex
+	certWarnLast  map[string]time.Time
+	certWarnSweep time.Time
 	// warmSem bounds the background certificate warm-ups.
 	warmSem chan struct{}
 }
@@ -110,20 +111,11 @@ func New(cfg config.Edge, log *slog.Logger) (*Edge, error) {
 
 // Run works until ctx is done.
 func (e *Edge) Run(ctx context.Context) error {
-	safe.Go(e.Log, "core client", func() { e.Core.Run(ctx) })
-	safe.Go(e.Log, "panel client", func() { e.Panel.Run(ctx) })
-	safe.Go(e.Log, "stats", func() { app.ReportStats(ctx, e.Core, "edge", 10*time.Second) })
-	if e.GH != nil {
-		safe.Go(e.Log, "github addresses", func() { e.refreshGitHub(ctx, e.GH) })
-	}
 	tlsCfg, pemBytes, acm, err := e.tlsSetup()
 	if err != nil {
 		return err
 	}
 	e.certPEM = pemBytes
-	if acm != nil {
-		acmeManager.Store(acm)
-	}
 	srv := &http.Server{
 		Addr: e.Cfg.ListenTLS, Handler: e.handler(), TLSConfig: tlsCfg,
 		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 2 * time.Minute,
@@ -139,10 +131,15 @@ func (e *Edge) Run(ctx context.Context) error {
 		plain = &http.Server{Addr: e.Cfg.ListenHTTP, Handler: acm.HTTPHandler(http.NotFoundHandler()), ReadHeaderTimeout: 10 * time.Second}
 		safe.Go(e.Log, "http listener", func() { errc <- plain.ListenAndServe() })
 	}
+	acmeManager.Store(acm)
+	safe.Go(e.Log, "core client", func() { e.Core.Run(ctx) })
+	safe.Go(e.Log, "panel client", func() { e.Panel.Run(ctx) })
+	safe.Go(e.Log, "stats", func() { app.ReportStats(ctx, e.Core, "edge", 10*time.Second) })
+	if e.GH != nil {
+		safe.Go(e.Log, "github addresses", func() { e.refreshGitHub(ctx, e.GH) })
+	}
 	safe.Go(e.Log, "tls listener", func() { errc <- srv.ListenAndServeTLS("", "") })
-	// Certificates for pages and Mini Apps are asked for in the background:
-	// the first visitor then does not wait for the whole ACME exchange inside
-	// the TLS handshake.
+	// Start issuance for configured pages and Mini Apps in the background.
 	safe.Go(e.Log, "certificates", func() { e.warmAllCerts(ctx) })
 	e.Log.Info("edge started", "version", buildinfo.Version, "listen", e.Cfg.ListenTLS, "domain", e.Cfg.Domain)
 	select {

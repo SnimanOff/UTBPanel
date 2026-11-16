@@ -1,6 +1,7 @@
 package edge
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -15,19 +16,19 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 )
 
-// stagingDirectory is the Let's Encrypt staging CA: no rate limits, but the
-// certificates are not trusted by browsers. Testing on it keeps the
-// production limits (and the "5 failed authorizations per identifier per
-// hour" lockout) out of the way.
+// stagingDirectory is the Let's Encrypt staging CA. It has its own rate
+// limits, and its certificates require explicit trust in the test client.
 const stagingDirectory = "https://acme-staging-v02.api.letsencrypt.org/directory"
 
-// certWarnEvery is how often a failure for one name is logged.
+// certWarnEvery is the minimum interval between warnings for the same
+// configured name, or for unknown names as a group.
 const certWarnEvery = 5 * time.Minute
 
 // selfSigned loads or creates the certificate for :8443 when there is no
@@ -82,24 +83,22 @@ func selfSigned(dir, addr string) (*tls.Certificate, []byte, error) {
 // domain), and the autocert manager (nil without a domain).
 func (e *Edge) tlsSetup() (*tls.Config, []byte, *autocert.Manager, error) {
 	if e.Cfg.Domain != "" {
+		cacheDir := "certs"
 		m := &autocert.Manager{
 			Prompt:     autocert.AcceptTOS,
-			HostPolicy: e.certHost, // the domain and bots' Mini App hosts
-			Cache:      autocert.DirCache(filepath.Join(e.Cfg.DataDir, "certs")),
-			// Without a contact address the CA cannot warn about a
-			// certificate that stopped renewing.
-			Email: e.Cfg.ACMEEmail,
+			HostPolicy: e.certHost,
+			Email:      e.Cfg.ACMEEmail,
 		}
 		if e.Cfg.ACMEStaging {
+			cacheDir = "certs-staging"
 			m.Client = &acme.Client{DirectoryURL: stagingDirectory}
 		}
+		m.Cache = autocert.DirCache(filepath.Join(e.Cfg.DataDir, cacheDir))
 		cfg := m.TLSConfig()
 		cfg.MinVersion = tls.VersionTLS12 // Telegram's servers
-		// The self-signed certificate is the fallback for names Let's
-		// Encrypt has not issued (yet): the browser gets a warning and a
-		// page with the reason instead of "tls: internal error", and the
-		// operator gets a log line.
-		fallback, _, err := selfSigned(filepath.Join(e.Cfg.DataDir, "certs"), e.fallbackName())
+		// Keep the fallback separate from the certificate that Telegram
+		// trusts in self-signed mode so switching modes preserves that pair.
+		fallback, _, err := selfSigned(filepath.Join(e.Cfg.DataDir, "certs-fallback"), e.Cfg.Domain)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("edge: fallback certificate: %w", err)
 		}
@@ -115,14 +114,6 @@ func (e *Edge) tlsSetup() (*tls.Config, []byte, *autocert.Manager, error) {
 		return nil, nil, nil, fmt.Errorf("edge: self-signed certificate: %w", err)
 	}
 	return &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{*cert}}, pemBytes, nil, nil
-}
-
-// fallbackName is the name of the self-signed fallback certificate.
-func (e *Edge) fallbackName() string {
-	if e.Cfg.PublicAddr != "" {
-		return e.Cfg.PublicAddr
-	}
-	return e.Cfg.Domain
 }
 
 // logCertErrors reports why no Let's Encrypt certificate was served and lets
@@ -144,27 +135,36 @@ func (e *Edge) logCertErrors(base func(*tls.ClientHelloInfo) (*tls.Certificate, 
 	}
 }
 
-// warnCert logs one failure per name per certWarnEvery: a scanner sending
-// random SNI names must not flood the log.
+// warnCert rate-limits warnings for configured names individually and groups
+// all unknown names under one key.
 func (e *Edge) warnCert(name string, err error) {
+	key := strings.ToLower(name)
+	if e.certHost(context.Background(), key) != nil {
+		key = ""
+	}
+	e.certWarnMu.Lock()
+	now := time.Now()
+	if now.Sub(e.certWarnLast[key]) < certWarnEvery {
+		e.certWarnMu.Unlock()
+		return
+	}
+	if e.certWarnLast == nil {
+		e.certWarnLast = map[string]time.Time{}
+	}
+	if now.Sub(e.certWarnSweep) >= certWarnEvery {
+		for host, at := range e.certWarnLast {
+			if now.Sub(at) >= certWarnEvery {
+				delete(e.certWarnLast, host)
+			}
+		}
+		e.certWarnSweep = now
+	}
+	e.certWarnLast[key] = now
+	e.certWarnMu.Unlock()
 	log := e.Log
 	if log == nil {
 		log = slog.Default()
 	}
-	e.certWarnMu.Lock()
-	if e.certWarnLast == nil {
-		e.certWarnLast = map[string]time.Time{}
-	}
-	now := time.Now()
-	if at, ok := e.certWarnLast[name]; ok && now.Sub(at) < certWarnEvery {
-		e.certWarnMu.Unlock()
-		return
-	}
-	if len(e.certWarnLast) > 1024 {
-		e.certWarnLast = map[string]time.Time{}
-	}
-	e.certWarnLast[name] = now
-	e.certWarnMu.Unlock()
 	log.Warn("tls: serving the fallback certificate", "name", name, "err", err)
 }
 

@@ -149,17 +149,19 @@ func TestPublicAddrValidation(t *testing.T) {
 	}
 }
 
-// With DOMAIN set, Telegram reaches the webhook by PUBLIC_ADDR and the
-// certificate is issued for DOMAIN: an IP address there cannot work.
-func TestDomainNeedsDomainAddr(t *testing.T) {
+func TestPublicAddrMustMatchDomain(t *testing.T) {
 	t.Setenv("TGPANEL_DOMAIN", "example.com")
-	t.Setenv("TGPANEL_PUBLIC_ADDR", "203.0.113.10")
-	cfg := DefaultEdge()
-	if err := Load(&cfg, ""); err == nil || !strings.Contains(err.Error(), "public_addr") {
-		t.Fatalf("got %v", err)
+	for _, addr := range []string{"", "203.0.113.10", "hooks.example.com"} {
+		t.Run(addr, func(t *testing.T) {
+			t.Setenv("TGPANEL_PUBLIC_ADDR", addr)
+			cfg := DefaultEdge()
+			if err := Load(&cfg, ""); err == nil || !strings.Contains(err.Error(), "public_addr") {
+				t.Fatalf("public_addr %q: got %v", addr, err)
+			}
+		})
 	}
-	t.Setenv("TGPANEL_PUBLIC_ADDR", "example.com")
-	cfg = DefaultEdge()
+	t.Setenv("TGPANEL_PUBLIC_ADDR", "Example.COM.")
+	cfg := DefaultEdge()
 	if err := Load(&cfg, ""); err != nil {
 		t.Fatalf("got %v", err)
 	}

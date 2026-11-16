@@ -1,17 +1,24 @@
 package edge
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/acme"
+	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/config"
 )
@@ -26,6 +33,151 @@ func quietEdge(t *testing.T) *Edge {
 		t.Fatal(err)
 	}
 	return e
+}
+
+func TestACMECachesAreIsolated(t *testing.T) {
+	e := quietEdge(t)
+	e.Cfg.Domain = "example.test"
+	e.Cfg.PublicAddr = e.Cfg.Domain
+
+	_, _, production, err := e.tlsSetup()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Cfg.ACMEStaging = true
+	_, _, staging, err := e.tlsSetup()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := t.Context()
+	key := e.Cfg.Domain
+	if err := staging.Cache.Put(ctx, key, []byte("staging entry")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := production.Cache.Get(ctx, key); !errors.Is(err, autocert.ErrCacheMiss) {
+		t.Fatalf("production cache lookup: got %v, want cache miss", err)
+	}
+	if err := production.Cache.Put(ctx, key, []byte("production entry")); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := staging.Cache.Get(ctx, key); err != nil || string(data) != "staging entry" {
+		t.Fatalf("staging cache lookup: got %q, %v", data, err)
+	}
+}
+
+func TestFallbackPreservesTelegramCertificate(t *testing.T) {
+	e := quietEdge(t)
+	ip := e.Cfg.PublicAddr
+	_, originalPEM, _, err := e.tlsSetup()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e.Cfg.Domain = "example.test"
+	e.Cfg.PublicAddr = e.Cfg.Domain
+	_, domainPEM, _, err := e.tlsSetup()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(domainPEM) != 0 {
+		t.Fatal("domain mode must not pass its fallback certificate to Telegram")
+	}
+
+	e.Cfg.Domain = ""
+	e.Cfg.PublicAddr = ip
+	_, restoredPEM, _, err := e.tlsSetup()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(originalPEM) == 0 || !bytes.Equal(originalPEM, restoredPEM) {
+		t.Fatal("the Telegram certificate changed after switching back to IP mode")
+	}
+}
+
+type cacheWithoutIssuance struct{ autocert.Cache }
+
+func (c cacheWithoutIssuance) Get(ctx context.Context, key string) ([]byte, error) {
+	data, err := c.Cache.Get(ctx, key)
+	if errors.Is(err, autocert.ErrCacheMiss) {
+		return nil, errors.New("test cache miss: ACME issuance disabled")
+	}
+	return data, err
+}
+
+func TestWarmCertificateServesECDSAClient(t *testing.T) {
+	e := quietEdge(t)
+	e.Cfg.Domain = "example.test"
+	e.Cfg.PublicAddr = e.Cfg.Domain
+	host := "page.example.test"
+	if err := e.settings.apply(Settings{Pages: map[string][]byte{host: []byte("hello")}}); err != nil {
+		t.Fatal(err)
+	}
+
+	tlsCfg, _, manager, err := e.tlsSetup()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixtureDir := t.TempDir()
+	_, certPEM, err := selfSigned(fixtureDir, host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPEM, err := os.ReadFile(filepath.Join(fixtureDir, "selfsigned.key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := t.Context()
+	if err := manager.Cache.Put(ctx, host, append(keyPEM, certPEM...)); err != nil {
+		t.Fatal(err)
+	}
+	manager.Cache = cacheWithoutIssuance{manager.Cache}
+	previous := acmeManager.Swap(manager)
+	t.Cleanup(func() { acmeManager.Store(previous) })
+	e.warmCert(ctx, host)
+	// Require the handshake to use the certificate loaded into memory by warm-up.
+	if err := manager.Cache.Delete(ctx, host); err != nil {
+		t.Fatal(err)
+	}
+
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(certPEM) {
+		t.Fatal("could not load the fixture certificate")
+	}
+	serverConn, clientConn := net.Pipe()
+	defer func() {
+		_ = serverConn.Close()
+		_ = clientConn.Close()
+	}()
+	handshakeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	serverResult := make(chan error, 1)
+	go func() { serverResult <- tls.Server(serverConn, tlsCfg).HandshakeContext(handshakeCtx) }()
+	client := tls.Client(clientConn, &tls.Config{ServerName: host, RootCAs: roots, MinVersion: tls.VersionTLS12})
+	if err := client.HandshakeContext(handshakeCtx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-serverResult; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCertWarningsGroupUnknownNames(t *testing.T) {
+	e := quietEdge(t)
+	e.Cfg.Domain = "example.test"
+	page := "page.example.test"
+	if err := e.settings.apply(Settings{Pages: map[string][]byte{page: []byte("hello")}}); err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	e.Log = slog.New(slog.NewTextHandler(&logs, nil))
+	err := errors.New("no certificate")
+	for _, name := range []string{"unknown.example.test", "other.example.test", e.Cfg.Domain, "EXAMPLE.TEST", page} {
+		e.warnCert(name, err)
+	}
+	if got := strings.Count(logs.String(), "level=WARN"); got != 3 {
+		t.Fatalf("got %d warnings, want one for unknown names and one per configured host:\n%s", got, &logs)
+	}
 }
 
 // A name without a Let's Encrypt certificate must still bring up a page: the
