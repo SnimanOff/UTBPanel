@@ -110,6 +110,70 @@ func TestBadFile(t *testing.T) {
 	}
 }
 
+func TestDomainNormalized(t *testing.T) {
+	t.Setenv("TGPANEL_DOMAIN", "Example.COM.")
+	t.Setenv("TGPANEL_PUBLIC_ADDR", "Example.COM.")
+	cfg := DefaultEdge()
+	if err := Load(&cfg, ""); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Domain != "example.com" {
+		t.Fatalf("domain = %q", cfg.Domain)
+	}
+	if cfg.PublicAddr != "Example.COM" {
+		t.Fatalf("public_addr = %q", cfg.PublicAddr)
+	}
+}
+
+// PUBLIC_ADDR is a bare name or IP: a scheme, a port or a path in it breaks
+// webhook URLs and the certificate names.
+func TestPublicAddrValidation(t *testing.T) {
+	bad := []string{"https://example.com", "example.com:8443", "exa mple.com", "example.com/path"}
+	for _, addr := range bad {
+		t.Run(addr, func(t *testing.T) {
+			t.Setenv("TGPANEL_PUBLIC_ADDR", addr)
+			cfg := DefaultPanel()
+			if err := Load(&cfg, ""); err == nil || !strings.Contains(err.Error(), "public_addr") {
+				t.Fatalf("got %v", err)
+			}
+		})
+	}
+	for _, addr := range []string{"example.com", "203.0.113.10", "panel.example.co.uk"} {
+		t.Run(addr, func(t *testing.T) {
+			t.Setenv("TGPANEL_PUBLIC_ADDR", addr)
+			cfg := DefaultPanel()
+			if err := Load(&cfg, ""); err != nil {
+				t.Fatalf("got %v", err)
+			}
+		})
+	}
+}
+
+// With DOMAIN set, Telegram reaches the webhook by PUBLIC_ADDR and the
+// certificate is issued for DOMAIN: an IP address there cannot work.
+func TestDomainNeedsDomainAddr(t *testing.T) {
+	t.Setenv("TGPANEL_DOMAIN", "example.com")
+	t.Setenv("TGPANEL_PUBLIC_ADDR", "203.0.113.10")
+	cfg := DefaultEdge()
+	if err := Load(&cfg, ""); err == nil || !strings.Contains(err.Error(), "public_addr") {
+		t.Fatalf("got %v", err)
+	}
+	t.Setenv("TGPANEL_PUBLIC_ADDR", "example.com")
+	cfg = DefaultEdge()
+	if err := Load(&cfg, ""); err != nil {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestDomainValidation(t *testing.T) {
+	t.Setenv("TGPANEL_DOMAIN", "localhost")
+	t.Setenv("TGPANEL_PUBLIC_ADDR", "localhost")
+	cfg := DefaultEdge()
+	if err := Load(&cfg, ""); err == nil || !strings.Contains(err.Error(), "domain") {
+		t.Fatalf("a name without a dot was accepted: %v", err)
+	}
+}
+
 func TestByteSize(t *testing.T) {
 	for _, raw := range []string{"9223372036854775807G", "-9223372036854775808G"} {
 		var size ByteSize

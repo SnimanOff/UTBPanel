@@ -7,6 +7,8 @@ x-common: &common
   environment: &env
     TGPANEL_PUBLIC_ADDR: ${PUBLIC_ADDR:?set PUBLIC_ADDR in .env}
     TGPANEL_DOMAIN: ${DOMAIN:-}
+    TGPANEL_ACME_EMAIL: ${ACME_EMAIL:-}
+    TGPANEL_ACME_STAGING: ${ACME_STAGING:-false}
     TGPANEL_WEB_LISTEN: ":${WEB_PORT:-9443}"
     TGPANEL_LOG_LEVEL: ${LOG_LEVEL:-info}
 

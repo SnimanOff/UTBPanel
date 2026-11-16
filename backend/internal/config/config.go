@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"os"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +43,12 @@ type Edge struct {
 	Domain      string   `yaml:"domain" env:"DOMAIN"` // Let's Encrypt; empty = self-signed
 	TelegramIPs []string `yaml:"telegram_ips" env:"TELEGRAM_IPS"`
 	MaxBody     ByteSize `yaml:"max_body" env:"EDGE_MAX_BODY"`
+	// ACMEEmail is the contact address of the Let's Encrypt account: expiry
+	// notices and the only way for the CA to reach the owner.
+	ACMEEmail string `yaml:"acme_email" env:"ACME_EMAIL"`
+	// ACMEStaging asks the staging CA instead of the production one: no rate
+	// limits while testing, but browsers do not trust the certificates.
+	ACMEStaging bool `yaml:"acme_staging" env:"ACME_STAGING"`
 }
 
 // Core runs bots and owns secrets.
@@ -160,6 +167,9 @@ func Load(cfg any, path string) error {
 	if err := fromEnv(reflect.ValueOf(cfg).Elem()); err != nil {
 		return err
 	}
+	if n, ok := cfg.(interface{ normalize() }); ok {
+		n.normalize()
+	}
 	if v, ok := cfg.(interface{ Validate() error }); ok {
 		return v.Validate()
 	}
@@ -251,6 +261,59 @@ func validAddr(name, addr string) error {
 	return nil
 }
 
+// hostnameRe matches a DNS name: labels of letters, digits and inner dashes.
+var hostnameRe = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
+
+// normalizeHost trims spaces and the root dot from a host name.
+func normalizeHost(s string) string {
+	return strings.TrimSuffix(strings.TrimSpace(s), ".")
+}
+
+// normalize tidies the values typed by hand. A DOMAIN with a capital letter
+// or a trailing dot silently breaks the Let's Encrypt host policy, so it is
+// folded before validation.
+func (c *Edge) normalize() {
+	c.PublicAddr = normalizeHost(c.PublicAddr)
+	c.Domain = strings.ToLower(normalizeHost(c.Domain))
+	c.ACMEEmail = strings.TrimSpace(c.ACMEEmail)
+}
+
+func (c *Core) normalize() {
+	c.PublicAddr = normalizeHost(c.PublicAddr)
+	c.Domain = strings.ToLower(normalizeHost(c.Domain))
+}
+
+func (c *Panel) normalize() {
+	c.PublicAddr = normalizeHost(c.PublicAddr)
+	c.Domain = strings.ToLower(normalizeHost(c.Domain))
+}
+
+// validHostName reports whether s is an IP address or a DNS name without a
+// scheme or a port: exactly what PUBLIC_ADDR may hold.
+func validHostName(s string) error {
+	if net.ParseIP(s) != nil {
+		return nil
+	}
+	if !hostnameRe.MatchString(s) {
+		return fmt.Errorf("%q is not a host name or an IP address (no scheme, no port)", s)
+	}
+	return nil
+}
+
+// validDomain checks a name Let's Encrypt can issue a certificate for.
+func validDomain(s string) error {
+	if net.ParseIP(s) != nil {
+		return fmt.Errorf("%q is an IP address; a domain name is required", s)
+	}
+	if !strings.Contains(s, ".") {
+		return fmt.Errorf("%q has no dot: a certificate is issued only for a name with a dot", s)
+	}
+	if len(s) > 253 {
+		return fmt.Errorf("%q is longer than 253 characters", s)
+	}
+	return validHostName(s)
+}
+
 // Validate checks edge settings.
 func (c Edge) Validate() error {
 	errs := []error{c.Common.validate(), validAddr("listen_tls", c.ListenTLS)}
@@ -270,6 +333,20 @@ func (c Edge) Validate() error {
 	}
 	if c.MaxBody <= 0 {
 		errs = append(errs, errors.New("max_body: must be positive"))
+	}
+	if c.PublicAddr != "" {
+		if err := validHostName(c.PublicAddr); err != nil {
+			errs = append(errs, fmt.Errorf("public_addr: %w", err))
+		}
+	}
+	if c.Domain != "" {
+		if err := validDomain(c.Domain); err != nil {
+			errs = append(errs, fmt.Errorf("domain: %w", err))
+		} else if c.PublicAddr == "" {
+			errs = append(errs, errors.New("public_addr: required with DOMAIN: Telegram reaches the webhook by this name"))
+		} else if net.ParseIP(c.PublicAddr) != nil {
+			errs = append(errs, errors.New("public_addr: with DOMAIN set it must be the same domain name, not an IP address: webhooks go to this name, and the certificate is issued for DOMAIN"))
+		}
 	}
 	return errors.Join(errs...)
 }
@@ -309,6 +386,16 @@ func (c Core) Validate() error {
 	if l.Memory <= 0 || l.File <= 0 || l.FilesTotal <= 0 || l.OpenFiles <= 0 || l.Threads <= 0 {
 		errs = append(errs, errors.New("limits: all limits must be positive"))
 	}
+	if c.PublicAddr != "" {
+		if err := validHostName(c.PublicAddr); err != nil {
+			errs = append(errs, fmt.Errorf("public_addr: %w", err))
+		}
+	}
+	if c.Domain != "" {
+		if err := validDomain(c.Domain); err != nil {
+			errs = append(errs, fmt.Errorf("domain: %w", err))
+		}
+	}
 	return errors.Join(errs...)
 }
 
@@ -320,6 +407,11 @@ func (c Panel) Validate() error {
 	}
 	if c.DataDir == "" {
 		errs = append(errs, errors.New("data_dir: must be set"))
+	}
+	if c.PublicAddr != "" {
+		if err := validHostName(c.PublicAddr); err != nil {
+			errs = append(errs, fmt.Errorf("public_addr: %w", err))
+		}
 	}
 	return errors.Join(errs...)
 }
