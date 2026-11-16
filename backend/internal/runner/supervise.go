@@ -17,13 +17,17 @@ var (
 
 // supervisor keeps the crash history of one bot.
 type supervisor struct {
-	mu       sync.Mutex
-	crashes  []time.Time
-	backoff  time.Duration
-	restarts int
-	lastExit int
-	lastAt   time.Time
-	timer    *time.Timer
+	lifecycle sync.Mutex // orders process launch and stop
+
+	mu        sync.Mutex
+	crashes   []time.Time
+	backoff   time.Duration
+	restarts  int
+	lastExit  int
+	lastAt    time.Time
+	lastStop  time.Time
+	timer     *time.Timer
+	restartID uint64
 }
 
 // Status is the supervision state of a bot.
@@ -77,9 +81,9 @@ func (r *Runner) inLoop(id int64) bool {
 }
 
 // cancelRestart drops a pending restart (the owner stopped the bot).
-func (r *Runner) cancelRestart(id int64) {
-	s := r.sup(id)
+func (s *supervisor) cancelRestart() {
 	s.mu.Lock()
+	s.lastStop = time.Now()
 	if s.timer != nil {
 		s.timer.Stop()
 		s.timer = nil
@@ -95,6 +99,10 @@ func (r *Runner) crashed(p *proc, code int) {
 	s := r.sup(id)
 	now := time.Now()
 	s.mu.Lock()
+	if p.started.Before(s.lastStop) {
+		s.mu.Unlock()
+		return
+	}
 	if now.Sub(p.started) >= stableAfter {
 		s.backoff = backoffMin
 	}
@@ -106,50 +114,68 @@ func (r *Runner) crashed(p *proc, code int) {
 		}
 	}
 	s.crashes = append(keep, now)
-	loop := len(s.crashes) >= loopThreshold
+	crashes := len(s.crashes)
+	loop := crashes >= loopThreshold
 	delay := s.backoff
+	state := Crashed
 	if loop {
 		delay = backoffMax
+		state = Errored
 	}
 	s.backoff = min(s.backoff*2, backoffMax)
 	if s.timer != nil {
 		s.timer.Stop()
 	}
-	s.timer = time.AfterFunc(delay, func() { r.restartAfterCrash(id) })
+	// Save the crash under the same lock that invalidates crashes on stop.
+	r.setState(context.Background(), id, state)
+	s.restartID++
+	restartID := s.restartID
+	s.timer = time.AfterFunc(delay, func() { r.restartAfterCrash(s, id, restartID) })
 	s.mu.Unlock()
 
 	if loop {
-		r.setState(context.Background(), id, Errored)
-		r.emit(id, "bot_crash_loop", "error", map[string]any{"crashes": len(s.crashes), "window_s": int(loopWindow.Seconds())})
-	} else {
-		r.setState(context.Background(), id, Crashed)
+		r.emit(id, "bot_crash_loop", "error", map[string]any{"crashes": crashes, "window_s": int(loopWindow.Seconds())})
 	}
 	r.coreLine(id, "restarting in %v", delay)
 }
 
-func (r *Runner) restartAfterCrash(id int64) {
-	s := r.sup(id)
+func (r *Runner) restartAfterCrash(s *supervisor, id int64, restartID uint64) {
+	ctx := context.Background()
+	p, err := r.launchRestart(ctx, s, id, restartID)
+	if p != nil {
+		err = r.waitStarted(ctx, s, p)
+	}
+	if err != nil {
+		r.coreLine(id, "restart failed: %v", err)
+	}
+}
+
+func (r *Runner) launchRestart(ctx context.Context, s *supervisor, id int64, restartID uint64) (*proc, error) {
+	s.lifecycle.Lock()
+	defer s.lifecycle.Unlock()
 	s.mu.Lock()
+	if s.timer == nil || s.restartID != restartID {
+		s.mu.Unlock()
+		return nil, nil
+	}
 	s.timer = nil
 	s.restarts++
+	restarts := s.restarts
 	s.mu.Unlock()
 	if r.IsRunning(id) || r.cfg.DB == nil {
-		return
+		return nil, nil
 	}
-	ctx := context.Background()
 	b, err := LoadBot(ctx, r.cfg.DB, id)
 	if err != nil {
-		return // deleted meanwhile
+		return nil, nil // deleted meanwhile
 	}
 	var state string
 	r.cfg.DB.R.QueryRowContext(ctx, `SELECT state FROM bots WHERE id = ?`, id).Scan(&state)
 	if state == Stopped {
-		return
+		return nil, nil
 	}
-	r.emit(id, "bot_restarted", "warn", map[string]any{"restarts": s.restarts})
-	if err := r.Start(ctx, b); err != nil {
-		r.coreLine(id, "restart failed: %v", err)
-	}
+	r.emit(id, "bot_restarted", "warn", map[string]any{"restarts": restarts})
+	return r.launch(ctx, b)
 }
 
 // Restore brings every bot back to its saved state after the core starts:
@@ -171,6 +197,7 @@ func (r *Runner) Restore(ctx context.Context) {
 	var wg sync.WaitGroup
 	for _, id := range ids {
 		wg.Go(func() {
+			started := time.Now()
 			b, err := LoadBot(ctx, r.cfg.DB, id)
 			if err != nil {
 				return
@@ -180,9 +207,8 @@ func (r *Runner) Restore(ctx context.Context) {
 					return
 				}
 				r.log.Warn("bot did not start after core restart", "bot", id, "err", err)
-				r.setState(ctx, id, Crashed)
 				// Treat it as a crash so the usual restarts apply.
-				r.crashed(&proc{bot: b, started: time.Now()}, -1)
+				r.crashed(&proc{bot: b, started: started}, -1)
 			}
 		})
 	}

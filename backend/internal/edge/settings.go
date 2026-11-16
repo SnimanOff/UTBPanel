@@ -74,6 +74,34 @@ func (s *settings) version() int64 {
 	return s.doc.Version
 }
 
+// hostSet lists every host the edge may serve: pages and Mini Apps.
+func (s *settings) hostSet() map[string]bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]bool, len(s.doc.Pages)+len(s.doc.Bots))
+	for host := range s.doc.Pages {
+		if host != "" {
+			out[host] = true
+		}
+	}
+	for _, b := range s.doc.Bots {
+		if b.App != "" {
+			out[b.App] = true
+		}
+	}
+	return out
+}
+
+// hosts is hostSet as a list.
+func (s *settings) hosts() []string {
+	set := s.hostSet()
+	out := make([]string, 0, len(set))
+	for host := range set {
+		out = append(out, host)
+	}
+	return out
+}
+
 // setSecrets is a shortcut for tests.
 func (s *settings) setSecrets(m map[int64]string) {
 	s.mu.Lock()
@@ -139,11 +167,13 @@ func (s *settings) apply(d Settings) error {
 // version it now has.
 func (e *Edge) registerSettings() {
 	e.Mux.Handle(MethodSettings, wire.Func(func(_ context.Context, _ *wire.Conn, d Settings) (int64, error) {
+		before := e.settings.hostSet()
 		if err := e.settings.apply(d); err != nil {
 			e.Log.Error("saving edge settings failed", "err", err)
 			return 0, err
 		}
 		e.Log.Info("settings from core", "version", d.Version, "bots", len(d.Bots), "pages", len(d.Pages))
+		e.warmNewCerts(before)
 		return d.Version, nil
 	}))
 }

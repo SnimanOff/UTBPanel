@@ -81,6 +81,7 @@ func (r *Runner) Release() {
 		s.mu.Lock()
 		if s.timer != nil {
 			s.timer.Stop()
+			s.timer = nil
 		}
 		s.mu.Unlock()
 		delete(r.sups, id)

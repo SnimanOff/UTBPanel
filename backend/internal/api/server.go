@@ -239,9 +239,12 @@ type ErrorBody struct {
 	Telegram json.RawMessage `json:"telegram,omitempty"`
 }
 
-// WriteJSON writes v as JSON.
+// WriteJSON writes v as JSON. Answers are never cached: they carry bot
+// settings, keys and audit records, and the panel must not leave them in a
+// shared browser cache.
 func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
 }

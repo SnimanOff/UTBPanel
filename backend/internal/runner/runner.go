@@ -299,30 +299,43 @@ func (r *Runner) prepareDirs(id int64) error {
 
 // Start launches the bot and waits until it accepts connections on PORT.
 func (r *Runner) Start(ctx context.Context, b Bot) error {
+	s := r.sup(b.ID)
+	s.lifecycle.Lock()
+	p, err := r.launch(ctx, b)
+	s.lifecycle.Unlock()
+	if err != nil {
+		return err
+	}
+	return r.waitStarted(ctx, s, p)
+}
+
+// launch registers a single process before another start or stop can run.
+// The caller holds the bot's lifecycle lock until launch returns.
+func (r *Runner) launch(ctx context.Context, b Bot) (*proc, error) {
 	if b.Version == "" {
-		return ErrNoVersion
+		return nil, ErrNoVersion
 	}
 	r.mu.Lock()
 	if _, ok := r.procs[b.ID]; ok {
 		r.mu.Unlock()
-		return ErrRunning
+		return nil, ErrRunning
 	}
 	r.mu.Unlock()
 	bin := r.Binary(b.ID, b.Version)
 	if _, err := os.Stat(bin); err != nil {
-		return fmt.Errorf("runner: binary of version %s: %w", b.Version, err)
+		return nil, fmt.Errorf("runner: binary of version %s: %w", b.Version, err)
 	}
 	if err := r.prepareDirs(b.ID); err != nil {
-		return err
+		return nil, err
 	}
 	if r.cfg.Hooks.Prepare != nil {
 		if err := r.cfg.Hooks.Prepare(ctx, b); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	env, err := r.Env(ctx, b)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	cmd := r.command(b, bin)
 	cmd.Env = env
@@ -330,7 +343,7 @@ func (r *Runner) Start(ctx context.Context, b Bot) error {
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("runner: start: %w", err)
+		return nil, fmt.Errorf("runner: start: %w", err)
 	}
 	p := &proc{bot: b, cmd: cmd, pid: cmd.Process.Pid, out: pipeFile(stdout), errOut: pipeFile(stderr), started: time.Now(), done: make(chan struct{})}
 	r.mu.Lock()
@@ -348,13 +361,29 @@ func (r *Runner) Start(ctx context.Context, b Bot) error {
 		r.exited(p)
 	}()
 	r.coreLine(b.ID, "starting version %s (pid %d)", b.Version, cmd.Process.Pid)
+	return p, nil
+}
 
-	if err := r.waitReady(ctx, b, p.done); err != nil {
+func (r *Runner) waitStarted(ctx context.Context, s *supervisor, p *proc) error {
+	b := p.bot
+	err := r.waitReady(ctx, b, p.done)
+	// Stop can interrupt the readiness wait. Only the current process may
+	// publish a readiness result or change the bot state.
+	s.lifecycle.Lock()
+	defer s.lifecycle.Unlock()
+	r.mu.Lock()
+	current := r.procs[b.ID] == p && !p.stopping
+	stopFailedStart := current && err != nil && !errors.Is(err, ErrExited)
+	if stopFailedStart {
+		p.stopping = true
+	}
+	r.mu.Unlock()
+	if !current && err == nil {
+		err = ErrExited
+	}
+	if err != nil {
 		r.coreLine(b.ID, "not ready: %v", err)
-		if err != ErrExited {
-			r.mu.Lock()
-			p.stopping = true
-			r.mu.Unlock()
+		if stopFailedStart {
 			r.kill(p)
 			r.setState(ctx, b.ID, Crashed)
 		}
@@ -374,7 +403,7 @@ func (r *Runner) Start(ctx context.Context, b Bot) error {
 		r.markRunning(ctx, b.ID)
 	}
 	r.coreLine(b.ID, "ready on port %d", b.Port)
-	r.emit(b.ID, "bot_started", "info", map[string]any{"version": b.Version, "pid": cmd.Process.Pid})
+	r.emit(b.ID, "bot_started", "info", map[string]any{"version": b.Version, "pid": p.pid})
 	if r.cfg.Hooks.Started != nil {
 		r.cfg.Hooks.Started(ctx, b)
 	}
@@ -408,7 +437,10 @@ func waitPort(ctx context.Context, port int, done <-chan struct{}, timeout time.
 
 // Stop stops the bot: SIGTERM to its process group, SIGKILL after 10 s.
 func (r *Runner) Stop(ctx context.Context, id int64) error {
-	r.cancelRestart(id)
+	s := r.sup(id)
+	s.lifecycle.Lock()
+	defer s.lifecycle.Unlock()
+	s.cancelRestart()
 	r.mu.Lock()
 	p, ok := r.procs[id]
 	if ok {

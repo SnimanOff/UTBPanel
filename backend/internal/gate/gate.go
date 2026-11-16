@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -249,6 +250,17 @@ func pinnedVerify(fingerprint []byte) func([][]byte, [][]*x509.Certificate) erro
 		if err != nil {
 			return err
 		}
+		// The same CA signs the server certificate and the client keys of
+		// every device. Only the first kind may act as the panel: without
+		// this check any device certificate — including a revoked one, since
+		// the registry is not consulted here — could impersonate the server
+		// to gate.
+		if leaf.IsCA {
+			return errors.New("gate: the server presented a CA certificate")
+		}
+		if !servesTLS(leaf) {
+			return errors.New("gate: the certificate is not for a TLS server")
+		}
 		for _, r := range raw[1:] {
 			ca, err := x509.ParseCertificate(r)
 			if err != nil {
@@ -265,10 +277,41 @@ func pinnedVerify(fingerprint []byte) func([][]byte, [][]*x509.Certificate) erro
 			if now.Before(leaf.NotBefore) || now.After(leaf.NotAfter) {
 				return errors.New("gate: server certificate expired")
 			}
+			if now.Before(ca.NotBefore) || now.After(ca.NotAfter) {
+				return errors.New("gate: panel CA certificate expired")
+			}
 			return nil
 		}
 		return errors.New("gate: server CA does not match the pinned fingerprint")
 	}
+}
+
+// servesTLS reports whether the certificate is meant for a TLS server.
+func servesTLS(c *x509.Certificate) bool {
+	if !slices.Contains(c.ExtKeyUsage, x509.ExtKeyUsageServerAuth) {
+		return false
+	}
+	// An empty KeyUsage means "any"; otherwise a server needs one of these.
+	if c.KeyUsage != 0 && c.KeyUsage&(x509.KeyUsageDigitalSignature|x509.KeyUsageKeyEncipherment) == 0 {
+		return false
+	}
+	return true
+}
+
+// sameOrigin guards the gate's own state-changing endpoints. The session
+// cookie is not bound to a port, so a page served by any other program on
+// 127.0.0.1 would send it along; only our own origin may change anything.
+func (g *Gate) sameOrigin(r *http.Request) bool {
+	if o := r.Header.Get("Origin"); o != "" {
+		u, err := url.Parse(o)
+		if err != nil || !g.allowedHost(u.Host) {
+			return false
+		}
+	}
+	if s := r.Header.Get("Sec-Fetch-Site"); s != "" && s != "same-origin" && s != "none" {
+		return false
+	}
+	return true
 }
 
 func (g *Gate) tlsConfig(cert *tls.Certificate) *tls.Config {

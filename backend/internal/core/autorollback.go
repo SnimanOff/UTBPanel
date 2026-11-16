@@ -117,10 +117,9 @@ func (c *Core) rollback(ctx context.Context, ob *observation, reason string) {
 	restored := false
 	var errs []string
 	err := c.Journal.Do(ctx, rollbackActor, "releases.rollback", ob.botID, map[string]string{"from": ob.to, "to": ob.from, "reason": reason}, func() error {
-		if c.Runner.IsRunning(ob.botID) {
-			if err := c.Runner.Stop(ctx, ob.botID); err != nil {
-				return err
-			}
+		// A crashed bot may have a restart pending even without a process.
+		if err := c.Runner.Stop(ctx, ob.botID); err != nil {
+			return err
 		}
 		if _, err := c.DB.W.ExecContext(ctx, `UPDATE bots SET current_version = ?, previous_version = ? WHERE id = ?`, ob.from, ob.to, ob.botID); err != nil {
 			return err
