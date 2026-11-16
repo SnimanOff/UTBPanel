@@ -52,6 +52,11 @@ type Edge struct {
 
 	cmu      sync.Mutex
 	counters map[string]int64
+	// certWarnMu and certWarnLast keep one failing name from flooding the log.
+	certWarnMu   sync.Mutex
+	certWarnLast map[string]time.Time
+	// warmSem bounds the background certificate warm-ups.
+	warmSem chan struct{}
 }
 
 func (e *Edge) count(name string) {
@@ -70,7 +75,8 @@ func New(cfg config.Edge, log *slog.Logger) (*Edge, error) {
 	}
 	e := &Edge{Cfg: cfg, Log: log, Mux: wire.NewMux(), telegram: cfg.TelegramPrefixes(),
 		limiter: limiter{max: 60}, appLimiter: limiter{max: appPerMinute},
-		appSlots: make(chan struct{}, maxAppInflight), counters: map[string]int64{}}
+		appSlots: make(chan struct{}, maxAppInflight), counters: map[string]int64{},
+		warmSem: make(chan struct{}, 2)}
 	e.settings.path = filepath.Join(cfg.DataDir, "settings")
 	e.queue.dir = filepath.Join(cfg.DataDir, "queue")
 	e.queue.recover()
@@ -124,13 +130,20 @@ func (e *Edge) Run(ctx context.Context) error {
 		ErrorLog: slog.NewLogLogger(e.Log.Handler(), slog.LevelDebug),
 	}
 	errc := make(chan error, 2)
-	safe.Go(e.Log, "tls listener", func() { errc <- srv.ListenAndServeTLS("", "") })
 	var plain *http.Server
 	if acm != nil {
-		// :80 only answers Let's Encrypt challenges.
+		// :80 only answers Let's Encrypt challenges. It is created before the
+		// TLS listener because acm.HTTPHandler enables the http-01 challenge:
+		// a handshake that gets here earlier would try tls-alpn-01 only, which
+		// the panel on :443 cannot answer, and fail.
 		plain = &http.Server{Addr: e.Cfg.ListenHTTP, Handler: acm.HTTPHandler(http.NotFoundHandler()), ReadHeaderTimeout: 10 * time.Second}
 		safe.Go(e.Log, "http listener", func() { errc <- plain.ListenAndServe() })
 	}
+	safe.Go(e.Log, "tls listener", func() { errc <- srv.ListenAndServeTLS("", "") })
+	// Certificates for pages and Mini Apps are asked for in the background:
+	// the first visitor then does not wait for the whole ACME exchange inside
+	// the TLS handshake.
+	safe.Go(e.Log, "certificates", func() { e.warmAllCerts(ctx) })
 	e.Log.Info("edge started", "version", buildinfo.Version, "listen", e.Cfg.ListenTLS, "domain", e.Cfg.Domain)
 	select {
 	case <-ctx.Done():

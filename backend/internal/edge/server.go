@@ -41,7 +41,8 @@ var coreTimeout = 2 * time.Second
 func (e *Edge) handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := clientIP(r)
-		if host := hostName(r); e.Cfg.Domain != "" && host != e.Cfg.Domain {
+		host := hostName(r)
+		if e.Cfg.Domain != "" && !strings.EqualFold(host, e.Cfg.Domain) {
 			if id, bs, ok := e.settings.appBot(host); ok {
 				e.app(w, r, ip, id, bs)
 				return
@@ -59,6 +60,14 @@ func (e *Edge) handler() http.Handler {
 		default:
 			if !e.limiter.allow(ip) {
 				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			// A name that is neither the panel domain nor a configured page
+			// or Mini App: say what is wrong instead of a bare 404, so that a
+			// typo in a subdomain is obvious.
+			if e.Cfg.Domain != "" && host != "" && !strings.EqualFold(host, e.Cfg.Domain) {
+				e.count("unknown_host")
+				e.unknownHost(w, host)
 				return
 			}
 			w.WriteHeader(http.StatusNotFound)

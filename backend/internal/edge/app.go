@@ -103,7 +103,7 @@ func (s *settings) appBot(host string) (int64, BotSettings, bool) {
 // and the subdomains bots have: never for any name someone points here.
 func (e *Edge) certHost(_ context.Context, host string) error {
 	host = strings.ToLower(host)
-	if host == e.Cfg.Domain {
+	if strings.EqualFold(host, e.Cfg.Domain) {
 		return nil
 	}
 	if _, _, ok := e.settings.appBot(host); ok {
