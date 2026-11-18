@@ -101,6 +101,15 @@ func (c *Core) Bots(ctx context.Context) ([]Bot, error) {
 		if err != nil {
 			return nil, err
 		}
+		out = append(out, b)
+	}
+	if err := rows.Err(); err != nil {
+		return out, err
+	}
+	// Exhausting rows releases the connection before reading bot metadata
+	// from the same pool.
+	for i := range out {
+		b := &out[i]
 		if c.Maint != nil {
 			b.Maintenance = c.maintLabel(ctx, b.ID)
 			b.Canary = c.canaryLabel(ctx, b.ID)
@@ -108,9 +117,8 @@ func (c *Core) Bots(ctx context.Context) ([]Bot, error) {
 		if c.SDK != nil {
 			b.SDK = c.SDK.Info(b.ID, "")
 		}
-		out = append(out, b)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // Bot returns one bot.

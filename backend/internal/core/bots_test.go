@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/secrets"
 	"github.com/SnimanOff/UTBPanel/backend/internal/wire"
@@ -96,6 +97,27 @@ func TestCreateBot(t *testing.T) {
 	b2, _ := c.CreateBot(ctx, CreateBot{Name: "Other", Token: "222:other"})
 	if b2.Port == b.Port || b2.Port-b.Port != 2 {
 		t.Fatalf("ports %d and %d", b.Port, b2.Port)
+	}
+}
+
+func TestBotsWithOneReadConnection(t *testing.T) {
+	c := newCore(t)
+	c.DB.R.SetMaxOpenConns(1)
+	if _, err := c.DB.W.Exec(`INSERT INTO bots (id, name, port, created_at) VALUES (1, 'Echo', 20001, '2026-01-01T00:00:00.000Z')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.DB.W.Exec(`INSERT INTO canaries (bot_id, version, share, started_at) VALUES (1, 'v2', 10, '2026-01-01T00:00:00.000Z')`); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	bots, err := c.Bots(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bots) != 1 || bots[0].Canary != "канарейка v2 · 10 %" {
+		t.Fatalf("bots = %+v", bots)
 	}
 }
 
