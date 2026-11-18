@@ -6,6 +6,7 @@
   import { api, errorText, type BotView, type Group } from '../lib/api/client'
   import { pollBots, store } from '../lib/api/stores.svelte'
   import HoldButton from '../lib/ui/HoldButton.svelte'
+  import { fadeSlide } from '../lib/ui/motion'
   import BotCard from './BotCard.svelte'
   import Export from './bot/Export.svelte'
   import ImportBot from './ImportBot.svelte'
@@ -131,7 +132,8 @@
   {#if s.group.id !== 0 || s.all.length > 0 || store.groups.length === 0}
     <section
       class="group"
-      role="list"
+      role="group"
+      aria-label={s.group.name}
       ondragover={(e) => e.preventDefault()}
       ondrop={(e) => {
         e.preventDefault()
@@ -139,8 +141,14 @@
       }}
     >
       <div class="sep">
-        <button class="collapse" onclick={() => (collapsed[s.group.id] = !collapsed[s.group.id])} title="Свернуть">
-          {collapsed[s.group.id] ? '+' : '−'}
+        <button
+          class="collapse"
+          aria-expanded={!collapsed[s.group.id]}
+          aria-label={`${collapsed[s.group.id] ? 'Развернуть' : 'Свернуть'} группу ${s.group.name}`}
+          onclick={() => (collapsed[s.group.id] = !collapsed[s.group.id])}
+          title={collapsed[s.group.id] ? 'Развернуть' : 'Свернуть'}
+        >
+          <span aria-hidden="true">{collapsed[s.group.id] ? '+' : '−'}</span>
         </button>
         <span class="name">{s.group.name}</span>
         <span class="muted num">{s.all.filter((b) => b.state === 'running').length} из {s.all.length} работают</span>
@@ -159,7 +167,7 @@
         {/if}
       </div>
       {#if !collapsed[s.group.id]}
-        <div class="cards">
+        <div class="cards" role="list" in:fadeSlide>
           {#each s.shown as b (b.id)}
             <div
               class="slot"
@@ -176,7 +184,7 @@
               <BotCard bot={b} />
             </div>
           {:else}
-            <p class="muted empty">{s.all.length ? 'Нет ботов под фильтр' : 'Перетащите сюда карточку'}</p>
+            <p class="muted empty" role="presentation">{s.all.length ? 'Нет ботов под фильтр' : 'Перетащите сюда карточку'}</p>
           {/each}
         </div>
       {/if}

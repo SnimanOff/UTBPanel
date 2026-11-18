@@ -111,12 +111,20 @@
     flex-direction: column;
     gap: var(--s2);
     cursor: pointer;
+    transition: border-color var(--motion-fast) var(--motion-ease);
   }
-  .card:hover {
+  .card:hover,
+  .card:focus-visible {
     border-color: var(--accent);
   }
   .card.problem {
     border-color: var(--danger);
+  }
+  /* A card with a problem answers the pointer and the keyboard too; the dark
+     red would drop under 3:1 on the raised surface, the text one holds. */
+  .card.problem:hover,
+  .card.problem:focus-visible {
+    border-color: var(--danger-text);
   }
   .row {
     display: flex;

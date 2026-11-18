@@ -5,6 +5,7 @@
   import { notifications } from '../lib/notifications.svelte'
   import { actions } from '../lib/actions.svelte'
   import PendingActions from '../lib/ui/PendingActions.svelte'
+  import { fadeSlide } from '../lib/ui/motion'
   import NewBot from './NewBot.svelte'
   import { session } from '../lib/session.svelte'
 
@@ -20,14 +21,34 @@
   const nav = $derived(session.limited ? all.slice(0, 1) : all.filter((n) => !n.owner || session.owner))
   let adding = $state(false)
   let feedOpen = $state(false)
+  let bell = $state<HTMLButtonElement>()
+  let addBtn = $state<HTMLButtonElement>()
   const s = $derived(live.server)
   const pct = (v?: number) => (v === undefined ? '—' : Math.round(v) + '%')
   const mbs = (v?: number) => (v === undefined ? '—' : (v / 1048576).toFixed(1))
+  // The emoji and the counters are not a name on their own: a screen reader
+  // would read "bell 3". The counts live in the label instead.
+  const bellLabel = $derived(
+    `Уведомления: непрочитанных ${notifications.unread}` +
+      (actions.pending.length ? `, ждут подтверждения ${actions.pending.length}` : ''),
+  )
+
+  function closeFeed() {
+    feedOpen = false
+    bell?.focus()
+  }
+
+  function closeAdd() {
+    adding = false
+    queueMicrotask(() => addBtn?.focus())
+  }
   // The bell shows how many AI requests wait for the owner.
   $effect(() => {
     if (session.owner) return actions.start()
   })
 </script>
+
+<svelte:window onkeydown={(e) => e.key === 'Escape' && feedOpen && closeFeed()} />
 
 <header>
   <a class="logo mono" href="/" use:link>TG PANEL</a>
@@ -45,11 +66,26 @@
   </div>
   <div class="right">
     {#if !session.limited}
-      <button class="bell" class:has={notifications.unread > 0} onclick={() => (feedOpen = !feedOpen)} title="Уведомления">
-        🔔 <span class="num">{notifications.unread}</span>
-        {#if actions.pending.length}<span class="num ask" title="Нейросеть ждёт подтверждения">· {actions.pending.length}?</span>{/if}
+      <button
+        class="bell"
+        class:has={notifications.unread > 0}
+        aria-expanded={feedOpen}
+        aria-controls="notif-feed"
+        aria-label={bellLabel}
+        bind:this={bell}
+        onclick={() => (feedOpen = !feedOpen)}
+        title="Уведомления"
+      >
+        <span aria-hidden="true">🔔</span>
+        {#key notifications.latestUnreadId}
+          <span class="num" class:arrived={notifications.latestUnreadId !== undefined}>{notifications.unread}</span>
+        {/key}
+        {#if actions.pending.length}<span class="num ask" aria-hidden="true" title="Нейросеть ждёт подтверждения">· {actions.pending.length}?</span>{/if}
       </button>
-      <button class="primary" onclick={() => (adding = true)}>+ Бот</button>
+      <!-- A new notification is announced from here: the counter above is
+           re-created for the pulse, and a live region must already exist. -->
+      <span class="sr" role="status" aria-live="polite" aria-atomic="true">{notifications.announce}</span>
+      <button class="primary" bind:this={addBtn} onclick={() => (adding = true)}>+ Бот</button>
     {/if}
     {#if session.web}<button onclick={() => session.logout()} title={session.name}>Выйти</button>{/if}
     {#if session.version}
@@ -59,7 +95,13 @@
     {/if}
   </div>
   {#if feedOpen}
-    <div class="feed">
+    <div
+      class="feed"
+      id="notif-feed"
+      role="region"
+      aria-label="Уведомления"
+      transition:fadeSlide={{ y: -6 }}
+    >
       <PendingActions />
       {#if notifications.unread}<button class="readall" onclick={() => notifications.readAll()}>прочитать все</button>{/if}
       <Feed
@@ -74,7 +116,7 @@
   {/if}
 </header>
 
-{#if adding}<NewBot onclose={() => (adding = false)} />{/if}
+{#if adding}<NewBot onclose={closeAdd} />{/if}
 
 <style>
   .ask {
@@ -115,6 +157,7 @@
   nav a {
     color: var(--muted);
     border-bottom: 1px solid transparent;
+    transition: color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
   }
   nav a:hover,
   nav a.active {
@@ -133,6 +176,24 @@
   }
   .bell.has {
     border-color: var(--danger);
+  }
+  /* Visible to screen readers only. */
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .arrived {
+      display: inline-block;
+      animation: arrive 260ms var(--motion-ease);
+    }
+    @keyframes arrive {
+      40% { transform: scale(1.25); }
+    }
   }
   .readall {
     width: 100%;

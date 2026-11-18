@@ -9,6 +9,10 @@ type N = Schemas['Notification']
 class Notifications {
   items = $state<Item[]>([])
   problems = $state<number[]>([])
+  latestUnreadId = $state<number>()
+  // Read out by the header's live region: a new notification must not arrive
+  // silently for a screen reader.
+  announce = $state('')
   unread = $derived(this.items.filter((i) => !i.read).length)
   private es?: EventSource
 
@@ -41,7 +45,12 @@ class Notifications {
     this.es.addEventListener('notification', (e) => {
       const n = JSON.parse((e as MessageEvent).data) as N
       if (this.items.some((x) => x.id === n.id)) return
-      this.items = [this.toItem(n), ...this.items].slice(0, 200)
+      const item = this.toItem(n)
+      this.items = [item, ...this.items].slice(0, 200)
+      if (!n.read) {
+        this.latestUnreadId = n.id
+        this.announce = item.text
+      }
       if (n.severity === 'error' && n.bot_id && !this.problems.includes(n.bot_id)) this.problems = [...this.problems, n.bot_id]
       if (n.severity === 'ok') this.load()
       if (n.kind === 'mcp_confirm') actions.load()

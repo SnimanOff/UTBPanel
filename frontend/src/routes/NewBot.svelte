@@ -5,6 +5,8 @@
   import { store } from '../lib/api/stores.svelte'
   import { router } from '../lib/router.svelte'
   import Field from '../lib/ui/Field.svelte'
+  import { fadeSlide } from '../lib/ui/motion'
+  import { onMount } from 'svelte'
 
   let { onclose }: { onclose: () => void } = $props()
   let name = $state('')
@@ -13,6 +15,10 @@
   let tokenError = $state('')
   let error = $state('')
   let saving = $state(false)
+  let nameInput = $state<HTMLInputElement>()
+
+  // The dialog takes the focus: without it the covered page keeps it.
+  onMount(() => nameInput?.focus())
 
   async function save(e: SubmitEvent) {
     e.preventDefault()
@@ -35,27 +41,36 @@
   }
 </script>
 
-<div class="backdrop" role="presentation" onclick={onclose}></div>
-<form class="dialog" onsubmit={save}>
-  <h1>Новый бот</h1>
-  <Field label="Имя в панели">
-    <input bind:value={name} required maxlength="64" />
-  </Field>
-  <Field label="Группа">
-    <select bind:value={groupId}>
-      <option value={0}>Без группы</option>
-      {#each store.groups as g}<option value={g.id}>{g.name}</option>{/each}
-    </select>
-  </Field>
-  <Field label="Токен от BotFather" error={tokenError} hint="После сохранения токен больше нигде не показывается">
-    <input type="password" autocomplete="off" bind:value={token} required />
-  </Field>
-  {#if error}<p class="danger">{error}</p>{/if}
-  <div class="buttons">
-    <button type="button" onclick={onclose}>Отмена</button>
-    <button class="primary" disabled={saving || !name || !token}>{saving ? 'Проверяю…' : 'Сохранить'}</button>
-  </div>
-</form>
+<svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
+<div class="backdrop" role="presentation" onclick={onclose} transition:fadeSlide|global={{ y: 0, duration: 120 }}></div>
+<div
+  class="dialog"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="newbot-title"
+  transition:fadeSlide|global={{ y: 12 }}
+>
+  <form onsubmit={save}>
+    <h1 id="newbot-title">Новый бот</h1>
+    <Field label="Имя в панели">
+      <input bind:this={nameInput} bind:value={name} required maxlength="64" />
+    </Field>
+    <Field label="Группа">
+      <select bind:value={groupId}>
+        <option value={0}>Без группы</option>
+        {#each store.groups as g}<option value={g.id}>{g.name}</option>{/each}
+      </select>
+    </Field>
+    <Field label="Токен от BotFather" error={tokenError} hint="После сохранения токен больше нигде не показывается">
+      <input type="password" autocomplete="off" bind:value={token} required />
+    </Field>
+    {#if error}<p class="danger">{error}</p>{/if}
+    <div class="buttons">
+      <button type="button" onclick={onclose}>Отмена</button>
+      <button class="primary" disabled={saving || !name || !token}>{saving ? 'Проверяю…' : 'Сохранить'}</button>
+    </div>
+  </form>
+</div>
 
 <style>
   .backdrop {

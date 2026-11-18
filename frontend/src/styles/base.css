@@ -43,16 +43,23 @@ button {
   padding: var(--s1) var(--s3);
   cursor: pointer;
   min-height: 28px;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
 }
 
 button:hover:not(:disabled) {
   border-color: var(--accent);
 }
 
+/* Anything focusable shows the same ring, including a card that is a
+   tabindex="0" div with role="link". */
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+[tabindex]:focus-visible {
   outline: 1px solid var(--accent-hi);
   outline-offset: 0;
 }

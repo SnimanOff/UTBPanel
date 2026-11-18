@@ -8,6 +8,7 @@
   import HoldButton from '../lib/ui/HoldButton.svelte'
   import StatusSquare from '../lib/ui/StatusSquare.svelte'
   import Tabs from '../lib/ui/Tabs.svelte'
+  import { fadeSlide } from '../lib/ui/motion'
   import Logs from './bot/Logs.svelte'
   import Settings from './bot/Settings.svelte'
   import Metrics from './bot/Metrics.svelte'
@@ -93,31 +94,33 @@
   <Metrics {bot} />
 
   <Tabs {tabs} active={tab} onselect={(t) => router.go(`/bots/${id}/${t}`, true)} />
-  <div class="tab">
-    {#if tab === 'logs'}
-      <Logs botId={id} />
-    {:else if tab === 'panics'}
-      <Panics botId={id} />
-    {:else if tab === 'db'}
-      <Database botId={id} />
-    {:else if tab === 'network'}
-      <Network botId={id} />
-    {:else if tab === 'users'}
-      <Users botId={id} />
-    {:else if tab === 'deploy'}
-      <Deploy botId={id} />
-      <h2 class="sub">Техработы</h2>
-      <Maintenance botId={id} />
-    {:else if tab === 'broadcast'}
-      <Broadcast botId={id} />
-    {:else if tab === 'profile'}
-      <Profile botId={id} />
-    {:else if tab === 'settings'}
-      <Settings {bot} />
-    {:else}
-      <p class="muted">Вкладка появится в следующих шагах.</p>
-    {/if}
-  </div>
+  {#key tab}
+    <div class="tab" id="tab-panel" role="tabpanel" aria-labelledby={`tab-${tab}`} in:fadeSlide>
+      {#if tab === 'logs'}
+        <Logs botId={id} />
+      {:else if tab === 'panics'}
+        <Panics botId={id} />
+      {:else if tab === 'db'}
+        <Database botId={id} />
+      {:else if tab === 'network'}
+        <Network botId={id} />
+      {:else if tab === 'users'}
+        <Users botId={id} />
+      {:else if tab === 'deploy'}
+        <Deploy botId={id} />
+        <h2 class="sub">Техработы</h2>
+        <Maintenance botId={id} />
+      {:else if tab === 'broadcast'}
+        <Broadcast botId={id} />
+      {:else if tab === 'profile'}
+        <Profile botId={id} />
+      {:else if tab === 'settings'}
+        <Settings {bot} />
+      {:else}
+        <p class="muted">Вкладка появится в следующих шагах.</p>
+      {/if}
+    </div>
+  {/key}
 {/if}
 
 <style>

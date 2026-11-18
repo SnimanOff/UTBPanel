@@ -227,7 +227,7 @@
     border: var(--line);
     border-radius: var(--radius);
     background: var(--surface-2);
-    transition: background 0.15s;
+    transition: background-color var(--motion-fast) var(--motion-ease);
   }
   .track::after {
     content: '';
@@ -238,7 +238,7 @@
     height: 12px;
     border-radius: var(--radius);
     background: var(--muted);
-    transition: transform 0.15s;
+    transition: transform var(--motion-fast) var(--motion-ease);
   }
   .switch input:checked + .track {
     background: var(--accent);

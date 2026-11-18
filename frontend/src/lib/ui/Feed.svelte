@@ -1,5 +1,6 @@
 <script lang="ts">
   // The notification feed under the bell.
+  import { fadeSlide } from './motion'
   export type Item = { id: number; ts: string; text: string; severity: string; href?: string; read?: boolean }
   let { items, onopen }: { items: Item[]; onopen?: (i: Item) => void } = $props()
 
@@ -11,7 +12,7 @@
 
 <ul class="feed">
   {#each items as i (i.id)}
-    <li class={i.severity} class:unread={!i.read}>
+    <li class={i.severity} class:unread={!i.read} in:fadeSlide>
       <button onclick={() => onopen?.(i)}>
         <span class="t num muted">{time(i.ts)}</span>
         <span>{i.text}</span>
@@ -33,6 +34,7 @@
   li {
     border-bottom: var(--line);
     border-left: 2px solid transparent;
+    transition: background-color var(--motion-fast) var(--motion-ease);
   }
   li.error {
     border-left-color: var(--danger);

@@ -9,6 +9,7 @@
   import HoldButton from '../lib/ui/HoldButton.svelte'
   import PendingActions from '../lib/ui/PendingActions.svelte'
   import StatusSquare from '../lib/ui/StatusSquare.svelte'
+  import { fadeSlide } from '../lib/ui/motion'
 
   let busy = $state<number | null>(null)
   let error = $state('')
@@ -61,7 +62,7 @@
   <h2>Уведомления</h2>
   <ul class="notes">
     {#each notifications.items.slice(0, 8) as n (n.id)}
-      <li class={n.severity} class:unread={!n.read}>
+      <li class={n.severity} class:unread={!n.read} in:fadeSlide>
         <button onclick={() => (notifications.read(n.id), n.href && full(n.href))}>
           <span class="num muted">{n.ts.slice(11, 16)}</span> {n.text}
         </button>
