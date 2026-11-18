@@ -293,7 +293,7 @@ func (s *Service) clear(w http.ResponseWriter, r *http.Request) {
 	}
 	audit.Annotate(r, "bot.clear", strconv.FormatInt(id, 10), nil)
 	var st runner.Status
-	s.Call(r.Context(), "bots.status", id, &st)
+	_ = s.Call(r.Context(), "bots.status", id, &st)
 	api.WriteJSON(w, http.StatusOK, st)
 }
 
