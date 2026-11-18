@@ -94,6 +94,7 @@ func (s *Service) Register(mux *api.Mux) {
 	mux.HandleFunc("GET /api/bots/{id}", s.get)
 	mux.HandleFunc("PATCH /api/bots/{id}", s.rename)
 	mux.HandleFunc("DELETE /api/bots/{id}", s.delete)
+	mux.HandleFunc("POST /api/bots/{id}/clear", s.clear)
 	mux.HandleFunc("PUT /api/bots/{id}/token", s.setToken)
 	mux.HandleFunc("PUT /api/bots/{id}/group", s.setGroup)
 	mux.HandleFunc("POST /api/bots/{id}/start", s.lifecycle("bots.start"))
@@ -275,6 +276,25 @@ func (s *Service) delete(w http.ResponseWriter, r *http.Request) {
 	s.Groups.Forget(r.Context(), id)
 	audit.Annotate(r, "bot.delete", strconv.FormatInt(id, 10), nil)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// clear wipes the bot's database, its files and its logs; the bot itself,
+// its settings and its versions stay.
+func (s *Service) clear(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
+	if err := s.Call(ctx, "bots.clear", core.BotRef{BotID: id, Actor: api.Actor(r.Context())}, nil); err != nil {
+		WriteCoreError(w, err)
+		return
+	}
+	audit.Annotate(r, "bot.clear", strconv.FormatInt(id, 10), nil)
+	var st runner.Status
+	s.Call(r.Context(), "bots.status", id, &st)
+	api.WriteJSON(w, http.StatusOK, st)
 }
 
 func (s *Service) lifecycle(method string) http.HandlerFunc {

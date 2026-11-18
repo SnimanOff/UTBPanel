@@ -169,6 +169,17 @@
     }
   }
 
+  // Clear wipes the bot's own data and leaves the bot: useful before a test.
+  async function clear() {
+    try {
+      await api.post(`/api/bots/${bot.id}/clear`)
+      store.refresh(bot.id)
+      done('Данные бота очищены', false)
+    } catch (e) {
+      error = errorText(e)
+    }
+  }
+
   const userSecrets = $derived(secrets.filter((s) => s.name !== 'BOT_TOKEN' && s.name !== 'WEBHOOK_SECRET'))
 </script>
 
@@ -277,8 +288,15 @@
       </select>
     </label>
     <div class="row delete">
+      <span class="muted small">
+        Очистка: база бота (bot.db), его файлы (DATA_DIR) и логи удаляются, настройки, секреты и версии остаются. Перед
+        тестом бот начинает с чистого состояния; если он работал, то запустится заново. Держать дольше, чем удаление.
+      </span>
+      <HoldButton ms={3200} onconfirm={clear}>Очистить бота</HoldButton>
+    </div>
+    <div class="row delete">
       <span class="muted small">Удаление: стоп, снятие вебхука, удаление всех данных бота.</span>
-      <HoldButton onconfirm={remove}>Удалить бота</HoldButton>
+      <HoldButton ms={1600} onconfirm={remove}>Удалить бота</HoldButton>
     </div>
   </Box>
 </div>

@@ -205,6 +205,16 @@ paths:
       responses:
         "204": { description: Deleted }
 
+  /api/bots/{id}/clear:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    post:
+      operationId: clear_bot
+      tags: [bots]
+      summary: Stop the bot and wipe its database, its files and its logs; the token, settings, secrets and versions stay
+      x-mcp: never
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Status" } } } }
+
   /api/bots/{id}/overview:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:

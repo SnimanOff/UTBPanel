@@ -164,6 +164,11 @@ func (c *Core) registerSettings() {
 			return c.DeleteBot(ctx, in.BotID)
 		})
 	}))
+	c.Mux.Handle("bots.clear", wire.Func(func(ctx context.Context, _ *wire.Conn, in BotRef) (struct{}, error) {
+		return struct{}{}, c.Journal.Do(ctx, in.Actor, "bots.clear", in.BotID, nil, func() error {
+			return c.ClearBot(ctx, in.BotID)
+		})
+	}))
 	c.Mux.Handle("bots.status", wire.Func(func(ctx context.Context, _ *wire.Conn, id int64) (runner.Status, error) {
 		return c.Runner.Status(id), nil
 	}))

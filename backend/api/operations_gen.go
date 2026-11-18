@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "9cef03a016d3167991422e23574dcbf661d1651cdee02d931c26b7e60089cc0e"
+const GeneratedHash = "c927a58d3b178ebd6f5ec29ff45581ac0e856b70692feef5ef9c8589e20084d7"
 
 // Op is one operation of the API.
 type Op struct {
@@ -116,6 +116,7 @@ var Ops = []Op{
 	{"resume_broadcast", "POST", "/api/bots/{id}/broadcasts/{bid}/resume", "write", "Continue a paused broadcast"},
 	{"start_canary", "POST", "/api/bots/{id}/canary", "confirm", "Start a canary with a version for listed users and/or a share of users in private chats"},
 	{"promote_canary", "POST", "/api/bots/{id}/canary/promote", "confirm", "Move everyone to the canary's version (deploy with observation and autorollback)"},
+	{"clear_bot", "POST", "/api/bots/{id}/clear", "never", "Stop the bot and wipe its database, its files and its logs; the token, settings, secrets and versions stay"},
 	{"closed_allow", "POST", "/api/bots/{id}/closed/allow", "write", "Add a user to the closed mode list by id, @username (known users only) or \"me\""},
 	{"apply_config", "POST", "/api/bots/{id}/config/apply", "confirm", "Apply settings against an expected version; field levels are returned by diff_config"},
 	{"diff_config", "POST", "/api/bots/{id}/config/diff", "read", "Compare a settings document and classify each changed field"},
