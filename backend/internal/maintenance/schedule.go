@@ -135,7 +135,7 @@ func (s *Service) endAfterDeploy(ctx context.Context, active M) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	current, ok := s.Get(active.BotID)
-	if ok && current.Kind == active.Kind && current.State == active.State && current.StartsAt == active.StartsAt && current.Version == active.Version {
+	if ok && current.Kind == active.Kind && current.State == active.State && current.StartsAt.Equal(active.StartsAt) && current.Version == active.Version {
 		if err := s.end(ctx, active.BotID); err != nil {
 			slog.Error("ending maintenance after deploy", "bot", active.BotID, "err", err)
 		}
