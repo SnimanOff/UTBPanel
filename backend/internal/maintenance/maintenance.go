@@ -56,8 +56,9 @@ type Service struct {
 	// deferred updates after the end, events).
 	Changed func(botID int64, m *M, ended bool)
 
-	mu    sync.RWMutex
-	cache map[int64]*M
+	writeMu sync.Mutex // orders writes, cache updates and change notifications
+	mu      sync.RWMutex
+	cache   map[int64]*M
 }
 
 // Load reads all maintenance into memory.
@@ -135,19 +136,32 @@ func (s *Service) save(ctx context.Context, m *M) error {
 	return nil
 }
 
-// ErrActive: something else is already planned or running.
-var ErrActive = errors.New("maintenance: the bot already has maintenance")
+var (
+	ErrActive  = errors.New("maintenance: the bot already has active maintenance")
+	ErrPlanned = errors.New("maintenance: the bot already has planned maintenance")
+)
 
 // PauseBot turns on the manual pause.
 func (s *Service) PauseBot(ctx context.Context, botID int64, text string) error {
-	if m, ok := s.Get(botID); ok && m.State == Active {
-		return ErrActive
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if m, ok := s.Get(botID); ok {
+		if m.State == Active {
+			return ErrActive
+		}
+		return ErrPlanned
 	}
 	return s.save(ctx, &M{BotID: botID, Kind: Pause, State: Active, StartsAt: time.Now().UTC(), Text: strings.TrimSpace(text)})
 }
 
 // End stops pause or maintenance; deferred updates go to the bot next.
 func (s *Service) End(ctx context.Context, botID int64) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	return s.end(ctx, botID)
+}
+
+func (s *Service) end(ctx context.Context, botID int64) error {
 	if _, err := s.DB.W.ExecContext(ctx, `DELETE FROM maintenance WHERE bot_id = ?`, botID); err != nil {
 		return err
 	}
@@ -200,7 +214,7 @@ func (s *Service) Check(ctx context.Context, u *ingress.Update) ingress.Verdict 
 // Label is shown on the card and in the bot header.
 func Label(m M, loc *time.Location) string {
 	if m.Kind == Pause {
-		return "пауза"
+		return "техработы без срока"
 	}
 	f := func(t time.Time) string { return t.In(loc).Format("15:04") }
 	prefix := "техработы "

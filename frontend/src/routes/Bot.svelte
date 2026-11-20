@@ -6,6 +6,7 @@
   import { uptime } from '../lib/format'
   import { link, router } from '../lib/router.svelte'
   import HoldButton from '../lib/ui/HoldButton.svelte'
+  import MaintenanceButton from '../lib/ui/MaintenanceButton.svelte'
   import StatusSquare from '../lib/ui/StatusSquare.svelte'
   import Tabs from '../lib/ui/Tabs.svelte'
   import { fadeSlide } from '../lib/ui/motion'
@@ -56,8 +57,8 @@
     } catch (e) {
       error = errorText(e)
     } finally {
+      await store.refresh(id)
       busy = false
-      store.refresh(id)
     }
   }
 </script>
@@ -85,9 +86,7 @@
       <button disabled={busy} onclick={() => act('start')}>▶ Старт</button>
     {/if}
     <button disabled={busy || !running} onclick={() => act('restart')}>↻ Рестарт</button>
-    <button disabled={busy || !running} onclick={() => act(bot.state === 'paused' ? 'resume' : 'pause')}>
-      {bot.state === 'paused' ? '▶ Снять паузу' : '⏸ Пауза'}
-    </button>
+    <MaintenanceButton {bot} disabled={busy} onaction={act} />
   </div>
   {#if error}<p class="danger err">{error}</p>{/if}
 

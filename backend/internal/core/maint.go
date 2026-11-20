@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -59,13 +60,12 @@ func (c *Core) maintChanged(botID int64, m *maintenance.M, ended bool) {
 	}
 }
 
-// maintLabel is shown on cards: "пауза" or "техработы 18:00–19:00".
-func (c *Core) maintLabel(ctx context.Context, botID int64) string {
-	m, ok := c.Maint.Get(botID)
-	if !ok {
-		return ""
+// botMaintenance adds the window status and label to the bot view.
+func (c *Core) botMaintenance(ctx context.Context, b *Bot) {
+	if m, ok := c.Maint.Get(b.ID); ok {
+		b.MaintenanceState = m.State
+		b.Maintenance = maintenance.Label(m, c.BotTZ(ctx, b.ID))
 	}
-	return maintenance.Label(m, c.BotTZ(ctx, botID))
 }
 
 func (c *Core) registerMaintenance() {
@@ -91,10 +91,15 @@ func (c *Core) registerMaintenance() {
 			if err := c.botExists(ctx, in.BotID); err != nil {
 				return err
 			}
-			if err := c.Maint.PauseBot(ctx, in.BotID, in.Text); err != nil {
+			err := c.Maint.PauseBot(ctx, in.BotID, in.Text)
+			switch {
+			case errors.Is(err, maintenance.ErrActive):
 				return wire.Errorf("conflict", "у бота уже идут техработы")
+			case errors.Is(err, maintenance.ErrPlanned):
+				return wire.Errorf("conflict", "у бота уже есть план техработ. Отмените его во вкладке «Деплой», чтобы начать сейчас")
+			default:
+				return err
 			}
-			return nil
 		})
 	}))
 	c.Mux.Handle("maintenance.end", wire.Func(func(ctx context.Context, _ *wire.Conn, in MaintReq) (struct{}, error) {

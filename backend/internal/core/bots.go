@@ -37,7 +37,7 @@ type Bot struct {
 	Port      int       `cbor:"6,keyasint" json:"port"`
 	Version   string    `cbor:"7,keyasint" json:"version"`
 	CreatedAt time.Time `cbor:"8,keyasint" json:"created_at"`
-	// Maintenance: "пауза" or "техработы 18:00–19:00", empty when none.
+	// Maintenance is the display label, empty when there is no window.
 	Maintenance string `cbor:"9,keyasint,omitempty" json:"maintenance,omitempty"`
 	// Canary: "канарейка v2 · 10 %", empty when none.
 	Canary string        `cbor:"10,keyasint,omitempty" json:"canary,omitempty"`
@@ -45,6 +45,8 @@ type Bot struct {
 	// TestFor is the bot this one tests new versions of (a hidden test bot),
 	// 0 for an ordinary bot.
 	TestFor int64 `cbor:"12,keyasint,omitempty" json:"test_for,omitempty"`
+	// MaintenanceState is planned or active regardless of the bot process state.
+	MaintenanceState string `cbor:"13,keyasint,omitempty" json:"maintenance_state,omitempty"`
 }
 
 // CreateBot is the request to add a bot.
@@ -111,7 +113,7 @@ func (c *Core) Bots(ctx context.Context) ([]Bot, error) {
 	for i := range out {
 		b := &out[i]
 		if c.Maint != nil {
-			b.Maintenance = c.maintLabel(ctx, b.ID)
+			c.botMaintenance(ctx, b)
 			b.Canary = c.canaryLabel(ctx, b.ID)
 		}
 		if c.SDK != nil {
@@ -128,7 +130,7 @@ func (c *Core) Bot(ctx context.Context, id int64) (Bot, error) {
 		return b, errNoBot
 	}
 	if err == nil && c.Maint != nil {
-		b.Maintenance = c.maintLabel(ctx, b.ID)
+		c.botMaintenance(ctx, &b)
 		b.Canary = c.canaryLabel(ctx, b.ID)
 	}
 	if err == nil && c.SDK != nil {

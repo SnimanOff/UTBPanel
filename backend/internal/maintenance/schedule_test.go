@@ -69,3 +69,45 @@ func TestScheduleDeployAndOverdue(t *testing.T) {
 		t.Fatalf("extend: %+v", m)
 	}
 }
+
+func TestPausePreservesPlannedMaintenance(t *testing.T) {
+	ctx := context.Background()
+	s := newService(t)
+	start := time.Now().Add(time.Hour)
+	if err := s.Schedule(ctx, Plan{BotID: 1, StartsAt: start, EndsAt: start.Add(time.Hour), Version: "v2"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PauseBot(ctx, 1, ""); !errors.Is(err, ErrPlanned) {
+		t.Fatalf("pause with a plan = %v, want ErrPlanned", err)
+	}
+	if m, ok := s.Get(1); !ok || m.State != Planned || m.Version != "v2" {
+		t.Fatalf("plan was replaced: %+v", m)
+	}
+}
+
+func TestAutoEndKeepsNewMaintenance(t *testing.T) {
+	ctx := context.Background()
+	s := newService(t)
+	now := time.Now()
+	if err := s.Schedule(ctx, Plan{BotID: 1, StartsAt: now, EndsAt: now.Add(time.Hour), Version: "v2", AutoEnd: true, WarnHours: 2}); err != nil {
+		t.Fatal(err)
+	}
+	s.Tick(ctx, Hooks{
+		Warn: func(context.Context, M, string) error {
+			t.Fatal("due maintenance should start even when the warning was missed")
+			return nil
+		},
+		Deploy: func(ctx context.Context, botID int64, _ string) error {
+			if !s.IsActive(ctx, botID) {
+				t.Fatal("deploy started before maintenance was active")
+			}
+			if err := s.End(ctx, botID); err != nil {
+				t.Fatal(err)
+			}
+			return s.PauseBot(ctx, botID, "manual maintenance")
+		},
+	}, now)
+	if m, ok := s.Get(1); !ok || m.State != Active || m.Kind != Pause {
+		t.Fatalf("new maintenance was lost: %+v", m)
+	}
+}

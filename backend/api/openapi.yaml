@@ -299,6 +299,7 @@ paths:
             schema: { type: object, properties: { text: { type: string } } }
       responses:
         "204": { description: Done }
+        "409": { description: Maintenance is already planned or active }
   /api/bots/{id}/resume:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     post:
@@ -2462,6 +2463,7 @@ components:
         canary: { type: string }
         sdk: { $ref: "#/components/schemas/SDKInfo" }
         test_for: { type: integer, description: the bot this one is the test bot of (hidden from the list) }
+        maintenance_state: { type: string, enum: [planned, active] }
     SDKInfo:
       type: object
       required: [version, modules, connected]

@@ -7,24 +7,25 @@
   import { notifications } from '../lib/notifications.svelte'
   import { live } from '../lib/live.svelte'
   import HoldButton from '../lib/ui/HoldButton.svelte'
+  import MaintenanceButton from '../lib/ui/MaintenanceButton.svelte'
   import PendingActions from '../lib/ui/PendingActions.svelte'
   import StatusSquare from '../lib/ui/StatusSquare.svelte'
   import { fadeSlide } from '../lib/ui/motion'
 
-  let busy = $state<number | null>(null)
+  let busy = $state<Record<number, boolean>>({})
   let error = $state('')
   $effect(() => pollBots(5000))
 
   async function act(id: number, op: string) {
-    busy = id
+    busy[id] = true
     error = ''
     try {
       await api.post(`/api/bots/${id}/${op}`)
     } catch (e) {
       error = errorText(e)
     } finally {
-      busy = null
-      store.refresh(id)
+      await store.refresh(id)
+      delete busy[id]
     }
   }
   // The full panel opens in the browser; the small window stays small.
@@ -49,11 +50,12 @@
         {#if b.maintenance}<span class="maint">{b.maintenance}</span>{/if}
         <span class="grow"></span>
         {#if running}
-          <HoldButton disabled={busy === b.id} onconfirm={() => act(b.id, 'stop')}>■</HoldButton>
-          <button disabled={busy === b.id} title="Рестарт" onclick={() => act(b.id, 'restart')}>↻</button>
+          <HoldButton disabled={!!busy[b.id]} onconfirm={() => act(b.id, 'stop')}>■</HoldButton>
+          <button disabled={busy[b.id]} title="Рестарт" onclick={() => act(b.id, 'restart')}>↻</button>
         {:else}
-          <button disabled={busy === b.id} title="Старт" onclick={() => act(b.id, 'start')}>▶</button>
+          <button disabled={busy[b.id]} title="Старт" onclick={() => act(b.id, 'start')}>▶</button>
         {/if}
+        <MaintenanceButton bot={b} disabled={!!busy[b.id]} onaction={(action) => act(b.id, action)} />
       </li>
     {:else}
       <li class="muted">{store.loaded ? 'Ботов нет' : 'Загрузка…'}</li>
@@ -97,6 +99,7 @@
   }
   .bots li {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--s2);
     padding: var(--s1) var(--s2);

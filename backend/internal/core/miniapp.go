@@ -122,6 +122,10 @@ func (c *Core) serveApp(ctx context.Context, in edge.AppRequest) edge.AppRespons
 	if !strings.HasPrefix(in.URI, "/") {
 		return appError(http.StatusBadRequest, "bad request")
 	}
+	// The edge may still have the settings from before maintenance started.
+	if c.Paused(ctx, in.BotID) {
+		return appError(http.StatusServiceUnavailable, "Бот на техработах, попробуйте позже.")
+	}
 	t, err := c.target(ctx, in.BotID)
 	if err != nil {
 		return appError(http.StatusNotFound, "not found")

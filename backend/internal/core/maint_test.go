@@ -2,10 +2,12 @@ package core
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/edge"
 	"github.com/SnimanOff/UTBPanel/backend/internal/maintenance"
 )
 
@@ -28,8 +30,8 @@ func TestPauseAnswersAndDefers(t *testing.T) {
 		t.Fatal("payment not deferred during pause")
 	}
 	bot, _ := c.Bot(ctx, b.ID)
-	if bot.Maintenance != "пауза" {
-		t.Fatalf("label = %q", bot.Maintenance)
+	if bot.Maintenance != "техработы без срока" || bot.MaintenanceState != maintenance.Active {
+		t.Fatalf("maintenance = %q (%q)", bot.Maintenance, bot.MaintenanceState)
 	}
 	doc, _ := c.EdgeSettings(ctx)
 	if !doc.Bots[b.ID].Maintenance || doc.Bots[b.ID].TZ != "Europe/Moscow" {
@@ -55,5 +57,22 @@ func TestRender(t *testing.T) {
 	got := maintenance.Render("с {start} до {end}", start, end, msk, now)
 	if got != "с 18:00 до 02.11 19:00" {
 		t.Fatalf("%q", got)
+	}
+}
+
+func TestMiniAppUsesCurrentMaintenanceState(t *testing.T) {
+	ctx := context.Background()
+	c := newCore(t)
+	c.Cfg.Domain = "example.test"
+	if _, err := c.DB.W.Exec(`INSERT INTO bots (id, name, port, settings, created_at)
+		VALUES (1, 'mini app', 20001, '{"mini_app":"app"}', '')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Maint.PauseBot(ctx, 1, ""); err != nil {
+		t.Fatal(err)
+	}
+	rep := c.serveApp(ctx, edge.AppRequest{BotID: 1, Host: "app.example.test", URI: "/"})
+	if rep.Status != http.StatusServiceUnavailable || !strings.Contains(string(rep.Body), "на техработах") {
+		t.Fatalf("mini app response during maintenance: %d %s", rep.Status, rep.Body)
 	}
 }

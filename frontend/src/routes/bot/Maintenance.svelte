@@ -5,6 +5,7 @@
   import { api, errorText } from '../../lib/api/client'
   import { store } from '../../lib/api/stores.svelte'
   import { utc } from '../../lib/format'
+  import { session } from '../../lib/session.svelte'
   import { defaultTZ, pair } from '../../lib/tz'
   import Box from '../../lib/ui/Box.svelte'
   import HoldButton from '../../lib/ui/HoldButton.svelte'
@@ -21,6 +22,8 @@
     overdue?: boolean
   }
   let current = $state<M | null>(null)
+  let loaded = $state(false)
+  let busy = $state(false)
   let versions = $state<{ version: string; current: boolean }[]>([])
   let tz = $state(defaultTZ)
   let error = $state('')
@@ -36,33 +39,50 @@
   let version = $state('')
   let autoEnd = $state(true)
   let warnHours = $state(0)
+  const canManage = $derived(session.scope?.role !== 'view')
+  const stopped = $derived(store.byId(botId)?.state === 'stopped')
 
-  async function load() {
+  async function loadCurrent(id: number) {
     try {
-      const r = await api.get<{ maintenance: M | null }>(`/api/bots/${botId}/maintenance`)
+      const r = await api.get<{ maintenance: M | null }>(`/api/bots/${id}/maintenance`)
+      if (id !== botId) return
       current = r.maintenance
-      versions = await api.get<typeof versions>(`/api/bots/${botId}/releases`)
-      const s = await api.get<Record<string, any>>(`/api/bots/${botId}/settings`)
-      tz = s.tz || defaultTZ
+      loaded = true
     } catch (e) {
       error = errorText(e)
     }
   }
   $effect(() => {
-    void botId
-    load()
+    void store.byId(botId)?.maintenance
+    void loadCurrent(botId)
+  })
+  $effect(() => {
+    const id = botId
+    if (!canManage) return
+    Promise.all([
+      api.get<typeof versions>(`/api/bots/${id}/releases`),
+      api.get<{ tz?: string }>(`/api/bots/${id}/settings`),
+    ]).then(([releases, settings]) => {
+      if (id !== botId) return
+      versions = releases
+      tz = settings.tz || defaultTZ
+    }, (e) => { if (id === botId) error = errorText(e) })
   })
 
   async function call(fn: () => Promise<unknown>, msg: string) {
+    if (busy) return
+    const id = botId
+    busy = true
     error = ''
+    saved = ''
     try {
       await fn()
+      await Promise.all([store.refresh(id), loadCurrent(id)])
       saved = msg
-      setTimeout(() => (saved = ''), 3000)
-      store.refresh(botId)
-      load()
     } catch (e) {
       error = errorText(e)
+    } finally {
+      busy = false
     }
   }
 
@@ -85,7 +105,8 @@
   }
   const extend = (minutes: number) =>
     call(() => api.post(`/api/bots/${botId}/maintenance/extend`, { minutes }), `Продлено на ${minutes} мин`)
-  const endNow = () => call(() => api.post(`/api/bots/${botId}/resume`), 'Техработы окончены')
+  const startNow = () => call(() => api.post(`/api/bots/${botId}/pause`), 'Техработы начались')
+  const endNow = () => call(() => api.post(`/api/bots/${botId}/resume`), current?.state === 'planned' ? 'План отменён' : 'Техработы завершены')
 
   const startD = $derived(fromInput(start))
   const endD = $derived(fromInput(end))
@@ -93,11 +114,16 @@
 
 <div class="cols">
   <Box title="Сейчас">
-    {#if !current}
+    {#if !loaded}
+      {#if !error}<p class="muted">Загрузка…</p>{/if}
+    {:else if !current}
       <p class="muted">Техработ нет.</p>
+      {#if canManage}
+        <button class="primary" disabled={busy || stopped} title={stopped ? 'Сначала запустите бота' : undefined} onclick={startNow}>Начать техработы</button>
+      {/if}
     {:else if current.kind === 'pause'}
-      <p>Пауза без срока.</p>
-      <button onclick={endNow}>▶ Снять паузу</button>
+      <p>Идут техработы без срока.</p>
+      {#if canManage}<button disabled={busy} onclick={endNow}>Завершить техработы</button>{/if}
     {:else}
       <p>
         {current.state === 'planned' ? 'Запланированы' : 'Идут'}:
@@ -106,14 +132,16 @@
       </p>
       {#if current.starts_at}<p class="muted num">{pair(new Date(current.starts_at), tz)}</p>{/if}
       {#if current.overdue}<p class="warn">Не успели к сроку — пользователи видят старое время окончания.</p>{/if}
-      <div class="row">
-        {#each [15, 30, 60] as m}<button onclick={() => extend(m)}>+{m === 60 ? '1 ч' : m + ' мин'}</button>{/each}
-        <HoldButton danger={false} onconfirm={endNow}>Закончить</HoldButton>
-      </div>
+      {#if canManage}
+        <div class="row">
+          {#each [15, 30, 60] as m}<button disabled={busy} onclick={() => extend(m)}>+{m === 60 ? '1 ч' : m + ' мин'}</button>{/each}
+          <HoldButton danger={false} disabled={busy} onconfirm={endNow}>{current.state === 'planned' ? 'Отменить план' : 'Завершить техработы'}</HoldButton>
+        </div>
+      {/if}
     {/if}
   </Box>
 
-  <Box title="Запланировать">
+  {#if canManage}<Box title="Запланировать">
     <form onsubmit={schedule}>
       <label>
         Начало, UTC
@@ -144,12 +172,12 @@
         Предупредить заранее рассылкой, часов
         <input type="number" min="0" max="72" bind:value={warnHours} />
       </label>
-      <div class="row"><button class="primary">Запланировать</button></div>
+      <div class="row"><button class="primary" disabled={busy || !loaded || current?.state === 'active'}>Запланировать</button></div>
     </form>
-  </Box>
+  </Box>{/if}
 </div>
 {#if error}<p class="danger">{error}</p>{/if}
-{#if saved}<p class="ok">{saved}</p>{/if}
+{#if saved}<p class="ok" role="status">{saved}</p>{/if}
 
 <style>
   .cols {
@@ -172,6 +200,7 @@
   }
   .row {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--s2);
     align-items: center;
   }

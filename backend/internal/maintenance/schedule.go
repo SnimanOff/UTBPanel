@@ -3,6 +3,7 @@ package maintenance
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -28,6 +29,8 @@ var (
 
 // Schedule plans maintenance (a start in the past starts it at once).
 func (s *Service) Schedule(ctx context.Context, p Plan) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	if !p.EndsAt.After(p.StartsAt) {
 		return ErrTimes
 	}
@@ -43,6 +46,8 @@ func (s *Service) Schedule(ctx context.Context, p Plan) error {
 
 // Extend moves the planned end; the text for users updates by itself.
 func (s *Service) Extend(ctx context.Context, botID int64, d time.Duration) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	m, ok := s.Get(botID)
 	if !ok || m.Kind != Scheduled {
 		return errors.New("maintenance: nothing to extend")
@@ -78,6 +83,24 @@ func (s *Service) Tick(ctx context.Context, h Hooks, now time.Time) {
 			continue
 		}
 		switch {
+		case m.State == Planned && !now.Before(m.StartsAt):
+			active := m
+			active.State = Active
+			if !s.saveIfCurrent(ctx, m, active) {
+				continue
+			}
+			if m.Version != "" && h.Deploy != nil {
+				if err := h.Deploy(ctx, m.BotID, m.Version); err != nil {
+					// On failure the owner decides whether to end or extend maintenance.
+					if h.Event != nil {
+						h.Event(m.BotID, "maintenance_deploy_failed", map[string]any{"version": m.Version, "error": err.Error()})
+					}
+					continue
+				}
+				if m.AutoEnd {
+					s.endAfterDeploy(ctx, active)
+				}
+			}
 		case m.State == Planned && m.WarnHours > 0 && !m.Warned && h.Warn != nil &&
 			now.After(m.StartsAt.Add(-time.Duration(m.WarnHours)*time.Hour)):
 			loc := time.UTC
@@ -86,29 +109,35 @@ func (s *Service) Tick(ctx context.Context, h Hooks, now time.Time) {
 			}
 			text := "В {start} " + tztext.In(loc, m.StartsAt) + " начнутся техработы, примерно до {end}."
 			if h.Warn(ctx, m, Render(text, m.StartsAt, m.EndsAt, loc, now)) == nil {
-				m.Warned = true
-				s.save(ctx, &m)
-			}
-		case m.State == Planned && !now.Before(m.StartsAt):
-			m.State = Active
-			s.save(ctx, &m)
-			if m.Version != "" && h.Deploy != nil {
-				if err := h.Deploy(ctx, m.BotID, m.Version); err != nil {
-					// Maintenance stays until the owner decides: end it on the
-					// old version or extend it.
-					h.Event(m.BotID, "maintenance_deploy_failed", map[string]any{"version": m.Version, "error": err.Error()})
-					continue
-				}
-				if m.AutoEnd {
-					s.End(ctx, m.BotID)
-				}
+				warned := m
+				warned.Warned = true
+				s.saveIfCurrent(ctx, m, warned)
 			}
 		case m.State == Active && !m.Overdue && now.After(m.EndsAt):
-			m.Overdue = true
-			s.save(ctx, &m)
-			if h.Event != nil {
+			overdue := m
+			overdue.Overdue = true
+			if s.saveIfCurrent(ctx, m, overdue) && h.Event != nil {
 				h.Event(m.BotID, "maintenance_overdue", map[string]any{"ends_at": m.EndsAt, "extend": []int{15, 30, 60}})
 			}
+		}
+	}
+}
+
+// Scheduler hooks may take time. Apply their results only to the same window.
+func (s *Service) saveIfCurrent(ctx context.Context, before, after M) bool {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	current, ok := s.Get(before.BotID)
+	return ok && current == before && s.save(ctx, &after) == nil
+}
+
+func (s *Service) endAfterDeploy(ctx context.Context, active M) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	current, ok := s.Get(active.BotID)
+	if ok && current.Kind == active.Kind && current.State == active.State && current.StartsAt == active.StartsAt && current.Version == active.Version {
+		if err := s.end(ctx, active.BotID); err != nil {
+			slog.Error("ending maintenance after deploy", "bot", active.BotID, "err", err)
 		}
 	}
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   // Bot card: status, name (click to rename in place), @username, uptime,
   // version, panics badge, live mini chart, users; ▶/■ is one button by
-  // status (stop by holding), ↻ restart, ⏸ pause. Red border on a problem.
+  // status (stop by holding), ↻ restart and maintenance. Red border on a problem.
   import { api, errorText, type BotView } from '../lib/api/client'
   import { store } from '../lib/api/stores.svelte'
   import { notifications } from '../lib/notifications.svelte'
@@ -9,6 +9,7 @@
   import { live } from '../lib/live.svelte'
   import { router } from '../lib/router.svelte'
   import HoldButton from '../lib/ui/HoldButton.svelte'
+  import MaintenanceButton from '../lib/ui/MaintenanceButton.svelte'
   import Spark from '../lib/ui/Spark.svelte'
   import StatusSquare, { stateTitles } from '../lib/ui/StatusSquare.svelte'
 
@@ -30,8 +31,8 @@
     } catch (e) {
       error = errorText(e)
     } finally {
+      await store.refresh(bot.id)
       busy = false
-      store.refresh(bot.id)
     }
   }
 
@@ -93,8 +94,7 @@
       <button disabled={busy} onclick={() => act('start')} title="Старт">▶</button>
     {/if}
     <button disabled={busy || !running} onclick={() => act('restart')} title="Рестарт">↻</button>
-    <button disabled={busy || !running} class:active={bot.state === 'paused'} onclick={() => act(bot.state === 'paused' ? 'resume' : 'pause')}
-      title={bot.state === 'paused' ? 'Снять паузу' : 'Пауза: пользователи получат текст техработ'}>⏸</button>
+    <MaintenanceButton {bot} disabled={busy} onaction={act} />
   </div>
   {#if error}<div class="danger small err">{error}</div>{/if}
 </div>
@@ -167,8 +167,8 @@
   .buttons :global(.hold) {
     min-width: 34px;
   }
-  .active {
-    border-color: var(--accent-hi);
+  .buttons {
+    flex-wrap: wrap;
   }
   .err {
     white-space: pre-wrap;
