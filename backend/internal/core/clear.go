@@ -30,14 +30,14 @@ func (c *Core) ClearBot(ctx context.Context, id int64) error {
 		return err
 	}
 	dir := filepath.Join(c.Cfg.DataDir, "bots", strconv.FormatInt(id, 10))
+	if err := clearDataDir(dir); err != nil {
+		return err
+	}
 	// Unlink, never follow: the bot may leave a link in place of any of these.
 	for _, name := range []string{"bot.db", "bot.db-wal", "bot.db-shm", "bot.db.restore"} {
 		if err := os.Remove(filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
-	}
-	if err := clearDir(filepath.Join(dir, "files")); err != nil {
-		return err
 	}
 	if err := c.Logs.Remove(id); err != nil {
 		return err
@@ -54,18 +54,44 @@ func (c *Core) ClearBot(ctx context.Context, id int64) error {
 	return nil
 }
 
-// clearDir removes everything inside dir and keeps dir itself: its owner and
-// mode are part of the bot's contract. Links are removed, never followed.
-func clearDir(dir string) error {
-	entries, err := os.ReadDir(dir)
+// clearDataDir keeps the DATA_DIR's owner and mode and confines removals to it.
+func clearDataDir(dir string) error {
+	bot, err := os.OpenRoot(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
+	defer func() { _ = bot.Close() }()
+	info, err := bot.Lstat("files")
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return errors.New("clear bot: DATA_DIR is not a directory")
+	}
+	files, err := bot.OpenRoot("files")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = files.Close() }()
+	opened, err := files.Stat(".")
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(info, opened) {
+		return errors.New("clear bot: DATA_DIR changed while opening it")
+	}
+	entries, err := fs.ReadDir(files.FS(), ".")
+	if err != nil {
+		return err
+	}
 	for _, e := range entries {
-		if err := os.RemoveAll(filepath.Join(dir, e.Name())); err != nil {
+		if err := files.RemoveAll(e.Name()); err != nil {
 			return err
 		}
 	}

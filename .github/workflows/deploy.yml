@@ -49,6 +49,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           sparse-checkout: deploy
+          persist-credentials: false
       - name: ssh setup
         env:
           KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -70,15 +71,29 @@ jobs:
         run: |
           test -n "$HOST" && test -n "$USER" && test -n "$DIR" || { echo "::error::set DEPLOY_HOST, DEPLOY_USER and the DEPLOY_PATH variable"; exit 1; }
           VERSION="${VERSION#v}"
-          ssh_() { ssh -i ~/.ssh/deploy -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "$@"; }
+          if ! [[ "$VERSION" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo '::error::Invalid image tag'
+            exit 1
+          fi
+          if ! [[ "$SERVICES" =~ ^(panel|core|edge)(,(panel|core|edge))*$ ]]; then
+            echo '::error::Expected a comma-separated list of panel, core or edge'
+            exit 1
+          fi
+          ssh_() { ssh -i ~/.ssh/deploy -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -- "$USER@$HOST" "$@"; }
+          shell_quote() {
+            local quote="'" escaped="'\\''"
+            printf "'%s'" "${1//"$quote"/"$escaped"}"
+          }
           # The job token reads the image even while the package is private;
           # it expires with the job, and the login is removed right after.
-          printf '%s' "$GHCR_TOKEN" | ssh_ "docker login ghcr.io -u '${{ github.actor }}' --password-stdin >/dev/null"
-          set +e
-          ssh_ "cd '$DIR' && UPDATE_IMAGE='ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/utbpanel' sh -s -- '$VERSION' '$SERVICES'" < deploy/update.sh
-          rc=$?
-          ssh_ "docker logout ghcr.io >/dev/null 2>&1" || true
-          exit $rc
+          printf '%s' "$GHCR_TOKEN" | ssh_ "docker login ghcr.io -u $(shell_quote "$GITHUB_ACTOR") --password-stdin >/dev/null"
+          trap 'ssh_ "docker logout ghcr.io >/dev/null 2>&1" || true' EXIT
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/utbpanel"
+          ssh_ "cd $(shell_quote "$DIR") && UPDATE_IMAGE=$(shell_quote "$image") sh -s -- $(shell_quote "$VERSION") $(shell_quote "$SERVICES")" < deploy/update.sh
       - name: summary
         if: always()
-        run: echo "Deploy of ${{ inputs.version }} (${{ inputs.services || 'panel,core' }}) — ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          VERSION: ${{ inputs.version }}
+          SERVICES: ${{ inputs.services || 'panel,core' }}
+          STATUS: ${{ job.status }}
+        run: printf 'Deploy of %s (%s) — %s\n' "$VERSION" "$SERVICES" "$STATUS" >> "$GITHUB_STEP_SUMMARY"

@@ -105,3 +105,28 @@ func TestClearBotRemovesLinksNotTheirTargets(t *testing.T) {
 		t.Errorf("core.db followed the link: %v", err)
 	}
 }
+
+func TestClearBotRefusesLinkedDataDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need a privilege on Windows")
+	}
+	c := newCore(t)
+	insertBot(t, c, 7)
+	dir := c.Runner.BotDir(7)
+	seedBotDir(t, dir)
+	if err := os.Rename(filepath.Join(dir, "files"), filepath.Join(dir, "old-files")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("secrets", filepath.Join(dir, "files")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.ClearBot(context.Background(), 7); err == nil {
+		t.Fatal("clear accepted a linked DATA_DIR")
+	}
+	for _, name := range []string{"bot.db", "secrets/API_KEY"} {
+		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(name))); err != nil {
+			t.Errorf("%s must stay after refusing the clear: %v", name, err)
+		}
+	}
+}

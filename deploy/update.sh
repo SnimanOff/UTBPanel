@@ -15,6 +15,7 @@
 #
 # .env gets the new *_VERSION, and a copy of the previous .env is kept.
 set -eu
+umask 077
 
 version="${1:?usage: update.sh <version> [services]}"
 version="${version#v}"

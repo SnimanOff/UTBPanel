@@ -6,7 +6,7 @@ COPY frontend/ ./
 RUN if [ -f package.json ]; then npm ci && npm run build; \
     else mkdir -p dist && echo '<!doctype html><title>TG Panel</title>' > dist/index.html; fi
 
-FROM golang:alpine AS go
+FROM golang:1.27.4-alpine AS go
 WORKDIR /src/backend
 ENV CGO_ENABLED=0 GOFLAGS=-trimpath
 COPY backend/go.mod backend/go.sum ./
