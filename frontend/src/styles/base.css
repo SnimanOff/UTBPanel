@@ -53,8 +53,8 @@ button:hover:not(:disabled) {
   border-color: var(--accent);
 }
 
-/* Anything focusable shows the same ring, including a card that is a
-   tabindex="0" div with role="link". */
+/* Use the same focus ring for navigation, forms, and cards. */
+a[href]:focus-visible,
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,

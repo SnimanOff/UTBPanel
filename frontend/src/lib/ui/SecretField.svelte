@@ -80,10 +80,4 @@
     }
   }
 
-  /* Very narrow: everything in one column. */
-  @container (max-width: 320px) {
-    .secret {
-      grid-template-columns: 1fr;
-    }
-  }
 </style>

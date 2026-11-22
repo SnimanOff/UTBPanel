@@ -60,11 +60,11 @@
 </script>
 
 <div class="card" class:problem role="link" tabindex="0" onclick={open} onkeydown={(e) => e.key === 'Enter' && open(e)}>
-  <div class="row">
+  <div class="identity">
     <StatusSquare state={bot.state} />
     {#if editing}
       <!-- svelte-ignore a11y_autofocus -->
-      <input class="rename" bind:value={name} autofocus onblur={rename} onkeydown={(e) => e.key === 'Enter' && rename()} />
+      <input class="rename" aria-label="Имя бота" bind:value={name} autofocus onblur={rename} onkeydown={(e) => e.key === 'Enter' && rename()} />
     {:else}
       <button class="name" title="Переименовать" onclick={startRename}>{bot.name}</button>
     {/if}
@@ -89,11 +89,11 @@
   </div>
   <div class="row buttons">
     {#if running}
-      <HoldButton disabled={busy} onconfirm={() => act('stop')} title="Стоп — удерживайте">■</HoldButton>
+      <HoldButton disabled={busy} onconfirm={() => act('stop')} title="Стоп — удерживайте" label="Стоп — удерживайте">■</HoldButton>
     {:else}
-      <button disabled={busy} onclick={() => act('start')} title="Старт">▶</button>
+      <button disabled={busy} onclick={() => act('start')} title="Старт" aria-label="Старт">▶</button>
     {/if}
-    <button disabled={busy || !running} onclick={() => act('restart')} title="Рестарт">↻</button>
+    <button disabled={busy || !running} onclick={() => act('restart')} title="Рестарт" aria-label="Рестарт">↻</button>
     <MaintenanceButton {bot} disabled={busy} onaction={act} />
   </div>
   {#if error}<div class="danger small err">{error}</div>{/if}
@@ -130,6 +130,14 @@
     display: flex;
     align-items: center;
     gap: var(--s2);
+    flex-wrap: wrap;
+  }
+  .identity {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: var(--s2);
+    overflow-wrap: anywhere;
   }
   .small {
     font-size: var(--fs-s);
@@ -138,7 +146,10 @@
     border: none;
     background: none;
     padding: 0;
-    min-height: 0;
+    min-height: 24px;
+    text-align: left;
+    justify-self: start;
+    max-width: 100%;
     font-weight: 500;
     cursor: text;
   }
@@ -146,16 +157,14 @@
     min-height: 22px;
     padding: 0 var(--s1);
     width: 160px;
+    max-width: 100%;
   }
   .user {
-    margin-left: auto;
+    grid-column: 2;
   }
   .panics {
     color: var(--danger-text);
     margin-left: auto;
-  }
-  .panics {
-    color: var(--danger-text);
   }
   .canary {
     color: var(--accent-text);
@@ -163,18 +172,20 @@
   .maint {
     color: var(--warn);
   }
-  .buttons button,
-  .buttons :global(.hold) {
+  .buttons :global(button) {
     min-width: 34px;
   }
   .buttons {
-    flex-wrap: wrap;
+    margin-top: auto;
   }
   .err {
     white-space: pre-wrap;
   }
   /* Phones: card buttons big enough for a finger. */
   @media (max-width: 700px) {
+    .name {
+      min-height: 40px;
+    }
     .buttons :global(button) {
       min-width: 44px;
     }

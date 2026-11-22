@@ -75,7 +75,13 @@
   }
 
   function massAction(ids: number[], op: 'start' | 'stop') {
-    return act(() => Promise.allSettled(ids.map((id) => api.post(`/api/bots/${id}/${op}`))))
+    return act(async () => {
+      const results = await Promise.allSettled(ids.map((id) => api.post(`/api/bots/${id}/${op}`)))
+      const failed = results.filter((result) => result.status === 'rejected')
+      if (failed.length) {
+        error = `Действие не выполнено для ${failed.length} из ${ids.length} ботов: ${errorText(failed[0].reason)}`
+      }
+    })
   }
 
   async function drop(groupId: number, beforeId?: number) {
@@ -115,10 +121,10 @@
 <div class="toolbar">
   <div class="filters">
     {#each filters as f}
-      <button class:active={filter === f.id} onclick={() => (filter = f.id)}>{f.label}</button>
+      <button class:active={filter === f.id} aria-pressed={filter === f.id} onclick={() => (filter = f.id)}>{f.label}</button>
     {/each}
   </div>
-  <input class="search" bind:this={search} bind:value={query} placeholder="поиск: /" />
+  <input class="search" aria-label="Поиск ботов" bind:this={search} bind:value={query} placeholder="поиск: /" />
 </div>
 
 {#if error}<p class="danger">{error}</p>{/if}
@@ -153,18 +159,20 @@
         <span class="name">{s.group.name}</span>
         <span class="muted num">{s.all.filter((b) => b.state === 'running').length} из {s.all.length} работают</span>
         <span class="line"></span>
-        {#if s.group.id !== 0}
-          <button title="Выше" onclick={() => moveGroup(s.group.id, -1)}>↑</button>
-          <button title="Ниже" onclick={() => moveGroup(s.group.id, 1)}>↓</button>
-          <button title="Переименовать" onclick={() => renameGroup(s.group as Group)}>✎</button>
-        {/if}
-        {#if s.all.length > 0}
-          <button onclick={() => massAction(s.all.map((b) => b.id), 'start')}>▶ все</button>
-          <HoldButton onconfirm={() => massAction(s.all.map((b) => b.id), 'stop')}>■ все</HoldButton>
-        {/if}
-        {#if s.group.id !== 0 && s.all.length === 0}
-          <HoldButton onconfirm={() => act(() => api.del(`/api/groups/${s.group.id}`))}>удалить</HoldButton>
-        {/if}
+        <div class="group-actions">
+          {#if s.group.id !== 0}
+            <button title="Выше" aria-label="Выше" onclick={() => moveGroup(s.group.id, -1)}>↑</button>
+            <button title="Ниже" aria-label="Ниже" onclick={() => moveGroup(s.group.id, 1)}>↓</button>
+            <button title="Переименовать" aria-label="Переименовать группу" onclick={() => renameGroup(s.group as Group)}>✎</button>
+          {/if}
+          {#if s.all.length > 0}
+            <button aria-label="Запустить всех ботов группы" onclick={() => massAction(s.all.map((b) => b.id), 'start')}>▶ все</button>
+            <HoldButton label="Остановить всех ботов группы — удерживайте" onconfirm={() => massAction(s.all.map((b) => b.id), 'stop')}>■ все</HoldButton>
+          {/if}
+          {#if s.group.id !== 0 && s.all.length === 0}
+            <HoldButton onconfirm={() => act(() => api.del(`/api/groups/${s.group.id}`))}>удалить</HoldButton>
+          {/if}
+        </div>
       </div>
       {#if !collapsed[s.group.id]}
         <div class="cards" role="list" in:fadeSlide>
@@ -221,6 +229,9 @@
   .filters {
     display: flex;
   }
+  .filters button {
+    white-space: nowrap;
+  }
   .filters button + button {
     border-left: none;
   }
@@ -240,15 +251,23 @@
     gap: var(--s2);
     margin-bottom: var(--s3);
   }
-  .sep button {
-    min-height: 24px;
+  .group-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s2);
+  }
+  .collapse,
+  .group-actions :global(button) {
+    min-width: 24px;
     padding: 0 var(--s2);
+    white-space: nowrap;
   }
   .collapse {
-    width: 24px;
+    flex: none;
   }
   .name {
     font-weight: 500;
+    overflow-wrap: anywhere;
   }
   .line {
     flex: 1;
@@ -261,6 +280,8 @@
   }
   .slot {
     cursor: grab;
+    display: grid;
+    min-width: 0;
   }
   .empty {
     grid-column: 1 / -1;
@@ -272,20 +293,37 @@
     gap: var(--s2);
     max-width: 360px;
   }
+  .newgroup input {
+    min-width: 0;
+  }
 
   /* Phones: one column, rows of controls wrap. */
   @media (max-width: 700px) {
-    .sep button {
-      min-height: 40px;
+    .collapse,
+    .group-actions :global(button) {
+      min-width: 40px;
     }
     .sep {
       flex-wrap: wrap;
+    }
+    .group-actions {
+      flex-basis: 100%;
+    }
+    .group-actions:empty {
+      display: none;
     }
     .toolbar {
       flex-wrap: wrap;
     }
     .filters {
       flex-wrap: wrap;
+      gap: var(--s1);
+    }
+    .filters button + button {
+      border-left: var(--line);
+    }
+    .filters button.active {
+      border-left-color: var(--accent);
     }
   }
 </style>

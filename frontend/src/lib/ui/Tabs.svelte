@@ -17,11 +17,17 @@
   // or a badge changes the width of the row.
   function reveal() {
     if (!row || row.scrollWidth <= row.clientWidth) return
-    row.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    const selected = row.querySelector<HTMLElement>('[aria-selected="true"]')
+    if (!selected) return
+    const { left, right } = selected.getBoundingClientRect()
+    const { left: start, right: end } = row.getBoundingClientRect()
+    if (left < start) row.scrollBy({ left: left - start })
+    else if (right > end) row.scrollBy({ left: right - end })
   }
 
   $effect(() => {
     void active
+    void shown
     reveal()
   })
 
@@ -41,11 +47,11 @@
     const next = shown[(shown.findIndex((t) => t.id === focusable) + by + shown.length) % shown.length]
     if (!next) return
     onselect(next.id)
-    row?.querySelector<HTMLElement>(`#tab-${next.id}`)?.focus()
+    row?.querySelector<HTMLElement>(`#tab-${next.id}`)?.focus({ preventScroll: true })
   }
 </script>
 
-<div class="tabs" role="tablist" bind:this={row}>
+<div class="tabs" role="tablist" aria-label="Разделы бота" bind:this={row}>
   {#each shown as t}
     <button
       role="tab"
@@ -89,10 +95,13 @@
   button.active {
     color: var(--text);
   }
+  button:focus-visible {
+    outline-offset: -2px;
+  }
   button::after {
     content: '';
     position: absolute;
-    inset: auto 0 -2px;
+    inset: auto 0 0;
     height: 2px;
     background: var(--accent-hi);
     opacity: 0;

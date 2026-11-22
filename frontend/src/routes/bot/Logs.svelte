@@ -138,9 +138,15 @@
   form {
     display: flex;
     gap: var(--s2);
+    min-width: 0;
+    max-width: 100%;
   }
   form input {
     width: 260px;
+    min-width: 0;
+  }
+  form button {
+    flex: none;
   }
   .grow {
     flex: 1;
@@ -149,6 +155,9 @@
     font-size: var(--fs-s);
   }
   .button {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
     border: var(--line);
     padding: var(--s1) var(--s3);
     background: var(--surface);
@@ -190,5 +199,16 @@
   }
   .empty {
     padding: var(--s3);
+  }
+  @media (max-width: 700px) {
+    form {
+      flex-basis: 100%;
+    }
+    form input {
+      flex: 1;
+    }
+    .button {
+      min-height: 40px;
+    }
   }
 </style>

@@ -286,6 +286,7 @@
   }
   .run {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--s3);
     align-items: center;
     margin: var(--s2) 0;

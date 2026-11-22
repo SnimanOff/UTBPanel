@@ -196,7 +196,7 @@
   }
   .grid {
     display: grid;
-    grid-template-columns: 1fr 300px;
+    grid-template-columns: minmax(0, 1fr) 300px;
     gap: var(--s3);
   }
   th,
@@ -236,7 +236,7 @@
   /* Phones: one column, rows of controls wrap. */
   @media (max-width: 700px) {
     .grid {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>

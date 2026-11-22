@@ -67,26 +67,31 @@
   <p class="muted">{store.loaded ? 'Нет такого бота' : 'Загрузка…'}</p>
 {:else}
   <div class="head">
-    <StatusSquare state={bot.state} size={12} />
-    <h1>{bot.name}</h1>
-    <span class="muted">@{bot.username}</span>
-    <span class="num muted">{bot.version || 'нет версии'}</span>
-	{#if bot.sdk}<span class="muted">SDK v{bot.sdk.version}: {bot.sdk.modules.join(', ')}{bot.sdk.connected ? '' : ' · нет связи'}</span>{/if}
-    {#if bot.status?.running}<span class="num muted">аптайм {uptime(bot.status.started)}</span>{/if}
-    {#if bot.maintenance}<span class="maint">{bot.maintenance}</span>{/if}
-    {#if bot.canary}<span class="canary">{bot.canary}</span>{/if}
-    {#if bot.test_for}
-      <a class="canary" href="/bots/{bot.test_for}/deploy" use:link>тестовый бот для {store.byId(bot.test_for)?.name ?? `#${bot.test_for}`}</a>
-    {/if}
-    {#if (bot.status?.restarts ?? 0) > 0}<span class="num muted">рестартов {bot.status.restarts}</span>{/if}
-    <span class="grow"></span>
-    {#if running}
-      <HoldButton disabled={busy} onconfirm={() => act('stop')}>■ Стоп</HoldButton>
-    {:else}
-      <button disabled={busy} onclick={() => act('start')}>▶ Старт</button>
-    {/if}
-    <button disabled={busy || !running} onclick={() => act('restart')}>↻ Рестарт</button>
-    <MaintenanceButton {bot} disabled={busy} onaction={act} />
+    <div class="info">
+      <div class="identity">
+        <StatusSquare state={bot.state} size={12} />
+        <h1>{bot.name}</h1>
+      </div>
+      <span class="muted">@{bot.username}</span>
+      <span class="num muted">{bot.version || 'нет версии'}</span>
+      {#if bot.sdk}<span class="muted">SDK v{bot.sdk.version}: {bot.sdk.modules.join(', ')}{bot.sdk.connected ? '' : ' · нет связи'}</span>{/if}
+      {#if bot.status?.running}<span class="num muted">аптайм {uptime(bot.status.started)}</span>{/if}
+      {#if bot.maintenance}<span class="maint">{bot.maintenance}</span>{/if}
+      {#if bot.canary}<span class="canary">{bot.canary}</span>{/if}
+      {#if bot.test_for}
+        <a class="canary" href="/bots/{bot.test_for}/deploy" use:link>тестовый бот для {store.byId(bot.test_for)?.name ?? `#${bot.test_for}`}</a>
+      {/if}
+      {#if (bot.status?.restarts ?? 0) > 0}<span class="num muted">рестартов {bot.status.restarts}</span>{/if}
+    </div>
+    <div class="actions">
+      {#if running}
+        <HoldButton disabled={busy} onconfirm={() => act('stop')}>■ Стоп</HoldButton>
+      {:else}
+        <button disabled={busy} onclick={() => act('start')}>▶ Старт</button>
+      {/if}
+      <button disabled={busy || !running} onclick={() => act('restart')}>↻ Рестарт</button>
+      <MaintenanceButton {bot} disabled={busy} onaction={act} />
+    </div>
   </div>
   {#if error}<p class="danger err">{error}</p>{/if}
 
@@ -124,20 +129,32 @@
 
 <style>
   .head {
+    justify-content: space-between;
+    margin-bottom: var(--s3);
+  }
+  .head,
+  .info,
+  .actions {
     display: flex;
     align-items: center;
-    gap: var(--s3);
-    margin-bottom: var(--s3);
+    gap: var(--s2) var(--s3);
     flex-wrap: wrap;
+  }
+  .info {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .identity {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    min-width: 0;
   }
   .canary {
     color: var(--accent-text);
   }
   .maint {
     color: var(--warn);
-  }
-  .grow {
-    flex: 1;
   }
   .tab {
     padding-top: var(--s3);

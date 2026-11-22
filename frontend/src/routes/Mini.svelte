@@ -48,14 +48,15 @@
         <button class="name" onclick={() => full(`/bots/${b.id}`)}>{b.name}</button>
         <span class="num muted">{live.bots[b.id]?.ups ?? 0} апд/с</span>
         {#if b.maintenance}<span class="maint">{b.maintenance}</span>{/if}
-        <span class="grow"></span>
-        {#if running}
-          <HoldButton disabled={!!busy[b.id]} onconfirm={() => act(b.id, 'stop')}>■</HoldButton>
-          <button disabled={busy[b.id]} title="Рестарт" onclick={() => act(b.id, 'restart')}>↻</button>
-        {:else}
-          <button disabled={busy[b.id]} title="Старт" onclick={() => act(b.id, 'start')}>▶</button>
-        {/if}
-        <MaintenanceButton bot={b} disabled={!!busy[b.id]} onaction={(action) => act(b.id, action)} />
+        <div class="actions">
+          {#if running}
+            <HoldButton disabled={!!busy[b.id]} label="Стоп — удерживайте" onconfirm={() => act(b.id, 'stop')}>■</HoldButton>
+            <button disabled={busy[b.id]} title="Рестарт" aria-label="Рестарт" onclick={() => act(b.id, 'restart')}>↻</button>
+          {:else}
+            <button disabled={busy[b.id]} title="Старт" aria-label="Старт" onclick={() => act(b.id, 'start')}>▶</button>
+          {/if}
+          <MaintenanceButton bot={b} disabled={!!busy[b.id]} onaction={(action) => act(b.id, action)} />
+        </div>
       </li>
     {:else}
       <li class="muted">{store.loaded ? 'Ботов нет' : 'Загрузка…'}</li>
@@ -114,6 +115,18 @@
     background: none;
     padding: 0;
     font-weight: 600;
+    text-align: left;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s2);
+    flex-basis: 100%;
+  }
+  .actions :global(button) {
+    min-width: 40px;
   }
   .maint {
     color: var(--warn);

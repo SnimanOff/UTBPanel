@@ -228,10 +228,8 @@
       {:else}
         <span class="muted">{fileName}</span>
       {/if}
-      <label class="file" title="Секрет-файл: путь к нему бот получит в переменной с этим именем">
-        файл
-        <input type="file" bind:this={fileInput} onchange={() => (fileName = fileInput?.files?.[0]?.name ?? '')} hidden />
-      </label>
+      <button type="button" title="Секрет-файл: путь к нему бот получит в переменной с этим именем" onclick={() => fileInput?.click()}>Файл</button>
+      <input type="file" bind:this={fileInput} onchange={() => (fileName = fileInput?.files?.[0]?.name ?? '')} hidden />
       <button disabled={!newName || (!newValue && !fileName)}>Добавить</button>
     </form>
     <p class="muted small">Значения только на запись: прочитать их нельзя ни здесь, ни через API.</p>
@@ -326,10 +324,13 @@
   }
   .secret-row {
     display: grid;
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--s2);
     align-items: center;
     margin-bottom: var(--s2);
+  }
+  .secret-row > :global(.wrap) {
+    grid-column: 1 / -1;
   }
   /* Rows of inputs share the box's width and wrap instead of running past
      its edge (the secrets box is a third of the page wide). */
@@ -354,11 +355,6 @@
   .kv input:nth-child(2) {
     flex: 2 1 160px;
   }
-  .file {
-    border: var(--line);
-    padding: var(--s1) var(--s3);
-    cursor: pointer;
-  }
   .sub {
     margin-top: var(--s4);
     font-size: var(--fs-s);
@@ -372,16 +368,12 @@
     gap: var(--s3);
     align-items: center;
     margin-bottom: var(--s3);
+    flex-wrap: wrap;
   }
   .delete {
     justify-content: space-between;
   }
-
-  /* Phones: one column, rows of controls wrap. */
-  @media (max-width: 700px) {
-    .add,
-    .kv {
-      flex-wrap: wrap;
-    }
+  .delete > span {
+    flex: 1 1 220px;
   }
 </style>

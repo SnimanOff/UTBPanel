@@ -163,7 +163,7 @@
             <span class="grip" title="Перетащите">⋮⋮</span>
             <span class="muted">/</span><input class="cmd" bind:value={c.command} placeholder="start" maxlength="32" />
             <input bind:value={c.description} placeholder="описание" maxlength="256" />
-            <button class="x" title="Удалить" onclick={() => (commands = commands.filter((_, j) => j !== i))}>×</button>
+            <button class="x" title="Удалить" aria-label="Удалить команду" onclick={() => (commands = commands.filter((_, j) => j !== i))}>×</button>
           </li>
         {:else}
           <li class="muted">Команд нет</li>
@@ -192,9 +192,13 @@
 <style>
   .langs {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--s2);
     align-items: center;
     margin-bottom: var(--s3);
+  }
+  .langs button {
+    white-space: nowrap;
   }
   .langs .active {
     border-color: var(--accent);
@@ -212,7 +216,7 @@
   }
   .cols {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--s3);
   }
   .stack {
@@ -245,10 +249,11 @@
     color: var(--muted);
   }
   .cmd {
-    width: 9em;
+    width: min(9em, 33%);
   }
   li input:last-of-type {
     flex: 1;
+    min-width: 0;
   }
   .x {
     border: none;
@@ -266,7 +271,7 @@
   /* Phones: one column, rows of controls wrap. */
   @media (max-width: 700px) {
     .cols {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>

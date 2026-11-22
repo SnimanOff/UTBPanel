@@ -16,9 +16,17 @@
   let error = $state('')
   let saving = $state(false)
   let nameInput = $state<HTMLInputElement>()
+  let dialog = $state<HTMLDialogElement>()
 
-  // The dialog takes the focus: without it the covered page keeps it.
-  onMount(() => nameInput?.focus())
+  onMount(() => {
+    dialog?.showModal()
+    nameInput?.focus()
+  })
+
+  function close() {
+    dialog?.close()
+    onclose()
+  }
 
   async function save(e: SubmitEvent) {
     e.preventDefault()
@@ -27,7 +35,7 @@
     try {
       const b = await api.post<Bot>('/api/bots', { name, token, group_id: groupId })
       await store.load()
-      onclose()
+      close()
       router.go(`/bots/${b.id}/settings`)
     } catch (err) {
       if (err instanceof ApiError && err.code === 'telegram') {
@@ -41,53 +49,63 @@
   }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
-<div class="backdrop" role="presentation" onclick={onclose} transition:fadeSlide|global={{ y: 0, duration: 120 }}></div>
-<div
+<dialog
   class="dialog"
-  role="dialog"
-  aria-modal="true"
   aria-labelledby="newbot-title"
-  transition:fadeSlide|global={{ y: 12 }}
+  bind:this={dialog}
+  onclick={(e) => e.target === dialog && close()}
+  oncancel={(e) => {
+    e.preventDefault()
+    close()
+  }}
+  in:fadeSlide|global={{ y: 12 }}
 >
   <form onsubmit={save}>
-    <h1 id="newbot-title">Новый бот</h1>
-    <Field label="Имя в панели">
-      <input bind:this={nameInput} bind:value={name} required maxlength="64" />
-    </Field>
-    <Field label="Группа">
-      <select bind:value={groupId}>
-        <option value={0}>Без группы</option>
-        {#each store.groups as g}<option value={g.id}>{g.name}</option>{/each}
-      </select>
-    </Field>
-    <Field label="Токен от BotFather" error={tokenError} hint="После сохранения токен больше нигде не показывается">
-      <input type="password" autocomplete="off" bind:value={token} required />
-    </Field>
-    {#if error}<p class="danger">{error}</p>{/if}
+    <div class="fields">
+      <h1 id="newbot-title">Новый бот</h1>
+      <Field label="Имя в панели">
+        <input bind:this={nameInput} bind:value={name} required maxlength="64" />
+      </Field>
+      <Field label="Группа">
+        <select bind:value={groupId}>
+          <option value={0}>Без группы</option>
+          {#each store.groups as g}<option value={g.id}>{g.name}</option>{/each}
+        </select>
+      </Field>
+      <Field label="Токен от BotFather" error={tokenError} hint="После сохранения токен больше нигде не показывается">
+        <input type="password" autocomplete="off" bind:value={token} required />
+      </Field>
+      {#if error}<p class="danger">{error}</p>{/if}
+    </div>
     <div class="buttons">
-      <button type="button" onclick={onclose}>Отмена</button>
+      <button type="button" onclick={close}>Отмена</button>
       <button class="primary" disabled={saving || !name || !token}>{saving ? 'Проверяю…' : 'Сохранить'}</button>
     </div>
   </form>
-</div>
+</dialog>
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
+  dialog::backdrop {
     background: rgb(12 10 15 / 0.7);
-    z-index: 10;
   }
   .dialog {
+    --dialog-top: clamp(12px, 10dvh, 80px);
     position: fixed;
-    z-index: 11;
-    top: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(440px, 92vw);
+    inset: var(--dialog-top) 0 auto;
+    width: min(440px, calc(100% - 2 * var(--s3)));
+    max-height: none;
+    color: var(--text);
     background: var(--surface);
     border: var(--line);
+    padding: 0;
+  }
+  form {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - var(--dialog-top) - var(--s3) - 2px);
+  }
+  .fields {
+    overflow-y: auto;
     padding: var(--s4);
   }
   h1 {
@@ -100,6 +118,9 @@
   .buttons {
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
     gap: var(--s2);
+    padding: var(--s2) var(--s4) var(--s4);
+    flex: none;
   }
 </style>

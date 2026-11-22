@@ -48,7 +48,7 @@
   })
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && feedOpen && closeFeed()} />
+<svelte:window onkeydown={(e) => e.key === 'Escape' && feedOpen && !adding && closeFeed()} />
 
 <header>
   <a class="logo mono" href="/" use:link>TG PANEL</a>
@@ -60,7 +60,7 @@
     {/if}
     <nav>
       {#each nav as n}
-        <a href={n.href} use:link class:active={router.route.name === n.name}>{n.label}</a>
+        <a href={n.href} use:link class:active={router.route.name === n.name} aria-current={router.route.name === n.name ? 'page' : undefined}>{n.label}</a>
       {/each}
     </nav>
   </div>
@@ -136,9 +136,11 @@
     letter-spacing: 0.12em;
     border: 1px solid var(--accent);
     padding: 2px var(--s2);
+    white-space: nowrap;
   }
   .grow {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -168,6 +170,10 @@
     display: flex;
     align-items: center;
     gap: var(--s2);
+  }
+  .right button {
+    flex: none;
+    white-space: nowrap;
   }
   .ver {
     color: var(--muted);
@@ -212,7 +218,7 @@
   }
   /* Phones: the navigation goes to its own scrolling line under the logo
      and the buttons. */
-  @media (max-width: 700px) {
+  @media (max-width: 900px) {
     header {
       flex-wrap: wrap;
       gap: var(--s2) var(--s3);
@@ -225,11 +231,18 @@
     }
     .right {
       margin-left: auto;
+      flex-wrap: wrap;
+      max-width: 100%;
     }
     nav {
       overflow-x: auto;
       white-space: nowrap;
       padding-bottom: 2px;
+    }
+    nav a {
+      display: inline-flex;
+      align-items: center;
+      padding: var(--s1) 0;
     }
     .metrics {
       overflow: hidden;
@@ -238,6 +251,17 @@
     }
     .feed {
       right: var(--s3);
+    }
+  }
+  @media (max-width: 700px) {
+    .right {
+      gap: var(--s1);
+    }
+    .right button {
+      padding-inline: var(--s2);
+    }
+    nav a {
+      min-height: 40px;
     }
   }
 </style>
