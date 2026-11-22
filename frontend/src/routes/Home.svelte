@@ -3,7 +3,7 @@
   // Filter by status on top works across groups; "/" focuses the search.
   // Cards are dragged between groups; groups are created, renamed, deleted
   // and reordered right here.
-  import { api, errorText, type BotView, type Group } from '../lib/api/client'
+  import { api, ApiError, errorText, type BotView, type Group } from '../lib/api/client'
   import { pollBots, store } from '../lib/api/stores.svelte'
   import HoldButton from '../lib/ui/HoldButton.svelte'
   import { fadeSlide } from '../lib/ui/motion'
@@ -77,7 +77,11 @@
   function massAction(ids: number[], op: 'start' | 'stop') {
     return act(async () => {
       const results = await Promise.allSettled(ids.map((id) => api.post(`/api/bots/${id}/${op}`)))
-      const failed = results.filter((result) => result.status === 'rejected')
+      const failed = results.filter((result): result is PromiseRejectedResult => {
+        if (result.status !== 'rejected') return false
+        // A start conflict means the bot is already running.
+        return !(op === 'start' && result.reason instanceof ApiError && result.reason.code === 'conflict')
+      })
       if (failed.length) {
         error = `Действие не выполнено для ${failed.length} из ${ids.length} ботов: ${errorText(failed[0].reason)}`
       }
