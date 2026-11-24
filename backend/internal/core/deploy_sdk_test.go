@@ -37,6 +37,8 @@ func TestDeployRegistersSDKFlagsBeforeReady(t *testing.T) {
 			path := filepath.Join(c.Releases.Dir(botID), "v1", "bot")
 			if runtime.GOOS == "windows" {
 				path += ".exe"
+			} else if err := os.Remove(path); err != nil {
+				t.Fatal(err)
 			}
 			if err := os.WriteFile(path, process, 0o700); err != nil {
 				t.Fatal(err)
