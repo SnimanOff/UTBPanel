@@ -120,7 +120,7 @@ func TestCreateBotDoesNotHoldConfigGuardDuringTelegramVerification(t *testing.T)
 		close(verifying)
 		select {
 		case <-respond:
-			io.WriteString(w, `{"ok":true,"result":{"id":123,"is_bot":true,"username":"test_bot"}}`)
+			_, _ = io.WriteString(w, `{"ok":true,"result":{"id":123,"is_bot":true,"username":"test_bot"}}`)
 		case <-r.Context().Done():
 		}
 	}))

@@ -49,5 +49,7 @@ func (c *Core) pruneReleases(ctx context.Context, botID int64) {
 	if err := c.DB.R.QueryRowContext(ctx, `SELECT COALESCE((SELECT version FROM scheduled_deploys WHERE bot_id = ? AND status IN ('scheduled', 'running')), '')`, botID).Scan(&scheduled); err != nil {
 		return
 	}
-	c.Releases.PruneKeep(botID, c.releaseSettings(ctx, botID).Keep, cur, prev, scheduled)
+	if err := c.Releases.PruneKeep(botID, c.releaseSettings(ctx, botID).Keep, cur, prev, scheduled); err != nil {
+		c.Log.Warn("pruning releases failed", "bot", botID, "err", err)
+	}
 }

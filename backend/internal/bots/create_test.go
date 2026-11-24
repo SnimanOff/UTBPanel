@@ -42,30 +42,37 @@ func TestCreateReportsGroupFailureAfterBotWasCreated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	dir, err := os.MkdirTemp("", "bot-create-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	path := filepath.Join(dir, "c.sock")
 	ln, err := wire.Listen(path, 0o600, -1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
 	mux := wire.NewMux()
 	mux.Handle("bots.create", wire.Func(func(_ context.Context, _ *wire.Conn, in core.CreateBot) (core.Bot, error) {
 		return core.Bot{ID: 42, Name: in.Name, Username: "test_bot"}, nil
 	}))
-	go (&wire.Server{Mux: mux, Hello: app.Hello(wire.ProtoCorePanel, "core", 1, 1)}).Serve(ln)
+	srv := &wire.Server{Mux: mux, Hello: app.Hello(wire.ProtoCorePanel, "core", 1, 1)}
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- srv.Serve(ln) }()
+	defer func() {
+		_ = ln.Close()
+		if err := <-serverDone; err != nil {
+			t.Errorf("wire server: %v", err)
+		}
+	}()
 	client := &wire.Client{Path: path, Hello: app.Hello(wire.ProtoCorePanel, "panel", 1, 1)}
 	go client.Run(ctx)
 	conn, err := client.Wait(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	s := &Service{Core: client, Groups: &Groups{DB: db}}
 	w := httptest.NewRecorder()

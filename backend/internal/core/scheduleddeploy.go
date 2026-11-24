@@ -141,12 +141,14 @@ func (c *Core) tickScheduledDeploys(ctx context.Context, now time.Time) error {
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return err
 		}
 		ids = append(ids, id)
 	}
-	rows.Close()
+	if err := rows.Close(); err != nil {
+		return err
+	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
