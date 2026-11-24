@@ -111,7 +111,7 @@ func (c *Core) registerEdgeSync() {
 	} else if err != sql.ErrNoRows {
 		c.Log.Warn("reading edge settings version", "err", err)
 	}
-	c.Mux.Handle(edge.MethodCert, wire.Func(func(ctx context.Context, conn *wire.Conn, pem []byte) (struct{}, error) {
+	c.edgeMux.Handle(edge.MethodCert, wire.Func(func(ctx context.Context, conn *wire.Conn, pem []byte) (struct{}, error) {
 		_, err := c.DB.W.ExecContext(ctx, `INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
 			kvEdgeCert, string(pem))
 		// The edge just connected: give it the current settings.

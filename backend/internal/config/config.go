@@ -56,6 +56,9 @@ type Core struct {
 	KeysDir     string `yaml:"keys_dir" env:"KEYS_DIR"`
 	HostProc    string `yaml:"host_proc" env:"HOST_PROC"`
 	WebhookPort int    `yaml:"webhook_port" env:"WEBHOOK_PORT"` // public edge port in WEBHOOK_URL
+	// EdgeUID and PanelUID authenticate the corresponding Unix socket roles.
+	EdgeUID  int `yaml:"edge_uid" env:"EDGE_UID"`
+	PanelUID int `yaml:"panel_uid" env:"PANEL_UID"`
 	// Domain is the edge's Let's Encrypt domain; Mini Apps of bots live on
 	// its subdomains. Empty = no Mini Apps.
 	Domain          string        `yaml:"domain" env:"DOMAIN"`
@@ -118,6 +121,8 @@ func DefaultCore() Core {
 		KeysDir:         "/keys",
 		HostProc:        "/host/proc",
 		WebhookPort:     8443,
+		EdgeUID:         1001,
+		PanelUID:        1002,
 		BotPortFirst:    20000,
 		BotPortLast:     29999,
 		SDKReadyTimeout: time.Minute,
@@ -363,6 +368,9 @@ func (c Edge) TelegramPrefixes() []netip.Prefix {
 // Validate checks core settings.
 func (c Core) Validate() error {
 	errs := []error{c.Common.validate()}
+	if c.EdgeUID < 0 || c.PanelUID < 0 || c.EdgeUID == c.PanelUID || uint64(c.EdgeUID) >= 1<<32 || uint64(c.PanelUID) >= 1<<32 {
+		errs = append(errs, errors.New("edge_uid and panel_uid must be distinct Unix user IDs"))
+	}
 	if c.SDKReadyTimeout <= 0 {
 		errs = append(errs, errors.New("sdk_ready_timeout: must be positive"))
 	}

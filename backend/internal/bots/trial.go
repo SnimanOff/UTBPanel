@@ -12,11 +12,24 @@ import (
 // core/trial.go).
 func (s *Service) registerTrial(mux *api.Mux) {
 	mux.HandleFunc("GET /api/bots/{id}/trial", s.getTrial)
-	mux.HandleFunc("POST /api/bots/{id}/trial", s.startTrial)
-	mux.HandleFunc("POST /api/bots/{id}/trial/promote", s.trialOp("trial.promote"))
-	mux.HandleFunc("DELETE /api/bots/{id}/trial", s.trialOp("trial.stop"))
-	mux.HandleFunc("PUT /api/bots/{id}/test-bot", s.attachTestBot)
-	mux.HandleFunc("DELETE /api/bots/{id}/test-bot", s.detachTestBot)
+	mux.HandleFunc("POST /api/bots/{id}/trial", s.withTrialGuard(s.startTrial))
+	mux.HandleFunc("POST /api/bots/{id}/trial/promote", s.withTrialGuard(s.trialOp("trial.promote")))
+	mux.HandleFunc("DELETE /api/bots/{id}/trial", s.withTrialGuard(s.trialOp("trial.stop")))
+	mux.HandleFunc("PUT /api/bots/{id}/test-bot", s.withTrialGuard(s.attachTestBot))
+	mux.HandleFunc("DELETE /api/bots/{id}/test-bot", s.withTrialGuard(s.detachTestBot))
+}
+
+// Serialize panel trial changes with MCP's authorization of their test bot.
+func (s *Service) withTrialGuard(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, unlock, err := s.Groups.Guard.Lock(r.Context())
+		if err != nil {
+			WriteCoreError(w, err)
+			return
+		}
+		defer unlock()
+		next(w, r.WithContext(ctx))
+	}
 }
 
 // attachTestBot makes a separate Telegram bot the test bot of this one.

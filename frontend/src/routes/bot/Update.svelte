@@ -9,6 +9,8 @@
   import { store } from '../../lib/api/stores.svelte'
   import { bytes, uptime, utc } from '../../lib/format'
   import { link } from '../../lib/router.svelte'
+  import { session } from '../../lib/session.svelte'
+  import { defaultTZ } from '../../lib/tz'
   import Box from '../../lib/ui/Box.svelte'
   import HoldButton from '../../lib/ui/HoldButton.svelte'
 
@@ -161,33 +163,119 @@
   // A version with tgpanel.yaml first shows the settings it changes; the
   // deploy then carries the settings revision the owner saw.
   type ReleaseConfig = { yaml: string; diff: Schemas['BotConfigDiff']; settings_version: string; error?: string }
-  let pending = $state<{ version: string; viaTrial: boolean; cfg: ReleaseConfig } | null>(null)
+  type DeployTarget = { version: string } & ({ mode: 'switch' | 'trial' } | { mode: 'schedule'; startsAt: string })
+  let pending = $state<{ target: DeployTarget; cfg: ReleaseConfig } | null>(null)
   $effect(() => {
     void botId
     pending = null
   })
 
-  function deployNow(v: string, viaTrial: boolean, configVersion?: string) {
+  function applyDeploy(target: DeployTarget, configVersion?: string) {
+    const v = target.version
+    if (target.mode === 'schedule') {
+      return run(async () => {
+        try {
+          await api.post(schedulePath(botId), { version: v, starts_at: target.startsAt, config_version: configVersion })
+          pending = null
+          start = ''
+        } finally {
+          await loadSchedule(botId)
+        }
+      }, `Деплой версии ${v} запланирован.`)
+    }
     const body = configVersion ? { config_version: configVersion } : undefined
     return run(async () => {
-      if (viaTrial) await api.post(`/api/bots/${botId}/trial/promote`, body)
+      if (target.mode === 'trial') await api.post(`/api/bots/${botId}/trial/promote`, body)
       else await api.post(`/api/bots/${botId}/releases/${encodeURIComponent(v)}/switch`, body)
       pending = null
     }, `Бот обновлён до ${v}. Минуту идёт наблюдение: при падениях или ошибках версия откатится сама.`)
   }
 
-  async function deploy(v: string, viaTrial: boolean) {
-    const r = releases.find((x) => x.version === v)
-    if (!r?.config) return deployNow(v, viaTrial)
+  async function deploy(target: DeployTarget) {
+    if (busy) return
+    const id = botId
+    const r = releases.find((x) => x.version === target.version)
+    pending = null
+    if (!r?.config) return applyDeploy(target)
     error = ''
+    busy = true
     try {
-      const cfg = await api.get<ReleaseConfig>(`/api/bots/${botId}/releases/${encodeURIComponent(v)}/config`)
-      if (!cfg.error && !cfg.diff.changes.length) return deployNow(v, viaTrial)
-      pending = { version: v, viaTrial, cfg }
+      const cfg = await api.get<ReleaseConfig>(`/api/bots/${id}/releases/${encodeURIComponent(target.version)}/config`)
+      if (id !== botId) return
+      if (!cfg.error && !cfg.diff.changes.length) return await applyDeploy(target)
+      pending = { target, cfg }
     } catch (e) {
       error = errorText(e)
+    } finally {
+      busy = false
     }
   }
+
+  type ScheduledDeploy = Schemas['ScheduledDeploy']
+  const schedulePath = (id: number) => `/api/bots/${id}/deploy-schedule`
+  const moscowTime = new Intl.DateTimeFormat('ru-RU', {
+    timeZone: defaultTZ, dateStyle: 'short', timeStyle: 'short', hourCycle: 'h23',
+  })
+  const scheduleStatus: Record<ScheduledDeploy['status'], string> = {
+    scheduled: 'Запланирован', running: 'Выполняется', ok: 'Завершён', failed: 'Ошибка', rolled_back: 'Откат',
+  }
+  const canManage = $derived(session.scope?.role !== 'view')
+  let schedule = $state<ScheduledDeploy | null>(null)
+  let scheduleLoaded = $state(false)
+  let scheduleError = $state('')
+  let scheduleRequest = 0
+  let scheduledVersion = $state('')
+  let start = $state('')
+  const scheduleActive = $derived(schedule?.status === 'scheduled' || schedule?.status === 'running')
+
+  async function loadSchedule(id: number, refreshOnChange = false) {
+    const request = ++scheduleRequest
+    try {
+      const r = await api.get<{ schedule: ScheduledDeploy | null }>(schedulePath(id))
+      if (request !== scheduleRequest || id !== botId) return
+      const updateHistory = refreshOnChange && scheduleActive && schedule?.status !== r.schedule?.status
+      schedule = r.schedule
+      scheduleError = ''
+      scheduleLoaded = true
+      if (updateHistory) {
+        void store.refresh(id)
+        await onchange()
+      }
+    } catch (e) {
+      if (request === scheduleRequest && id === botId) scheduleError = errorText(e)
+    }
+  }
+
+  $effect(() => {
+    const id = botId
+    schedule = null
+    scheduleLoaded = false
+    scheduleError = ''
+    scheduledVersion = ''
+    start = ''
+    void loadSchedule(id)
+    const timer = setInterval(() => { if (!busy) void loadSchedule(id, true) }, 5000)
+    return () => clearInterval(timer)
+  })
+
+  function planDeploy(e: SubmitEvent) {
+    e.preventDefault()
+    if (!scheduledVersion || scheduleActive) return
+    const startsAt = new Date(`${start}:00+03:00`)
+    if (!(startsAt.getTime() > Date.now())) {
+      error = 'Укажите дату и время в будущем по МСК.'
+      return
+    }
+    return deploy({ version: scheduledVersion, mode: 'schedule', startsAt: startsAt.toISOString() })
+  }
+
+  const cancelSchedule = (id: number) => run(async () => {
+    try {
+      await api.del(`${schedulePath(botId)}/${id}`)
+    } finally {
+      await loadSchedule(botId)
+    }
+  }, 'Плановый деплой отменён.')
 </script>
 
 <Box title="Обновление">
@@ -308,24 +396,61 @@
       </p>
       {#if trial && !trial.error}
         <div class="line">
-          <HoldButton danger={false} disabled={busy} onconfirm={() => { if (trial) deploy(trial.version, true) }}>
+          <HoldButton danger={false} disabled={busy} onconfirm={() => { if (trial) deploy({ version: trial.version, mode: 'trial' }) }}>
             Всё работает — обновить до {trial.version}
           </HoldButton>
         </div>
       {/if}
       {#if version && (!trial || trial.version !== version || trial.error)}
         <div class="line">
-          <HoldButton disabled={busy} onconfirm={() => deploy(version, false)}>Обновить до {version} без теста</HoldButton>
+          <HoldButton disabled={busy} onconfirm={() => deploy({ version, mode: 'switch' })}>Обновить до {version} без теста</HoldButton>
         </div>
       {:else if !trial}
         <p class="muted small">Сначала загрузите новую версию.</p>
       {/if}
+      <div class="planned-deploy">
+        <h4>Плановый деплой</h4>
+        {#if schedule}
+          <p class="small" role="status">
+            {scheduleStatus[schedule.status]} · <span class="num">{schedule.version}</span> ·
+            {moscowTime.format(new Date(schedule.starts_at))} МСК
+          </p>
+          {#if schedule.error}<p class="danger small">{schedule.error}</p>{/if}
+          {#if schedule.status === 'scheduled' && canManage}
+            <button type="button" disabled={busy} onclick={() => { if (schedule) cancelSchedule(schedule.id) }}>Отменить план</button>
+          {/if}
+        {/if}
+        {#if scheduleError}<p class="danger small" role="alert">{scheduleError}</p>{/if}
+        {#if canManage && scheduleLoaded && !scheduleActive}
+          {#if releases.some((r) => !r.current)}
+            <form onsubmit={planDeploy}>
+              <label class="pick">
+                Версия
+                <select bind:value={scheduledVersion} required disabled={busy}>
+                  <option value="">Выберите версию</option>
+                  {#each releases.filter((r) => !r.current) as r (r.version)}<option value={r.version}>{r.version}</option>{/each}
+                </select>
+              </label>
+              <label class="pick">
+                Дата и время (МСК)
+                <input type="datetime-local" bind:value={start} required disabled={busy} />
+              </label>
+              <div class="line"><button disabled={busy || !scheduledVersion || !start}>Запланировать деплой</button></div>
+            </form>
+          {:else}
+            <p class="muted small">Загрузите версию для планового деплоя.</p>
+          {/if}
+        {/if}
+      </div>
     </section>
   </div>
 
   {#if pending}
     <div class="relcfg">
-      <h4>Настройки из tgpanel.yaml версии <span class="num">{pending.version}</span></h4>
+      <h4>Настройки из tgpanel.yaml версии <span class="num">{pending.target.version}</span></h4>
+      {#if pending.target.mode === 'schedule'}
+        <p class="muted small">Деплой на {moscowTime.format(new Date(pending.target.startsAt))} МСК</p>
+      {/if}
       {#if pending.cfg.error}
         <p class="danger pre">{pending.cfg.error}</p>
         <p class="muted">С этим файлом версию не развернуть: исправьте его и загрузите новую версию.</p>
@@ -341,8 +466,8 @@
       {/if}
       <div class="line">
         {#if !pending.cfg.error}
-          <HoldButton disabled={busy} onconfirm={() => { if (pending) deployNow(pending.version, pending.viaTrial, pending.cfg.settings_version) }}>
-            Применить и обновить
+          <HoldButton disabled={busy} onconfirm={() => { if (pending) applyDeploy(pending.target, pending.cfg.settings_version) }}>
+            {pending.target.mode === 'schedule' ? 'Подтвердить и запланировать' : 'Применить и обновить'}
           </HoldButton>
         {/if}
         <button disabled={busy} onclick={() => (pending = null)}>Отмена</button>
@@ -418,6 +543,18 @@
     flex-direction: column;
     gap: var(--s1);
     margin-top: var(--s2);
+  }
+  .planned-deploy {
+    border-top: var(--line);
+    margin-top: var(--s3);
+    padding-top: var(--s3);
+  }
+  .planned-deploy h4 {
+    margin: 0;
+  }
+  .planned-deploy input {
+    min-width: 0;
+    max-width: 100%;
   }
   .check {
     display: flex;

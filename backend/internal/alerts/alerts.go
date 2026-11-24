@@ -282,6 +282,9 @@ func Map(ev events.Event) (Note, bool) {
 		if str(ev, "result") == "failed" {
 			return Note{Kind: "deploy_failed", Severity: "error", Key: "deployfail:" + id, Text: "деплой " + str(ev, "version") + " не прошёл: " + str(ev, "error"), Href: bot + "/deploy"}, true
 		}
+	case "scheduled_deploy_failed":
+		return Note{Kind: "deploy_failed", Severity: "error", Key: "scheduleddeployfail:" + id + ":" + num(ev, "id"),
+			Text: "плановый деплой " + str(ev, "version") + " не прошёл: " + str(ev, "error"), Href: bot + "/deploy"}, true
 	case "deploy_worse":
 		return Note{Kind: "deploy_worse", Severity: "warn", Key: "worse:" + id + ":" + str(ev, "version"), Text: "после деплоя " + str(ev, "version") + " стало хуже", Href: bot + "/deploy"}, true
 	case "canary_cancelled":

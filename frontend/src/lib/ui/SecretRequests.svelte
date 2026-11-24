@@ -18,6 +18,7 @@
   let items = $state<Req[]>([])
   let error = $state('')
   let fieldErrors = $state<Record<string, string>>({})
+  let groupWarningBotId = $state<number>()
 
   async function load() {
     try {
@@ -45,7 +46,8 @@
       if (r.bot_id) {
         await api.put(`/api/bots/${r.bot_id}/secrets/${encodeURIComponent(r.name)}`, { value })
       } else {
-        await api.post(`/api/secret-requests/${r.id}/token`, { token: value })
+        const created = await api.post<Schemas['TokenRequestBot']>(`/api/secret-requests/${r.id}/token`, { token: value })
+        if (created.group_assignment_failed) groupWarningBotId = created.bot_id
         store.load()
       }
       onset?.(r.name)
@@ -68,6 +70,12 @@
   const hours = (ts: string) => Math.max(0, Math.round((new Date(ts).getTime() - Date.now()) / 3600000))
 </script>
 
+{#if groupWarningBotId}
+  <p class="danger" role="status">
+    Бот создан, но панель не сохранила его место в списке.
+    <a href={`/bots/${groupWarningBotId}/settings`} use:link>Выбрать группу в настройках</a>
+  </p>
+{/if}
 {#if items.length}
   <div class="requests">
     {#if error}<p class="danger">{error}</p>{/if}

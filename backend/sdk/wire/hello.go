@@ -3,6 +3,7 @@ package wire
 import (
 	"errors"
 	"fmt"
+	"net"
 	"slices"
 )
 
@@ -57,7 +58,7 @@ func (c *Conn) clientHandshake(self Hello) error {
 
 // serverHandshake reads the client's hello and answers with the hello of
 // the same protocol, so one socket can serve several protocols.
-func (c *Conn) serverHandshake(selves []Hello) error {
+func (c *Conn) serverHandshake(selves []Hello, muxForPeer func(net.Conn, Hello) (*Mux, error)) error {
 	peer, err := c.readHello()
 	if err != nil {
 		return err
@@ -70,6 +71,16 @@ func (c *Conn) serverHandshake(selves []Hello) error {
 		if h.Proto == peer.Proto {
 			self = normalize(h)
 		}
+	}
+	if muxForPeer != nil && peer.Proto == self.Proto {
+		mux, err := muxForPeer(c.nc, peer)
+		if err != nil {
+			return err
+		}
+		if mux == nil {
+			return errors.New("wire: peer mux is missing")
+		}
+		c.mux = mux
 	}
 	if err := c.send(fHello, 0, self); err != nil {
 		return err

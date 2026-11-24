@@ -155,7 +155,7 @@ paths:
                 group_id: { type: integer }
                 hint: { type: string, description: MCP only — where the owner gets the token }
       responses:
-        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Bot" } } } }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/BotCreated" } } } }
         "422": { $ref: "#/components/responses/Telegram" }
 
   /api/bots/order:
@@ -533,6 +533,59 @@ paths:
       x-mcp: read
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/DeployRecord" } } } } }
+  /api/bots/{id}/deploy-schedule:
+    parameters: [{ $ref: "#/components/parameters/BotID" }]
+    get:
+      operationId: get_scheduled_deploy
+      tags: [releases]
+      summary: Latest one-time deploy plan and its status, if any
+      x-mcp: read
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schedule]
+                properties:
+                  schedule:
+                    oneOf:
+                      - $ref: "#/components/schemas/ScheduledDeploy"
+                      - type: "null"
+    post:
+      operationId: schedule_deploy
+      tags: [releases]
+      summary: Schedule a one-time deploy of a stored version
+      x-mcp: confirm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, starts_at]
+              properties:
+                version: { type: string }
+                starts_at: { type: string, format: date-time, description: Future RFC 3339 timestamp with an offset }
+                config_version: { type: string, description: settings_version from get_release_config, as for deploy_release }
+      responses:
+        "204": { description: Scheduled }
+        "400": { description: Invalid release configuration or time }
+        "404": { description: Bot or version not found }
+        "409": { description: Plan already active or release configuration needs a fresh confirmation }
+  /api/bots/{id}/deploy-schedule/{schedule_id}:
+    parameters:
+      - { $ref: "#/components/parameters/BotID" }
+      - { name: schedule_id, in: path, required: true, schema: { type: integer } }
+    delete:
+      operationId: cancel_scheduled_deploy
+      tags: [releases]
+      summary: Cancel a deploy plan before it starts
+      x-mcp: confirm
+      responses:
+        "204": { description: Canceled }
+        "409": { description: Plan is no longer pending }
   /api/bots/{id}/deploy-reports:
     parameters: [{ $ref: "#/components/parameters/BotID" }]
     get:
@@ -1125,7 +1178,7 @@ paths:
           application/json:
             schema: { type: object, required: [token], properties: { token: { type: string, writeOnly: true } } }
       responses:
-        "201": { description: Created, content: { application/json: { schema: { type: object, properties: { bot_id: { type: integer }, username: { type: string } } } } } }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/TokenRequestBot" } } } }
         "409": { description: Already closed or expired }
         "422": { $ref: "#/components/responses/Telegram" }
   /api/bots/{id}/secrets/{name}:
@@ -2464,6 +2517,18 @@ components:
         sdk: { $ref: "#/components/schemas/SDKInfo" }
         test_for: { type: integer, description: the bot this one is the test bot of (hidden from the list) }
         maintenance_state: { type: string, enum: [planned, active] }
+    BotCreated:
+      allOf:
+        - { $ref: "#/components/schemas/Bot" }
+        - type: object
+          properties:
+            group_assignment_failed: { type: boolean, description: The bot was created but the panel could not save its group and position }
+    TokenRequestBot:
+      type: object
+      properties:
+        bot_id: { type: integer }
+        username: { type: string }
+        group_assignment_failed: { type: boolean, description: The bot was created but the panel could not save its group and position }
     SDKInfo:
       type: object
       required: [version, modules, connected]
@@ -2748,6 +2813,15 @@ components:
         started_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time }
         result: { type: string, enum: [running, observing, ok, failed, rolled_back] }
+        error: { type: string }
+    ScheduledDeploy:
+      type: object
+      required: [id, version, starts_at, status]
+      properties:
+        id: { type: integer }
+        version: { type: string }
+        starts_at: { type: string, format: date-time }
+        status: { type: string, enum: [scheduled, running, ok, failed, rolled_back] }
         error: { type: string }
     Trial:
       type: object

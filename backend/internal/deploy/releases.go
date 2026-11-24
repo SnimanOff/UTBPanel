@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -358,9 +359,9 @@ func (s *Store) Prune(botID int64, current, previous string) error {
 	return s.PruneKeep(botID, Keep, current, previous)
 }
 
-// PruneKeep keeps the newest keep releases (Keep when keep < 1); current
-// and previous always stay.
-func (s *Store) PruneKeep(botID int64, keep int, current, previous string) error {
+// PruneKeep keeps the newest keep releases (Keep when keep < 1); current,
+// previous and protected versions always stay.
+func (s *Store) PruneKeep(botID int64, keep int, current, previous string, protected ...string) error {
 	if keep < 1 {
 		keep = Keep
 	}
@@ -368,15 +369,16 @@ func (s *Store) PruneKeep(botID int64, keep int, current, previous string) error
 	if err != nil {
 		return err
 	}
-	// Current and previous always stay; the newest others fill the rest.
+	isProtected := func(r Release) bool { return r.Current || r.Previous || slices.Contains(protected, r.Version) }
+	// The newest unprotected versions fill the available slots.
 	room := keep
 	for _, r := range rs {
-		if r.Current || r.Previous {
+		if isProtected(r) {
 			room--
 		}
 	}
 	for _, r := range rs {
-		if r.Current || r.Previous {
+		if isProtected(r) {
 			continue
 		}
 		if room > 0 {

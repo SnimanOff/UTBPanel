@@ -2,11 +2,14 @@ package core
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/deploy"
 	"github.com/SnimanOff/UTBPanel/backend/internal/ingress"
+	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
+	"github.com/SnimanOff/UTBPanel/backend/internal/store"
 )
 
 func TestCanaryChecksAndRoute(t *testing.T) {
@@ -57,5 +60,127 @@ func TestCanaryVerdict(t *testing.T) {
 	}
 	if v, _ := CanaryVerdict(r, 100, 0, 100, 0, 10*time.Minute, 30*time.Minute); v != "" {
 		t.Fatal("promoted too early")
+	}
+	for _, observed := range []int{0, r.MinUpdates - 1} {
+		if v, _ := CanaryVerdict(r, observed, 0, 100, 0, 31*time.Minute, 30*time.Minute); v != "" {
+			t.Fatalf("auto-promoted with only %d observed updates: %q", observed, v)
+		}
+	}
+}
+
+func TestCheckCanaryDoesNotPromoteExitedProcess(t *testing.T) {
+	ctx := t.Context()
+	c := newCore(t)
+	addCanaryCandidate(t, c, "")
+	c.canaryStatsOf(1).ok = 100
+	c.checkCanary(ctx, 1)
+	current, _, err := c.versions(ctx, 1)
+	if err != nil || current != "v1" {
+		t.Fatalf("after checking exited canary, current = %q, err = %v", current, err)
+	}
+}
+
+func TestManualCanaryPromotionPreservesCandidateOnUnconfirmedRelease(t *testing.T) {
+	ctx := t.Context()
+	c := newCore(t)
+	addCanaryCandidate(t, c, "env: { LOG_LEVEL: debug }\n")
+	err := c.PromoteCanary(ctx, 1, journal.Actor{Source: journal.SourceUI})
+	if code(err) != "config_confirm" {
+		t.Fatalf("promoting unconfirmed release: %v", err)
+	}
+	candidate, err := c.CanaryOf(ctx, 1)
+	if err != nil || candidate == nil || candidate.Version != "v2" {
+		t.Fatalf("candidate after validation failure: %+v, err = %v", candidate, err)
+	}
+}
+
+func TestManualCanaryPromotionDoesNotRequireObservations(t *testing.T) {
+	ctx := t.Context()
+	c := newCore(t)
+	addCanaryCandidate(t, c, "")
+	if err := c.PromoteCanary(ctx, 1, journal.Actor{Source: journal.SourceUI}); err != nil {
+		t.Fatal(err)
+	}
+	current, _, err := c.versions(ctx, 1)
+	if err != nil || current != "v2" {
+		t.Fatalf("after manual promotion, current = %q, err = %v", current, err)
+	}
+	candidate, err := c.CanaryOf(ctx, 1)
+	if err != nil || candidate != nil {
+		t.Fatalf("candidate after manual promotion: %+v, err = %v", candidate, err)
+	}
+}
+
+func TestAutoPromotionWaitsQuietlyForReleaseConfirmation(t *testing.T) {
+	ctx := t.Context()
+	c := newCore(t)
+	addCanaryCandidate(t, c, "env: { LOG_LEVEL: debug }\n")
+	in := SwitchVersion{BotID: 1, Version: "v2", Actor: canaryActor}
+	stats := c.canaryStatsOf(in.BotID)
+	promote := func() error {
+		_, err := c.Deploy(ctx, in)
+		return err
+	}
+	for range 3 {
+		c.autoPromoteCanary(ctx, stats, in, promote)
+	}
+
+	entries, err := c.Journal.Since(ctx, 0, 100)
+	if err != nil || len(entries) != 1 || entries[0].Command != "canary.promote" {
+		t.Fatalf("journal while confirmation is pending: %+v, err = %v", entries, err)
+	}
+	events, err := c.Ev.Since(ctx, 0, 100)
+	if err != nil || len(events) != 1 || events[0].Type != "release_config" || events[0].Data["state"] != "pending" {
+		t.Fatalf("events while confirmation is pending: %+v, err = %v", events, err)
+	}
+	if err := c.SetSetting(ctx, in.BotID, "env", map[string]string{"LOG_LEVEL": "debug"}); err != nil {
+		t.Fatal(err)
+	}
+	c.autoPromoteCanary(ctx, stats, in, promote)
+	current, _, err := c.versions(ctx, in.BotID)
+	if err != nil || current != "v2" {
+		t.Fatalf("after resolving the configuration, current = %q, err = %v", current, err)
+	}
+}
+
+func TestCanaryStopRequestWaitsForDeployment(t *testing.T) {
+	ctx := t.Context()
+	c := newCore(t)
+	addCanaryCandidate(t, c, "")
+	_, unlock, err := c.lockDeploy(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	err = c.requestStopCanary(stopCtx, 1, "test")
+	cancel()
+	unlock()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("stop during deployment: %v", err)
+	}
+	if candidate, err := c.CanaryOf(ctx, 1); err != nil || candidate == nil {
+		t.Fatalf("candidate after timed-out stop: %+v, err = %v", candidate, err)
+	}
+	for _, botID := range []int64{1, 1, 2} {
+		if err := c.requestStopCanary(ctx, botID, "test"); err != nil {
+			t.Fatalf("stop for bot %d: %v", botID, err)
+		}
+	}
+	if candidate, err := c.CanaryOf(ctx, 1); err != nil || candidate != nil {
+		t.Fatalf("candidate after successful stop: %+v, err = %v", candidate, err)
+	}
+}
+
+func addCanaryCandidate(t *testing.T, c *Core, config string) {
+	t.Helper()
+	ctx := t.Context()
+	if _, err := c.DB.W.ExecContext(ctx, `INSERT INTO bots (id, name, port, created_at, current_version)
+		VALUES (1, 'test', 20001, ?, 'v1')`, store.Now()); err != nil {
+		t.Fatal(err)
+	}
+	storeRelease(t, c, 1, "v2", config)
+	if _, err := c.DB.W.ExecContext(ctx, `INSERT INTO canaries (bot_id, version, auto_after, started_at)
+		VALUES (1, 'v2', 1, ?)`, store.FormatTime(time.Now().Add(-time.Hour))); err != nil {
+		t.Fatal(err)
 	}
 }

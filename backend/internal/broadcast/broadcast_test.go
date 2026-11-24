@@ -248,6 +248,65 @@ func TestPauseResumeCancel(t *testing.T) {
 	}
 }
 
+func TestSelectedBroadcastDoesNotSendAfterPauseOrCancel(t *testing.T) {
+	for _, state := range []string{Paused, Cancelled} {
+		t.Run(state, func(t *testing.T) {
+			ctx := t.Context()
+			tg := &fakeTG{}
+			s := newService(t, tg, 3)
+			b, err := s.Create(ctx, B{BotID: 1, Text: "hi"})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// The scheduler selected b while it was scheduled. The operator
+			// stops it before the selected worker is registered.
+			stop := s.Pause
+			if state == Cancelled {
+				stop = s.Cancel
+			}
+			if err := stop(ctx, b.ID); err != nil {
+				t.Fatal(err)
+			}
+			s.launch(ctx, b.ID, s.send)
+			s.Wait()
+
+			got, err := s.Get(ctx, b.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.State != state || got.Sent != 0 || len(tg.sent) != 0 {
+				t.Fatalf("state = %s, recorded sends = %d, actual sends = %v", got.State, got.Sent, tg.sent)
+			}
+		})
+	}
+}
+
+func TestBroadcastDoesNotSendWithoutClaimingScheduledRow(t *testing.T) {
+	ctx := t.Context()
+	tg := &fakeTG{}
+	s := newService(t, tg, 3)
+	b, err := s.Create(ctx, B{BotID: 1, Text: "hi"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate the worker losing the state transition after reading the row.
+	if _, err := s.DB.W.ExecContext(ctx, `CREATE TRIGGER skip_claim BEFORE UPDATE OF state ON broadcasts
+		WHEN OLD.state = 'scheduled' AND NEW.state = 'running' BEGIN SELECT RAISE(IGNORE); END`); err != nil {
+		t.Fatal(err)
+	}
+	s.Tick(ctx)
+	s.Wait()
+
+	got, err := s.Get(ctx, b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.State != Scheduled || got.Sent != 0 || len(tg.sent) != 0 {
+		t.Fatalf("state = %s, recorded sends = %d, actual sends = %v", got.State, got.Sent, tg.sent)
+	}
+}
+
 func TestBotCallsGoFirst(t *testing.T) {
 	ctx := context.Background()
 	tg := &fakeTG{}

@@ -3,6 +3,7 @@ package secretreq
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -93,20 +94,21 @@ func TestNewBotToken(t *testing.T) {
 	}
 	var created []string
 	a := &API{Store: s, WriteError: func(w http.ResponseWriter, err error) { api.WriteError(w, 422, "telegram", err.Error()) },
-		CreateBot: func(_ context.Context, name, token string, group int64) (int64, string, error) {
+		CreateBot: func(_ context.Context, name, token string, group int64) (TokenRequestBot, error) {
 			if token != "111:good" {
-				return 0, "", errors.New("Unauthorized")
+				return TokenRequestBot{}, errors.New("Unauthorized")
 			}
 			created = append(created, name)
-			return 42, "shop_bot", nil
+			return TokenRequestBot{ID: 42, Username: "shop_bot", GroupAssignmentFailed: true}, nil
 		}}
 	mux := api.NewMux()
 	a.Register(mux)
+	var response *httptest.ResponseRecorder
 	post := func(caller api.Caller, path, body string) int {
 		req := httptest.NewRequest("POST", path, bytes.NewBufferString(body)).WithContext(api.WithCaller(ctx, caller))
-		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, req)
-		return w.Code
+		response = httptest.NewRecorder()
+		mux.ServeHTTP(response, req)
+		return response.Code
 	}
 	owner := api.Caller{Identity: pki.Identity{Serial: "o", Name: "owner", Kind: pki.Owner}, Source: api.SourceUI}
 	path := "/api/secret-requests/" + r.ID + "/token"
@@ -121,6 +123,10 @@ func TestNewBotToken(t *testing.T) {
 	}
 	if code := post(owner, path, `{"token":"111:good"}`); code != 201 {
 		t.Fatalf("token: %d", code)
+	}
+	var result TokenRequestBot
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil || result.ID != 42 || !result.GroupAssignmentFailed {
+		t.Fatalf("created bot response with group warning: %s", response.Body.String())
 	}
 	if r, _ = s.Get(ctx, r.ID); r.State != "set" || r.CreatedBot != 42 || len(created) != 1 || created[0] != "Shop" {
 		t.Fatalf("%+v %v", r, created)

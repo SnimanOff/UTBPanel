@@ -100,6 +100,71 @@ func TestCreateBot(t *testing.T) {
 	}
 }
 
+func TestValidBotNameCountsUnicodeCodePoints(t *testing.T) {
+	for _, character := range []string{"a", "я", "🙂"} {
+		if err := validBotName(strings.Repeat(character, 64)); err != nil {
+			t.Errorf("64 occurrences of %q: %v", character, err)
+		}
+		if err := validBotName(strings.Repeat(character, 65)); err == nil {
+			t.Errorf("accepted 65 occurrences of %q", character)
+		}
+	}
+}
+
+func TestCreateBotDoesNotHoldConfigGuardDuringTelegramVerification(t *testing.T) {
+	c := newCore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	verifying := make(chan struct{})
+	respond := make(chan struct{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(verifying)
+		select {
+		case <-respond:
+			io.WriteString(w, `{"ok":true,"result":{"id":123,"is_bot":true,"username":"test_bot"}}`)
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	defer close(respond)
+	defer cancel()
+	c.TG.Base = srv.URL
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.CreateBot(ctx, CreateBot{Name: "Test", Token: "123:fixture"})
+		done <- err
+	}()
+	select {
+	case <-verifying:
+	case err := <-done:
+		t.Fatalf("getMe did not start: %v", err)
+	case <-ctx.Done():
+		t.Fatal("getMe did not start")
+	}
+
+	lockCtx, unlockWait := context.WithTimeout(ctx, time.Second)
+	defer unlockWait()
+	_, unlock, err := c.ConfigGuard.Lock(lockCtx)
+	if err != nil {
+		t.Fatalf("getMe was holding the configuration guard: %v", err)
+	}
+	c.restoring.Store(true)
+	unlock()
+	respond <- struct{}{}
+
+	select {
+	case err := <-done:
+		var we *wire.Error
+		if !errors.As(err, &we) || we.Code != wire.CodeUnavailable {
+			t.Fatalf("creation during restoration: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("creation did not finish")
+	}
+	if bots, err := c.Bots(ctx); err != nil || len(bots) != 0 {
+		t.Fatalf("bots after restore started: %v, %v", bots, err)
+	}
+}
+
 func TestBotsWithOneReadConnection(t *testing.T) {
 	c := newCore(t)
 	c.DB.R.SetMaxOpenConns(1)

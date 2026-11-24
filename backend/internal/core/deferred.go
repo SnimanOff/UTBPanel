@@ -157,7 +157,7 @@ func (c *Core) registerDeferred() {
 		return l.RUnlock
 	}
 	// The edge hands over what it queued while the core was down.
-	c.Mux.Handle(edge.MethodDeferred, wire.Func(func(ctx context.Context, _ *wire.Conn, d edge.Deferred) (struct{}, error) {
+	c.edgeMux.Handle(edge.MethodDeferred, wire.Func(func(ctx context.Context, _ *wire.Conn, d edge.Deferred) (struct{}, error) {
 		for _, u := range d.Updates {
 			if err := c.Defer(ctx, d.BotID, u); err != nil {
 				return struct{}{}, err

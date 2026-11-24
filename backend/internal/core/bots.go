@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/SnimanOff/UTBPanel/backend/internal/journal"
 	"github.com/SnimanOff/UTBPanel/backend/internal/sdkhost"
@@ -150,7 +151,7 @@ func (c *Core) BotByName(ctx context.Context, name string) (Bot, error) {
 }
 
 func validBotName(name string) error {
-	if strings.TrimSpace(name) == "" || len(name) > 64 {
+	if strings.TrimSpace(name) == "" || utf8.RuneCountInString(name) > 64 {
 		return wire.Errorf(wire.CodeBadRequest, "name must be 1-64 characters")
 	}
 	return nil
@@ -187,11 +188,9 @@ func randomSecret() string {
 // CreateBot checks the token with getMe and stores the bot. Nothing is
 // saved if Telegram rejects the token.
 func (c *Core) CreateBot(ctx context.Context, in CreateBot) (Bot, error) {
-	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
-	if err != nil {
+	if err := ctx.Err(); err != nil {
 		return Bot{}, err
 	}
-	defer unlock()
 	if c.restoring.Load() {
 		return Bot{}, wire.Errorf(wire.CodeUnavailable, "выполняется восстановление")
 	}
@@ -203,11 +202,22 @@ func (c *Core) CreateBot(ctx context.Context, in CreateBot) (Bot, error) {
 	if err != nil {
 		return Bot{}, telegramError(err)
 	}
+
+	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return Bot{}, err
+	}
+	defer unlock()
+	if c.restoring.Load() {
+		return Bot{}, wire.Errorf(wire.CodeUnavailable, "выполняется восстановление")
+	}
 	c.Sec.Redact.Add(in.Token)
 	var b Bot
 	err = c.DB.Tx(ctx, func(tx *sql.Tx) error {
 		var n int
-		tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM bots WHERE tg_id = ?`, me.ID).Scan(&n)
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM bots WHERE tg_id = ?`, me.ID).Scan(&n); err != nil {
+			return err
+		}
 		if n > 0 {
 			return wire.Errorf("exists", "@%s is already in the panel", me.Username)
 		}

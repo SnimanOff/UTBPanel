@@ -103,8 +103,20 @@ func (c *Core) observe(ob *observation) {
 				close(ob.done)
 				return
 			}
-			c.rollback(context.Background(), ob, reason)
-			ob.result = "rolled_back"
+			// Serialize the rollback with version switches and recheck after
+			// waiting: this observation may already have been superseded.
+			ob.result = "ok"
+			ctx, unlock, err := c.lockDeploy(context.Background(), ob.botID)
+			if err == nil {
+				c.watch.mu.Lock()
+				latest := c.watch.bots[ob.botID] == ob
+				c.watch.mu.Unlock()
+				if cur, _, _ := c.versions(ctx, ob.botID); latest && cur == ob.to {
+					c.rollback(ctx, ob, reason)
+					ob.result = "rolled_back"
+				}
+				unlock()
+			}
 			close(ob.done)
 			return
 		}
@@ -208,10 +220,10 @@ func (c *Core) watchDeploy(id, botID int64, from, to, backup string, schema int6
 }
 
 // rollbackNow is for a new version that did not even start.
-func (c *Core) rollbackNow(id, botID int64, from, to, backup string, schema int64, reason string) {
+func (c *Core) rollbackNow(ctx context.Context, id, botID int64, from, to, backup string, schema int64, reason string) {
 	ob := &observation{deployID: id, botID: botID, from: from, to: to, backup: backup, schemaBefore: schema,
 		start: time.Now(), done: make(chan struct{})}
-	c.rollback(context.Background(), ob, reason)
+	c.rollback(ctx, ob, reason)
 	ob.result = "rolled_back"
 	close(ob.done)
 }

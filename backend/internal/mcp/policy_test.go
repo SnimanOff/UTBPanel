@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -30,7 +31,7 @@ func TestMCPGroupPolicyChecksCurrentScopeAndFiltersGlobalLists(t *testing.T) {
 	defer db.Close()
 	for _, query := range []string{
 		`INSERT INTO groups(id,name,mcp_mode) VALUES(1,'read','read'),(2,'full','full'),(3,'off','off')`,
-		`INSERT INTO bot_meta(bot_id,group_id) VALUES(11,1),(22,2),(33,3)`,
+		`INSERT INTO bot_meta(bot_id,group_id) VALUES(11,1),(22,2),(23,2),(24,2),(25,2),(33,3),(55,2),(66,3),(77,1),(88,2)`,
 		`INSERT INTO alert_rules(id,bot_id,metric,value) VALUES(101,11,'cpu',80),(102,22,'cpu',80),(103,0,'cpu',80)`,
 	} {
 		if _, err := db.W.Exec(query); err != nil {
@@ -53,17 +54,34 @@ func TestMCPGroupPolicyChecksCurrentScopeAndFiltersGlobalLists(t *testing.T) {
 		api.WriteJSON(w, 200, map[string]bool{"ok": true})
 	})
 	mux.HandleFunc("GET /api/bots", func(w http.ResponseWriter, r *http.Request) {
-		api.WriteJSON(w, 200, []map[string]int{{"id": 11}, {"id": 22}, {"id": 33}, {"id": 44}})
+		api.WriteJSON(w, 200, []map[string]int{{"id": 11}, {"id": 22}, {"id": 33}, {"id": 44}, {"id": 35, "test_for": 33}})
 	})
 	mux.HandleFunc("GET /api/audit", func(w http.ResponseWriter, r *http.Request) {
-		api.WriteJSON(w, 200, []map[string]any{{"bot_id": 11, "text": "visible"}, {"bot_id": 33, "text": "hidden"}, {"text": "global"}})
+		api.WriteJSON(w, 200, []map[string]any{{"bot_id": 11, "text": "visible"}, {"bot_id": 33, "text": "hidden"}, {"bot_id": 35, "text": "hidden trial"}, {"text": "global"}})
 	})
-	mux.HandleFunc("GET /api/panics/summary", func(w http.ResponseWriter, r *http.Request) { api.WriteJSON(w, 200, map[string]int{"11": 1, "33": 2}) })
+	mux.HandleFunc("GET /api/panics/summary", func(w http.ResponseWriter, r *http.Request) {
+		api.WriteJSON(w, 200, map[string]int{"11": 1, "33": 2, "35": 3})
+	})
+	mux.HandleFunc("GET /api/bots/{id}/trial", func(w http.ResponseWriter, r *http.Request) {
+		api.WriteJSON(w, 200, map[string]any{
+			"test_bot": map[string]int{"id": 66}, "trial": map[string]int{"test_bot_id": 66},
+		})
+	})
+	mux.HandleFunc("GET /api/groups", func(w http.ResponseWriter, r *http.Request) {
+		api.WriteJSON(w, 200, []map[string]string{{"name": "visible", "mcp_mode": "read"}, {"name": "hidden", "mcp_mode": "off"}})
+	})
 	service, err := New(mux, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	service.Groups = groups
+	service.TestBotParents = func(context.Context) (map[int64]int64, error) {
+		return map[int64]int64{35: 33, 55: 11, 66: 22, 77: 23, 88: 24, 99: 25}, nil
+	}
+	service.TrialTargets = func(_ context.Context, parent int64) (int64, int64, error) {
+		attached := map[int64]int64{22: 66, 23: 77, 24: 88, 25: 99}[parent]
+		return attached, attached, nil
+	}
 	ops, err := operations()
 	if err != nil {
 		t.Fatal(err)
@@ -89,19 +107,52 @@ func TestMCPGroupPolicyChecksCurrentScopeAndFiltersGlobalLists(t *testing.T) {
 		}
 		return string(text)
 	}
-	for _, id := range []int{11, 22, 44} {
+	for _, id := range []int{11, 22, 44, 55} {
 		invoke("get_bot", map[string]any{"id": id}, false)
 	}
 	invoke("get_bot", map[string]any{"id": 33}, true)
+	invoke("get_bot", map[string]any{"id": 35}, true)
+	if text := invoke("get_trial", map[string]any{"id": 22}, false); strings.Contains(text, "66") {
+		t.Fatal("disabled test bot leaked through the trial read", text)
+	}
 	rename := func(id int, wantError bool) {
 		invoke("rename_bot", map[string]any{"id": id, "body": map[string]string{"name": "changed"}}, wantError)
 	}
 	rename(11, true)
 	rename(44, true)
+	rename(55, true)
+	rename(99, true)
 	rename(22, false)
 	invoke("stop", map[string]any{"id": 22}, true)
 	if writes.Load() != 1 {
 		t.Fatal("read-only or confirmation operation executed", writes.Load())
+	}
+	for _, tc := range []struct {
+		parent int
+		op     string
+		keep   bool
+		allow  bool
+	}{
+		{22, "start_trial", false, false},
+		{23, "start_trial", false, false},
+		{24, "start_trial", false, true},
+		{25, "start_trial", false, true},
+		{22, "stop_trial", true, false},
+		{23, "stop_trial", false, false},
+		{23, "stop_trial", true, true},
+		{25, "stop_trial", false, true},
+		{22, "promote_trial", true, false},
+		{23, "promote_trial", false, false},
+		{23, "promote_trial", true, true},
+		{25, "promote_trial", false, true},
+	} {
+		body := map[string]any{"keep_test_bot": tc.keep}
+		if err := service.authorize(ctx, byName[tc.op], map[string]any{"id": tc.parent, "body": body}); (err == nil) != tc.allow {
+			t.Errorf("%s parent %d (keep %v): %v", tc.op, tc.parent, tc.keep, err)
+		}
+		if tc.op == "start_trial" && tc.allow && inputID(body["test_bot_id"]) == 0 {
+			t.Errorf("%s parent %d did not bind the proposal to its test bot", tc.op, tc.parent)
+		}
 	}
 	if _, err := groups.SetMCPMode(ctx, 2, "read"); err != nil {
 		t.Fatal(err)
@@ -120,7 +171,7 @@ func TestMCPGroupPolicyChecksCurrentScopeAndFiltersGlobalLists(t *testing.T) {
 	}
 	for _, name := range []string{"list_bots", "get_audit", "panics_summary"} {
 		text := invoke(name, map[string]any{}, false)
-		if strings.Contains(text, "33") || strings.Contains(text, "hidden") {
+		if strings.Contains(text, "33") || strings.Contains(text, "35") || strings.Contains(text, "hidden") {
 			t.Fatal("disabled bot leaked through", name, text)
 		}
 	}
@@ -151,6 +202,15 @@ func TestMCPGroupPolicyChecksCurrentScopeAndFiltersGlobalLists(t *testing.T) {
 	args["body"] = map[string]any{"name": "new", "token": "private"}
 	if err := service.authorize(ctx, create, args); err == nil {
 		t.Fatal("creation permitted without any full group")
+	}
+
+	service.TestBotParents = func(context.Context) (map[int64]int64, error) {
+		return nil, errors.New("core offline")
+	}
+	invoke("get_bot", map[string]any{"id": 35}, true)
+	invoke("get_audit", map[string]any{}, true)
+	if text := invoke("list_groups", map[string]any{}, false); !strings.Contains(text, "visible") || strings.Contains(text, "hidden") {
+		t.Fatal("group listing changed when the core became unavailable", text)
 	}
 }
 

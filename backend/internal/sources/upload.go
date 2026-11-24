@@ -34,6 +34,7 @@ func (u *Uploads) Register(mux *api.Mux) {
 	mux.HandleFunc("GET /api/bots/{id}/releases", u.list)
 	mux.HandleFunc("POST /api/bots/{id}/releases/{version}/switch", u.switchVersion)
 	mux.HandleFunc("GET /api/bots/{id}/deploys", u.deploys)
+	u.registerScheduledDeploys(mux)
 	u.registerGitHub(mux)
 }
 

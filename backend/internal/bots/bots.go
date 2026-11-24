@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -182,13 +183,6 @@ func (s *Service) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) create(w http.ResponseWriter, r *http.Request) {
-	ctx, unlock, err := s.Groups.Guard.Lock(r.Context())
-	if err != nil {
-		WriteCoreError(w, err)
-		return
-	}
-	defer unlock()
-	r = r.WithContext(ctx)
 	var in struct {
 		Name    string `json:"name"`
 		Token   string `json:"token"`
@@ -202,19 +196,38 @@ func (s *Service) create(w http.ResponseWriter, r *http.Request) {
 		WriteCoreError(w, err)
 		return
 	}
-	audit.Annotate(r, "bot.create", b.Name, map[string]any{"username": b.Username, "token": "изменено"})
+	audit.Annotate(r, "bot.create", b.Name, map[string]any{
+		"username": b.Username, "token": "изменено", "group_assignment_failed": b.GroupAssignmentFailed,
+	})
 	audit.SetBot(r, b.ID)
 	// The token is never returned: only @username is shown from now on.
 	api.WriteJSON(w, http.StatusCreated, b)
 }
 
+// CreatedBot includes any warning from placing the new bot in the panel.
+type CreatedBot struct {
+	core.Bot
+	GroupAssignmentFailed bool `json:"group_assignment_failed,omitempty"`
+}
+
 // CreateBot adds a bot (the core checks the token with getMe) into a group.
-func (s *Service) CreateBot(ctx context.Context, name, token string, groupID int64) (core.Bot, error) {
-	var b core.Bot
-	if err := s.Call(ctx, "bots.create", core.CreateBot{Name: name, Token: token, Actor: api.Actor(ctx)}, &b); err != nil {
+func (s *Service) CreateBot(ctx context.Context, name, token string, groupID int64) (CreatedBot, error) {
+	var b CreatedBot
+	// Keep MCP checks from seeing a bot before its group permissions are saved.
+	ctx, unlock, err := s.Groups.Guard.Lock(ctx)
+	if err != nil {
 		return b, err
 	}
-	s.Groups.SetGroup(ctx, b.ID, groupID)
+	defer unlock()
+	if err := s.Call(ctx, "bots.create", core.CreateBot{Name: name, Token: token, Actor: api.Actor(ctx)}, &b.Bot); err != nil {
+		return b, err
+	}
+	groupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := s.Groups.SetGroup(groupCtx, b.ID, groupID); err != nil {
+		b.GroupAssignmentFailed = true
+		slog.WarnContext(ctx, "could not place newly created bot", "bot", b.ID, "group", groupID, "err", err)
+	}
 	return b, nil
 }
 

@@ -2,12 +2,15 @@ package core
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
+	"github.com/SnimanOff/UTBPanel/backend/internal/botconfig"
 	"github.com/SnimanOff/UTBPanel/backend/internal/dbgate"
 	"github.com/SnimanOff/UTBPanel/backend/internal/deploy"
 	"github.com/SnimanOff/UTBPanel/backend/internal/events"
@@ -72,6 +75,21 @@ func (c *Core) versions(ctx context.Context, id int64) (cur, prev string, err er
 	return
 }
 
+// lockDeploy orders release switches and related operations for a bot and
+// its test bot. SDK registration can still take ConfigGuard during startup.
+func (c *Core) lockDeploy(ctx context.Context, id int64) (context.Context, func(), error) {
+	var owner int64
+	err := c.DB.R.QueryRowContext(ctx, `SELECT COALESCE(NULLIF(test_for, 0), id) FROM bots WHERE id=?`, id).Scan(&owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ctx, nil, errNoBot
+	}
+	if err != nil {
+		return ctx, nil, err
+	}
+	guard, _ := c.deployLocks.LoadOrStore(owner, &botconfig.Guard{})
+	return guard.(*botconfig.Guard).Lock(ctx)
+}
+
 // SwitchVersion stops the bot, makes version current and starts it again
 // if it was running. The deploy is recorded with the database backup made
 // before it; observation and autorollback come on top.
@@ -83,7 +101,18 @@ func (c *Core) SwitchVersion(ctx context.Context, in SwitchVersion) error {
 // Deploy is SwitchVersion that returns the deploy record (0 when nothing
 // changed).
 func (c *Core) Deploy(ctx context.Context, in SwitchVersion) (int64, error) {
-	b, err := c.Bot(ctx, in.BotID)
+	ctx, unlock, err := c.lockDeploy(ctx, in.BotID)
+	if err != nil {
+		return 0, err
+	}
+	defer unlock()
+	configCtx, unlockConfig, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return 0, err
+	}
+	unlockConfig = sync.OnceFunc(unlockConfig)
+	defer unlockConfig()
+	b, err := c.Bot(configCtx, in.BotID)
 	if err != nil {
 		return 0, err
 	}
@@ -94,15 +123,15 @@ func (c *Core) Deploy(ctx context.Context, in SwitchVersion) (int64, error) {
 		return 0, nil
 	}
 	// Settings first: env and limits take effect when the new version starts.
-	if err := c.applyReleaseConfig(ctx, in); err != nil {
+	if err := c.applyReleaseConfig(configCtx, in); err != nil {
 		return 0, err
 	}
 	// A copy of the database before every deploy.
-	bk, err := c.BackupDB(ctx, in.BotID, "deploy")
+	bk, err := c.BackupDB(configCtx, in.BotID, "deploy")
 	if err != nil && err != dbgate.ErrNoDB {
 		return 0, wire.Errorf("backup_failed", "бэкап базы перед деплоем не удался: %v", err)
 	}
-	res, err := c.DB.W.ExecContext(ctx, `INSERT INTO deploys (bot_id, from_version, to_version, backup, schema_before, actor, started_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+	res, err := c.DB.W.ExecContext(configCtx, `INSERT INTO deploys (bot_id, from_version, to_version, backup, schema_before, actor, started_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		in.BotID, b.Version, in.Version, bk.Name, bk.SchemaVersion, in.Actor.Source+":"+in.Actor.Name, store.Now())
 	if err != nil {
 		return 0, err
@@ -114,20 +143,22 @@ func (c *Core) Deploy(ctx context.Context, in SwitchVersion) (int64, error) {
 	}
 	wasRunning := c.Runner.IsRunning(in.BotID)
 	if wasRunning {
-		if err := c.Runner.Stop(ctx, in.BotID); err != nil {
+		if err := c.Runner.Stop(configCtx, in.BotID); err != nil {
 			return fail(err)
 		}
 	}
-	if _, err := c.DB.W.ExecContext(ctx, `UPDATE bots SET previous_version = current_version, current_version = ? WHERE id = ?`, in.Version, in.BotID); err != nil {
+	if _, err := c.DB.W.ExecContext(configCtx, `UPDATE bots SET previous_version = current_version, current_version = ? WHERE id = ?`, in.Version, in.BotID); err != nil {
 		return fail(err)
 	}
+	// The new process can register SDK flags before signaling readiness.
+	unlockConfig()
 	c.Logs.Add(in.BotID, "core", "version "+b.Version+" → "+in.Version, nowUTC())
 	started := wasRunning || b.Version == ""
 	if started {
 		if err := c.StartBot(ctx, in.BotID); err != nil {
 			if b.Version != "" && in.Actor.Source != journal.SourceAutorollback {
 				// The new version did not start: back to the old one at once.
-				c.rollbackNow(id, in.BotID, b.Version, in.Version, bk.Name, bk.SchemaVersion, "не запустилась: "+err.Error())
+				c.rollbackNow(context.WithoutCancel(ctx), id, in.BotID, b.Version, in.Version, bk.Name, bk.SchemaVersion, "не запустилась: "+err.Error())
 				return id, wire.Errorf("rolled_back", "версия %s не запустилась, возвращена %s: %v", in.Version, b.Version, err)
 			}
 			return fail(err)

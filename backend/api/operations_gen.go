@@ -3,7 +3,7 @@
 package spec
 
 // GeneratedHash is the SHA-256 of openapi.yaml this file was made from.
-const GeneratedHash = "c071b856157cbe4425915902e676fe26026f15d167ea6a54966e74339084f0dc"
+const GeneratedHash = "614fb8fe37ed5ae2cfc68d1e2267e4dbc331d5104b2a0b9fc3d6e90fab9d0fec"
 
 // Op is one operation of the API.
 type Op struct {
@@ -18,6 +18,7 @@ var Ops = []Op{
 	{"delete_bot", "DELETE", "/api/bots/{id}", "never", "Stop the bot, remove its webhook and delete all its data"},
 	{"stop_canary", "DELETE", "/api/bots/{id}/canary", "write", "Cancel the canary; everyone goes back to the main version, the database is not touched"},
 	{"closed_remove", "DELETE", "/api/bots/{id}/closed/allow/{uid}", "write", "Remove a user from the closed mode list"},
+	{"cancel_scheduled_deploy", "DELETE", "/api/bots/{id}/deploy-schedule/{schedule_id}", "confirm", "Cancel a deploy plan before it starts"},
 	{"reset_flag", "DELETE", "/api/bots/{id}/sdk/flags/{name}", "write", "Restore a flag default from the bot code"},
 	{"delete_secret", "DELETE", "/api/bots/{id}/secrets/{name}", "confirm", "Delete a secret"},
 	{"detach_test_bot", "DELETE", "/api/bots/{id}/test-bot", "never", "Detach the test bot and delete it with its data; a test run on it ends"},
@@ -50,6 +51,7 @@ var Ops = []Op{
 	{"get_db_metrics", "GET", "/api/bots/{id}/db/metrics", "read", "SDK query counts, active requests, latency histogram and redacted slow SQL"},
 	{"get_db_rows", "GET", "/api/bots/{id}/db/tables/{table}", "read", "A page of a table"},
 	{"list_deploy_reports", "GET", "/api/bots/{id}/deploy-reports", "read", "Hour before vs hour after each deploy (updates, errors, p95, crashes, CPU, RAM) and what got worse"},
+	{"get_scheduled_deploy", "GET", "/api/bots/{id}/deploy-schedule", "read", "Latest one-time deploy plan and its status, if any"},
 	{"list_deploys", "GET", "/api/bots/{id}/deploys", "read", "Deploy history (from, to, backup, who, result), newest first"},
 	{"download_bot_export", "GET", "/api/bots/{id}/exports/{export}", "never", "Download an encrypted .tgbot archive before it expires"},
 	{"get_github", "GET", "/api/bots/{id}/github", "read", "GitHub Releases setup of the bot, or null"},
@@ -124,6 +126,7 @@ var Ops = []Op{
 	{"restore_db", "POST", "/api/bots/{id}/db/backups/{name}/restore", "never", "Stop the bot, restore the database from a backup, start it again"},
 	{"exec_db", "POST", "/api/bots/{id}/db/exec", "never", "SQL that writes to the bot database (held button in the panel; the text goes to the audit)"},
 	{"query_db", "POST", "/api/bots/{id}/db/query", "read", "Read-only SQL (the connection is query_only; the text is not inspected)"},
+	{"schedule_deploy", "POST", "/api/bots/{id}/deploy-schedule", "confirm", "Schedule a one-time deploy of a stored version"},
 	{"check_github", "POST", "/api/bots/{id}/github/check", "write", "Look for a new release now"},
 	{"schedule_maintenance", "POST", "/api/bots/{id}/maintenance", "confirm", "Plan maintenance (times in UTC; text with {start} and {end}; optionally switch to a version)"},
 	{"extend_maintenance", "POST", "/api/bots/{id}/maintenance/extend", "write", "Move the planned end (+15, +30, +60 minutes)"},

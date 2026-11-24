@@ -18,11 +18,30 @@ func inputID(value any) int64 {
 	return n
 }
 
-func (s *Service) botMode(ctx context.Context, id int64) (string, error) {
+func (s *Service) botGroupMode(ctx context.Context, id int64, ungrouped string) (string, error) {
 	var mode string
-	err := s.Groups.DB.R.QueryRowContext(ctx, `SELECT COALESCE((SELECT g.mcp_mode FROM bot_meta m JOIN groups g ON g.id=m.group_id WHERE m.bot_id=?),'read')`, id).Scan(&mode)
+	err := s.Groups.DB.R.QueryRowContext(ctx, `SELECT COALESCE((SELECT g.mcp_mode FROM bot_meta m JOIN groups g ON g.id=m.group_id WHERE m.bot_id=?),?)`, id, ungrouped).Scan(&mode)
 	return mode, err
 }
+
+func (s *Service) botMode(ctx context.Context, id int64) (string, error) {
+	mode, err := s.botGroupMode(ctx, id, "read")
+	if err != nil || (mode != "read" && mode != "full") || s.TestBotParents == nil {
+		return mode, err
+	}
+	parents, err := s.TestBotParents(ctx)
+	if err != nil {
+		return "", fmt.Errorf("unavailable: could not check test bot permissions: %w", err)
+	}
+	if parent := parents[id]; parent != 0 {
+		parentMode, err := s.botGroupMode(ctx, parent, "read")
+		if err != nil || parentMode != "full" {
+			return parentMode, err
+		}
+	}
+	return mode, nil
+}
+
 func (s *Service) allowBot(ctx context.Context, id int64, level string) error {
 	if id <= 0 {
 		return fmt.Errorf("forbidden: a bot is required")
@@ -31,6 +50,10 @@ func (s *Service) allowBot(ctx context.Context, id int64, level string) error {
 	if err != nil {
 		return err
 	}
+	return allowBotMode(mode, level)
+}
+
+func allowBotMode(mode, level string) error {
 	if mode == "off" || (mode != "read" && mode != "full") {
 		return fmt.Errorf("forbidden: MCP is disabled for this group")
 	}
@@ -72,7 +95,16 @@ func (s *Service) authorize(ctx context.Context, op operation, args map[string]a
 		return nil
 	}
 	if strings.HasPrefix(op.Path, "/api/bots/{id}") {
-		return s.allowBot(ctx, inputID(args["id"]), op.MCP)
+		botID := inputID(args["id"])
+		if err := s.allowBot(ctx, botID, op.MCP); err != nil {
+			return err
+		}
+		switch op.ID {
+		case "start_trial", "stop_trial", "promote_trial":
+			return s.authorizeTrial(ctx, op, botID, args)
+		default:
+			return nil
+		}
 	}
 	if op.ID == "save_alert_rule" || op.ID == "delete_alert_rule" {
 		var id, bot int64
@@ -100,9 +132,51 @@ func (s *Service) authorize(ctx context.Context, op operation, args map[string]a
 	return nil
 }
 
+func (s *Service) authorizeTrial(ctx context.Context, op operation, botID int64, args map[string]any) error {
+	if s.TrialTargets == nil {
+		return fmt.Errorf("unavailable: could not resolve the test bot")
+	}
+	attached, active, err := s.TrialTargets(ctx, botID)
+	if err != nil {
+		return fmt.Errorf("unavailable: could not resolve the test bot")
+	}
+	body, _ := args["body"].(map[string]any)
+	allowTarget := func(id int64, level string) error {
+		if id != attached {
+			return s.allowBot(ctx, id, level)
+		}
+		// The primary bot already authorized this trial. Its default
+		// ungrouped attachment participates in the primary's operation.
+		mode, err := s.botGroupMode(ctx, id, "full")
+		if err != nil {
+			return err
+		}
+		return allowBotMode(mode, level)
+	}
+	level := op.MCP
+	if op.ID == "start_trial" && attached != 0 {
+		if err := allowTarget(attached, level); err != nil {
+			return err
+		}
+		// Bind the proposal to the same attachment for the approval recheck.
+		if supplied := inputID(body["test_bot_id"]); supplied != 0 && supplied != attached {
+			return fmt.Errorf("invalid_arguments: the selected bot is not the attached test bot")
+		}
+		if body != nil {
+			body["test_bot_id"] = json.Number(strconv.FormatInt(attached, 10))
+		}
+	} else if keep, _ := body["keep_test_bot"].(bool); keep {
+		level = spec.Read
+	}
+	if active != 0 && (op.ID != "start_trial" || active != attached) {
+		return allowTarget(active, level)
+	}
+	return nil
+}
+
 // Global lists must not provide a second route to bots in disabled groups.
 func (s *Service) filter(ctx context.Context, op operation, value any) (any, error) {
-	if s.Groups == nil || strings.HasPrefix(op.Path, "/api/bots/{id}") {
+	if s.Groups == nil || (strings.HasPrefix(op.Path, "/api/bots/{id}") && op.ID != "get_trial") {
 		return value, nil
 	}
 	rows, err := s.Groups.DB.R.QueryContext(ctx, `SELECT m.bot_id FROM bot_meta m JOIN groups g ON g.id=m.group_id WHERE g.mcp_mode NOT IN ('read','full')`)
@@ -123,24 +197,52 @@ func (s *Service) filter(ctx context.Context, op operation, value any) (any, err
 	if err != nil {
 		return nil, err
 	}
+	var parents map[int64]int64
+	var parentsErr error
+	var checkedParents bool
+	isOff := func(id int64) bool {
+		if off[id] {
+			return true
+		}
+		if id <= 0 || len(off) == 0 || s.TestBotParents == nil {
+			return false
+		}
+		if !checkedParents {
+			parents, parentsErr = s.TestBotParents(ctx)
+			checkedParents = true
+		}
+		return off[parents[id]]
+	}
+	if op.ID == "get_trial" {
+		if result, ok := value.(map[string]any); ok {
+			if test, ok := result["test_bot"].(map[string]any); ok && isOff(inputID(test["id"])) {
+				result["test_bot"] = nil
+				delete(result, "test_bot_status")
+			}
+			if trial, ok := result["trial"].(map[string]any); ok && isOff(inputID(trial["test_bot_id"])) {
+				result["trial"] = nil
+			}
+		}
+		return value, parentsErr
+	}
 	if op.ID == "panics_summary" {
 		if summary, ok := value.(map[string]any); ok {
 			for key := range summary {
-				if off[inputID(key)] {
+				if isOff(inputID(key)) {
 					delete(summary, key)
 				}
 			}
 		}
-		return value, nil
+		return value, parentsErr
 	}
 	var scrub func(any) (any, bool)
 	scrub = func(value any) (any, bool) {
 		switch node := value.(type) {
 		case map[string]any:
-			if off[inputID(node["bot_id"])] {
+			if isOff(inputID(node["bot_id"])) {
 				return nil, false
 			}
-			if op.ID == "list_bots" && off[inputID(node["id"])] {
+			if op.ID == "list_bots" && isOff(inputID(node["id"])) {
 				return nil, false
 			}
 			if op.ID == "list_groups" && node["mcp_mode"] == "off" {
@@ -156,7 +258,7 @@ func (s *Service) filter(ctx context.Context, op operation, value any) (any, err
 		case []any:
 			out := make([]any, 0, len(node))
 			for _, child := range node {
-				if op.ID == "problem_bots" && off[inputID(child)] {
+				if op.ID == "problem_bots" && isOff(inputID(child)) {
 					continue
 				}
 				if next, keep := scrub(child); keep {
@@ -168,5 +270,5 @@ func (s *Service) filter(ctx context.Context, op operation, value any) (any, err
 		return value, true
 	}
 	out, _ := scrub(value)
-	return out, nil
+	return out, parentsErr
 }

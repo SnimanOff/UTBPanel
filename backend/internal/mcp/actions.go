@@ -165,7 +165,7 @@ func (s *Service) resolve(ctx context.Context, id string) {
 }
 
 // describe says what the action will do: a diff for apply_config, the
-// version and its tgpanel.yaml diff for deploy_release.
+// version and its tgpanel.yaml diff for a release switch or scheduled deploy.
 func (s *Service) describe(ctx context.Context, op operation, args map[string]any) (string, map[string]any, error) {
 	detail := map[string]any{"operation": op.ID}
 	caller := api.CallerFrom(ctx)
@@ -192,22 +192,28 @@ func (s *Service) describe(ctx context.Context, op operation, args map[string]an
 			}
 		}
 		return fmt.Sprintf("применить настройки (%d изменений)", n), detail, nil
-	case "deploy_release":
+	case "deploy_release", "schedule_deploy":
+		body, _ := args["body"].(map[string]any)
 		version := fmt.Sprint(args["version"])
+		if op.ID == "schedule_deploy" {
+			version = fmt.Sprint(body["version"])
+		}
 		detail["version"] = version
 		status, cfg, err := s.internal(ctx, "GET", "/api/bots/"+bot+"/releases/"+url.PathEscape(version)+"/config", nil, "application/json", nil, caller.IP)
 		if err == nil && status == 200 {
 			detail["config"] = cfg
 			// The owner confirms the diff shown here: bind the deploy to it,
 			// so changed settings make it fail instead of applying another diff.
-			body, _ := args["body"].(map[string]any)
-			if m, ok := cfg.(map[string]any); ok && body["config_version"] == nil {
+			if m, ok := cfg.(map[string]any); ok && (op.ID == "schedule_deploy" || body["config_version"] == nil) {
 				if body == nil {
 					body = map[string]any{}
 				}
 				body["config_version"] = m["settings_version"]
 				args["body"] = body
 			}
+		}
+		if op.ID == "schedule_deploy" {
+			return fmt.Sprintf("запланировать деплой %s на %v", version, body["starts_at"]), detail, nil
 		}
 		return "развернуть версию " + version, detail, nil
 	}

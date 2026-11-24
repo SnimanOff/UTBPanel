@@ -34,6 +34,7 @@
   let fileInput = $state<HTMLInputElement>()
   // A notification about a requested secret opens the tab with ?secret=NAME.
   const asked = new URLSearchParams(location.search).get('secret') ?? ''
+  let groupAssignmentFailed = $state(new URLSearchParams(location.search).has('group_assignment_failed'))
   const standard = ['BOT_TOKEN', 'PORT', 'WEBHOOK_URL', 'WEBHOOK_SECRET', 'DATABASE_URL', 'DATA_DIR', 'MINI_APP_URL']
 
   async function load() {
@@ -152,6 +153,12 @@
     const group_id = Number((e.target as HTMLSelectElement).value)
     try {
       await api.put(`/api/bots/${bot.id}/group`, { group_id })
+      if (groupAssignmentFailed) {
+        groupAssignmentFailed = false
+        const page = new URL(location.href)
+        page.searchParams.delete('group_assignment_failed')
+        router.go(page.pathname + page.search, true)
+      }
       store.refresh(bot.id)
       done('Группа изменена', false)
     } catch (err) {
@@ -191,6 +198,7 @@
 {/if}
 {#if saved}<p class="ok">{saved}</p>{/if}
 {#if error}<p class="danger pre">{error}</p>{/if}
+{#if groupAssignmentFailed}<p class="danger" role="status">Бот создан, но панель не сохранила его место в списке. Группу можно выбрать в настройках ниже.</p>{/if}
 
 <SecretRequests botId={bot.id} highlight={asked} onset={(name) => { done(`${name} сохранён`); load() }} />
 

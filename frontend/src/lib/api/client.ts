@@ -24,7 +24,7 @@ export class ApiError extends Error {
 
 type Body = BodyInit | object | undefined
 
-async function request<T>(method: string, path: string, body?: Body): Promise<T> {
+async function request<T>(method: string, path: string, body?: Body, signal?: AbortSignal): Promise<T> {
   const headers: Record<string, string> = { 'X-Panel': '1' }
   let payload: BodyInit | undefined
   if (body instanceof FormData || body instanceof Blob || typeof body === 'string') {
@@ -35,7 +35,7 @@ async function request<T>(method: string, path: string, body?: Body): Promise<T>
   }
   let resp: Response
   try {
-    resp = await fetch(path, { method, headers, body: payload, credentials: 'same-origin' })
+    resp = await fetch(path, { method, headers, body: payload, credentials: 'same-origin', signal })
   } catch (e) {
     throw new ApiError(0, 'network', 'нет связи с gate')
   }
@@ -58,7 +58,7 @@ async function request<T>(method: string, path: string, body?: Body): Promise<T>
 
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
-  post: <T>(path: string, body?: Body) => request<T>('POST', path, body ?? undefined),
+  post: <T>(path: string, body?: Body, signal?: AbortSignal) => request<T>('POST', path, body ?? undefined, signal),
   put: <T>(path: string, body?: Body) => request<T>('PUT', path, body),
   patch: <T>(path: string, body?: Body) => request<T>('PATCH', path, body),
   del: <T>(path: string) => request<T>('DELETE', path),

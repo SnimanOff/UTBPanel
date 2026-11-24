@@ -19,7 +19,7 @@ func storeRelease(t *testing.T, c *Core, botID int64, version, config string) {
 	t.Helper()
 	dir := filepath.Join(c.Releases.Dir(botID), version)
 	os.MkdirAll(dir, 0o750)
-	os.WriteFile(filepath.Join(dir, "bot"), []byte("x"), 0o500)
+	os.WriteFile(filepath.Join(dir, "bot"), []byte("x"), 0o700)
 	meta, _ := json.Marshal(deploy.Release{Version: version, Source: "github"})
 	os.WriteFile(filepath.Join(dir, "release.json"), meta, 0o640)
 	if config != "" {

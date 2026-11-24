@@ -124,13 +124,22 @@ func (s *Service) send(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-	if b.State == Scheduled {
+	// An operator may stop a broadcast after Tick selected it.
+	switch b.State {
+	case Running:
+	case Scheduled:
 		total, _ := s.Estimate(ctx, b.BotID, b.Audience, b.ActiveDays)
 		b.Total = total
-		if _, err := s.DB.W.ExecContext(ctx, `UPDATE broadcasts SET state = ?, started_at = ?, total = ? WHERE id = ? AND state = ?`,
-			Running, store.Now(), total, id, Scheduled); err != nil {
+		res, err := s.DB.W.ExecContext(ctx, `UPDATE broadcasts SET state = ?, started_at = ?, total = ? WHERE id = ? AND state = ?`,
+			Running, store.Now(), total, id, Scheduled)
+		if err != nil {
 			return err
 		}
+		if n, err := res.RowsAffected(); err != nil || n == 0 {
+			return err
+		}
+	default:
+		return nil
 	}
 	token, err := s.Token(ctx, b.BotID)
 	if err != nil {

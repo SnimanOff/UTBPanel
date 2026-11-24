@@ -39,6 +39,15 @@ func (c *Core) deployRules(ctx context.Context, botID int64) (deploy.Rules, bool
 
 // pruneReleases removes stored versions beyond the bot's keep setting.
 func (c *Core) pruneReleases(ctx context.Context, botID int64) {
+	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return
+	}
+	defer unlock()
 	cur, prev, _ := c.versions(ctx, botID)
-	c.Releases.PruneKeep(botID, c.releaseSettings(ctx, botID).Keep, cur, prev)
+	var scheduled string
+	if err := c.DB.R.QueryRowContext(ctx, `SELECT COALESCE((SELECT version FROM scheduled_deploys WHERE bot_id = ? AND status IN ('scheduled', 'running')), '')`, botID).Scan(&scheduled); err != nil {
+		return
+	}
+	c.Releases.PruneKeep(botID, c.releaseSettings(ctx, botID).Keep, cur, prev, scheduled)
 }

@@ -54,7 +54,10 @@ type Server struct {
 	OnConnect    func(*Conn)
 	OnDisconnect func(*Conn, error)
 	// Accept checks the operating-system identity before reading any frames.
-	Accept           func(net.Conn) error
+	Accept func(net.Conn) error
+	// MuxForPeer authenticates the peer and selects its handlers before the
+	// handshake is acknowledged. Without it all protocols use Mux.
+	MuxForPeer       func(net.Conn, Hello) (*Mux, error)
 	HandshakeTimeout time.Duration
 
 	mu    sync.Mutex
@@ -86,7 +89,7 @@ func (s *Server) handle(nc net.Conn) {
 		nc.SetDeadline(time.Now().Add(s.HandshakeTimeout))
 	}
 	c := newConn(nc, s.Mux, s.Log)
-	if err := c.serverHandshake(append([]Hello{s.Hello}, s.Also...)); err != nil {
+	if err := c.serverHandshake(append([]Hello{s.Hello}, s.Also...), s.MuxForPeer); err != nil {
 		c.log.Warn("wire handshake failed", "proto", s.Hello.Proto, "err", err)
 		c.shutdown(err)
 		return

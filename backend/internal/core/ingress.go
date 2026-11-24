@@ -56,7 +56,7 @@ func (c *Core) newPipeline() *ingress.Pipeline {
 }
 
 func (c *Core) registerIngress() {
-	c.Mux.Handle(edge.MethodUpdate, wire.Func(func(ctx context.Context, _ *wire.Conn, u edge.Update) (edge.Reply, error) {
+	c.edgeMux.Handle(edge.MethodUpdate, wire.Func(func(ctx context.Context, _ *wire.Conn, u edge.Update) (edge.Reply, error) {
 		return c.Pipe.Handle(ctx, u.BotID, u.Body, time.Unix(0, u.Received)), nil
 	}))
 }

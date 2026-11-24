@@ -125,6 +125,11 @@ func validShare(s int) error {
 
 // StartCanary starts the second instance with a new version.
 func (c *Core) StartCanary(ctx context.Context, in CanaryReq) error {
+	ctx, unlock, err := c.lockDeploy(ctx, in.BotID)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	b, err := runner.LoadBot(ctx, c.DB, in.BotID)
 	if err != nil {
 		return errNoBot
@@ -178,6 +183,11 @@ func (c *Core) SetCanary(ctx context.Context, in CanaryReq) error {
 	if err := validShare(in.Share); err != nil {
 		return err
 	}
+	ctx, unlock, err := c.lockDeploy(ctx, in.BotID)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	cn, err := c.CanaryOf(ctx, in.BotID)
 	if err != nil {
 		return err
@@ -214,6 +224,20 @@ func (c *Core) StopCanary(ctx context.Context, botID int64, reason string) error
 	c.Logs.Add(botID, "core", "canary "+cn.Version+" stopped: "+reason, nowUTC())
 	c.Ev.Emit("canary", botID, events.Info, map[string]any{"action": "stopped", "version": cn.Version, "reason": reason})
 	return nil
+}
+
+// requestStopCanary orders an operator's stop with deployment and promotion.
+// Runner cleanup calls StopCanary directly while holding its lifecycle lock.
+func (c *Core) requestStopCanary(ctx context.Context, botID int64, reason string) error {
+	ctx, unlock, err := c.lockDeploy(ctx, botID)
+	if errors.Is(err, errNoBot) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	return c.StopCanary(ctx, botID, reason)
 }
 
 func (c *Core) registerCanary() {
@@ -270,7 +294,7 @@ func (c *Core) registerCanary() {
 			if reason == "" {
 				reason = "отменена"
 			}
-			return c.StopCanary(ctx, in.BotID, reason)
+			return c.requestStopCanary(ctx, in.BotID, reason)
 		})
 	}))
 }

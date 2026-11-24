@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 )
 
 // ClearBot stops the bot and wipes what it accumulated: bot.db with its WAL,
@@ -16,17 +17,23 @@ import (
 //
 // The canary shares the directory and the database, so it is stopped too.
 func (c *Core) ClearBot(ctx context.Context, id int64) error {
-	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	ctx, unlock, err := c.lockDeploy(ctx, id)
 	if err != nil {
 		return err
 	}
 	defer unlock()
-	if err := c.botExists(ctx, id); err != nil {
+	configCtx, unlockConfig, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	unlockConfig = sync.OnceFunc(unlockConfig)
+	defer unlockConfig()
+	if err := c.botExists(configCtx, id); err != nil {
 		return err
 	}
 	wasRunning := c.Runner.IsRunning(id)
 	c.Runner.StopCanary(id)
-	if err := c.Runner.Stop(ctx, id); err != nil {
+	if err := c.Runner.Stop(configCtx, id); err != nil {
 		return err
 	}
 	dir := filepath.Join(c.Cfg.DataDir, "bots", strconv.FormatInt(id, 10))
@@ -48,6 +55,7 @@ func (c *Core) ClearBot(ctx context.Context, id int64) error {
 	}
 	// The data is already gone: a bot that cannot start now must not turn the
 	// clear into an error.
+	unlockConfig()
 	if err := c.StartBot(ctx, id); err != nil {
 		c.Log.Warn("starting the bot after a clear failed", "bot", id, "err", err)
 	}

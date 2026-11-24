@@ -36,7 +36,7 @@ func (c *Core) TestBotOf(ctx context.Context, botID int64) (*Bot, error) {
 }
 
 // testBotName is a free panel name for the test bot of b.
-func (c *Core) testBotName(ctx context.Context, name string) string {
+func (c *Core) testBotName(ctx context.Context, name string) (string, error) {
 	base := name
 	if r := []rune(base); len(r) > 50 {
 		base = string(r[:50])
@@ -48,8 +48,11 @@ func (c *Core) testBotName(ctx context.Context, name string) string {
 			n += " " + strconv.Itoa(i)
 		}
 		var cnt int
-		if c.DB.R.QueryRowContext(ctx, `SELECT COUNT(*) FROM bots WHERE name = ?`, n).Scan(&cnt) == nil && cnt == 0 {
-			return n
+		if err := c.DB.R.QueryRowContext(ctx, `SELECT COUNT(*) FROM bots WHERE name = ?`, n).Scan(&cnt); err != nil {
+			return "", err
+		}
+		if cnt == 0 {
+			return n, nil
 		}
 	}
 }
@@ -57,6 +60,11 @@ func (c *Core) testBotName(ctx context.Context, name string) string {
 // AttachTestBot checks the token with getMe and makes that bot the test bot
 // of in.BotID; an attached one gets the new token.
 func (c *Core) AttachTestBot(ctx context.Context, in TestBotReq) (Bot, error) {
+	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
+	if err != nil {
+		return Bot{}, err
+	}
+	defer unlock()
 	b, err := c.Bot(ctx, in.BotID)
 	if err != nil {
 		return Bot{}, err
@@ -79,7 +87,11 @@ func (c *Core) AttachTestBot(ctx context.Context, in TestBotReq) (Bot, error) {
 		}
 		return c.SetToken(ctx, SetToken{BotID: old.ID, Token: in.Token, Actor: in.Actor})
 	}
-	tb, err := c.CreateBot(ctx, CreateBot{Name: c.testBotName(ctx, b.Name), Token: in.Token, TestFor: b.ID, Actor: in.Actor})
+	name, err := c.testBotName(ctx, b.Name)
+	if err != nil {
+		return Bot{}, err
+	}
+	tb, err := c.CreateBot(ctx, CreateBot{Name: name, Token: in.Token, TestFor: b.ID, Actor: in.Actor})
 	var we *wire.Error
 	if errors.As(err, &we) && we.Code == "exists" {
 		return Bot{}, wire.Errorf("exists", "этот бот уже есть в панели: для тестов нужен отдельный бот — создайте его в @BotFather")

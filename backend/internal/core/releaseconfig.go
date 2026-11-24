@@ -18,6 +18,12 @@ import (
 // is the settings revision the confirmed diff was made against.
 // Alert thresholds belong to the panel: they leave in the event.
 func (c *Core) applyReleaseConfig(ctx context.Context, in SwitchVersion) error {
+	return c.releaseConfig(ctx, in, true)
+}
+
+// releaseConfig checks the diff and its confirmation. Scheduling checks
+// it without applying changes; the deploy checks it again before applying.
+func (c *Core) releaseConfig(ctx context.Context, in SwitchVersion, apply bool) error {
 	if in.Actor.Source == journal.SourceAutorollback {
 		return nil // going back must not wait for anyone
 	}
@@ -26,7 +32,9 @@ func (c *Core) applyReleaseConfig(ctx context.Context, in SwitchVersion) error {
 		return err
 	}
 	invalid := func(err error) error {
-		c.Ev.Emit("release_config", in.BotID, events.Error, map[string]any{"version": in.Version, "state": "invalid", "error": err.Error()})
+		if apply {
+			c.Ev.Emit("release_config", in.BotID, events.Error, map[string]any{"version": in.Version, "state": "invalid", "error": err.Error()})
+		}
 		return wire.Errorf("bad_config", "tgpanel.yaml версии %s: %v", in.Version, err)
 	}
 	file, err := botconfig.ParseRelease(raw)
@@ -59,8 +67,13 @@ func (c *Core) applyReleaseConfig(ctx context.Context, in SwitchVersion) error {
 			}
 		}
 		sort.Strings(paths)
-		c.Ev.Emit("release_config", in.BotID, events.Warn, map[string]any{"version": in.Version, "state": "pending", "paths": strings.Join(paths, ", ")})
+		if apply {
+			c.Ev.Emit("release_config", in.BotID, events.Warn, map[string]any{"version": in.Version, "state": "pending", "paths": strings.Join(paths, ", ")})
+		}
 		return wire.Errorf("config_confirm", "tgpanel.yaml версии %s меняет %s: подтвердите diff во вкладке «Деплой»", in.Version, strings.Join(paths, ", "))
+	}
+	if !apply {
+		return nil
 	}
 	if len(diff.Changes) > 0 {
 		var res botconfig.ApplyResult

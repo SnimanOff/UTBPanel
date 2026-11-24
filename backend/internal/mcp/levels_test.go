@@ -46,7 +46,10 @@ func levelsDB(t *testing.T, ctx context.Context) *store.DB {
 // checked here and confirmed separately). A bot without a group is read.
 func TestLevelsInEveryMode(t *testing.T) {
 	ctx := context.Background()
-	service := &Service{Groups: &bots.Groups{DB: levelsDB(t, ctx)}}
+	service := &Service{
+		Groups:       &bots.Groups{DB: levelsDB(t, ctx)},
+		TrialTargets: func(context.Context, int64) (int64, int64, error) { return 0, 0, nil },
+	}
 	ops, err := operations()
 	if err != nil {
 		t.Fatal(err)

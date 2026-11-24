@@ -110,6 +110,11 @@ func (c *Core) UpdateSettings(ctx context.Context, in SettingsUpdate) error {
 
 // DeleteBot stops the bot, removes its webhook and deletes all its data.
 func (c *Core) DeleteBot(ctx context.Context, id int64) error {
+	ctx, unlockDeploy, err := c.lockDeploy(ctx, id)
+	if err != nil {
+		return err
+	}
+	defer unlockDeploy()
 	ctx, unlock, err := c.ConfigGuard.Lock(ctx)
 	if err != nil {
 		return err

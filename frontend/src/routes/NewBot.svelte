@@ -1,7 +1,7 @@
 <script lang="ts">
   // "+ Бот": name, group, token. Saving checks the token with getMe; on an
   // error Telegram's answer is shown under the field and nothing is saved.
-  import { api, ApiError, errorText, type Bot } from '../lib/api/client'
+  import { api, ApiError, errorText, type Schemas } from '../lib/api/client'
   import { store } from '../lib/api/stores.svelte'
   import { router } from '../lib/router.svelte'
   import Field from '../lib/ui/Field.svelte'
@@ -17,6 +17,7 @@
   let saving = $state(false)
   let nameInput = $state<HTMLInputElement>()
   let dialog = $state<HTMLDialogElement>()
+  const nameError = $derived([...name].length > 64 ? 'Имя должно содержать не больше 64 символов' : '')
 
   onMount(() => {
     dialog?.showModal()
@@ -30,20 +31,43 @@
 
   async function save(e: SubmitEvent) {
     e.preventDefault()
+    if (saving || nameError) return
     saving = true
     tokenError = error = ''
+    const group = groupId
+    const controller = new AbortController()
+    // Allow the core's 60-second Telegram request to return its error first.
+    const timeout = setTimeout(() => controller.abort(), 70_000)
     try {
-      const b = await api.post<Bot>('/api/bots', { name, token, group_id: groupId })
-      await store.load()
+      const { group_assignment_failed: groupFailed, ...b } = await api.post<Schemas['BotCreated']>(
+        '/api/bots', { name, token, group_id: group }, controller.signal,
+      )
+      store.put({
+        ...b,
+        group_id: groupFailed ? undefined : group || undefined,
+        position: 0,
+        status: { running: false, restarts: 0, last_exit: 0 },
+      })
       close()
-      router.go(`/bots/${b.id}/settings`)
+      router.go(`/bots/${b.id}/settings${groupFailed ? '?group_assignment_failed=1' : ''}`)
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'telegram') {
-        tokenError = 'Telegram: ' + err.message
+      if (controller.signal.aborted) {
+        error = 'Панель не ответила вовремя. Проверьте список ботов перед повторной попыткой.'
+      } else if (err instanceof ApiError && err.code === 'telegram') {
+        const reply = err.telegram as { error_code?: number; parameters?: { retry_after?: number } } | undefined
+        if (reply?.error_code === 429) {
+          const seconds = reply.parameters?.retry_after
+          tokenError = typeof seconds === 'number' && seconds > 0
+            ? `Telegram пока не смог проверить токен (429). Повторите попытку не раньше чем через ${seconds} с.`
+            : 'Telegram пока не смог проверить токен (429). Повторите попытку позже.'
+        } else {
+          tokenError = 'Telegram: ' + err.message
+        }
       } else {
         error = errorText(err)
       }
     } finally {
+      clearTimeout(timeout)
       saving = false
     }
   }
@@ -63,8 +87,8 @@
   <form onsubmit={save}>
     <div class="fields">
       <h1 id="newbot-title">Новый бот</h1>
-      <Field label="Имя в панели">
-        <input bind:this={nameInput} bind:value={name} required maxlength="64" />
+      <Field label="Имя в панели" error={nameError}>
+        <input bind:this={nameInput} bind:value={name} required aria-invalid={!!nameError} />
       </Field>
       <Field label="Группа">
         <select bind:value={groupId}>
@@ -79,7 +103,7 @@
     </div>
     <div class="buttons">
       <button type="button" onclick={close}>Отмена</button>
-      <button class="primary" disabled={saving || !name || !token}>{saving ? 'Проверяю…' : 'Сохранить'}</button>
+      <button class="primary" disabled={saving || !name.trim() || !!nameError || !token}>{saving ? 'Проверяю…' : 'Сохранить'}</button>
     </div>
   </form>
 </dialog>

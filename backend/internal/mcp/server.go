@@ -33,6 +33,10 @@ type Service struct {
 	API    http.Handler
 	Audit  *audit.Log
 	Groups *bots.Groups
+	// TestBotParents returns the core's test-bot to primary-bot mapping.
+	TestBotParents func(context.Context) (map[int64]int64, error)
+	// TrialTargets returns the attached test bot and the active trial's bot.
+	TrialTargets func(context.Context, int64) (attached, active int64, err error)
 	// DB keeps pending actions; without it confirm-level calls are refused.
 	DB      *store.DB
 	Notes   *alerts.Service

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -232,24 +233,26 @@ func (s *Service) Estimate(ctx context.Context, botID int64, aud string, days in
 
 // setState changes the state if it is one of from.
 func (s *Service) setState(ctx context.Context, id int64, to string, from ...string) error {
-	b, err := s.Get(ctx, id)
-	if err != nil {
+	err := s.DB.Tx(ctx, func(tx *sql.Tx) error {
+		var state string
+		err := tx.QueryRowContext(ctx, `SELECT state FROM broadcasts WHERE id = ?`, id).Scan(&state)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if !slices.Contains(from, state) {
+			return ErrState
+		}
+		if to == Cancelled {
+			_, err = tx.ExecContext(ctx, `UPDATE broadcasts SET state = ?, finished_at = ? WHERE id = ?`, to, store.Now(), id)
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE broadcasts SET state = ? WHERE id = ?`, to, id)
 		return err
-	}
-	ok := false
-	for _, f := range from {
-		ok = ok || b.State == f
-	}
-	if !ok {
-		return ErrState
-	}
-	q := `UPDATE broadcasts SET state = ? WHERE id = ?`
-	args := []any{to, id}
-	if to == Cancelled {
-		q = `UPDATE broadcasts SET state = ?, finished_at = ? WHERE id = ?`
-		args = []any{to, store.Now(), id}
-	}
-	if _, err := s.DB.W.ExecContext(ctx, q, args...); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	if to == Paused || to == Cancelled {

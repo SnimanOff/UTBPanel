@@ -389,7 +389,7 @@ func (c *Core) registerGitHub() {
 		}
 		return c.GitHub(ctx, id)
 	}))
-	c.Mux.Handle(edge.MethodGitHubHook, wire.Func(func(ctx context.Context, _ *wire.Conn, in edge.GitHubHook) (int, error) {
+	c.edgeMux.Handle(edge.MethodGitHubHook, wire.Func(func(ctx context.Context, _ *wire.Conn, in edge.GitHubHook) (int, error) {
 		return c.onGitHubHook(ctx, in)
 	}))
 }

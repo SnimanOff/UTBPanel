@@ -169,7 +169,7 @@ func (c *Core) serveApp(ctx context.Context, in edge.AppRequest) edge.AppRespons
 }
 
 func (c *Core) registerMiniApp() {
-	c.Mux.Handle(edge.MethodApp, wire.Func(func(ctx context.Context, _ *wire.Conn, in edge.AppRequest) (edge.AppResponse, error) {
+	c.edgeMux.Handle(edge.MethodApp, wire.Func(func(ctx context.Context, _ *wire.Conn, in edge.AppRequest) (edge.AppResponse, error) {
 		return c.serveApp(ctx, in), nil
 	}))
 	// The edge routes the host and gets a certificate for it.

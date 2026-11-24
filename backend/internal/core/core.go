@@ -78,6 +78,7 @@ type Core struct {
 	DB             *store.DB
 	W              *store.Writer
 	Mux            *wire.Mux
+	edgeMux        *wire.Mux
 	Srv            *wire.Server
 	Ev             *events.Bus
 	Sec            *secrets.Store
@@ -98,6 +99,7 @@ type Core struct {
 	Flood          *users.Antiflood
 	Maint          *maintenance.Service
 	Bcast          *broadcast.Service
+	deployLocks    sync.Map // bot ID (or its parent) → *botconfig.Guard
 	watch          watches
 	canaries       canaryRoutes
 	polls          polls
@@ -168,6 +170,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		Cfg:        cfg, Log: log, DB: db,
 		W:       store.NewWriter(db, 10*time.Second, log),
 		Mux:     wire.NewMux(),
+		edgeMux: wire.NewMux(),
 		procs:   map[string]procstat.Stats{},
 		cpuPrev: map[int64]cpuSample{},
 		cpuLast: map[int64]float64{},
@@ -183,7 +186,8 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 			app.Hello(wire.ProtoEdgeCore, "core", EdgeVersion, 1),
 			app.Hello(wire.ProtoCoreCLI, "core", 1, 1),
 		},
-		Log: log,
+		Log:        log,
+		MuxForPeer: c.peerMux,
 		OnConnect: func(conn *wire.Conn) {
 			log.Info("peer connected", "proto", conn.Proto(), "peer", conn.Peer().Hello.Name, "version", conn.Version())
 		},
@@ -223,6 +227,7 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 	c.registerUpgrade()
 	c.Releases = c.newReleases()
 	c.registerReleases()
+	c.registerScheduledDeploys()
 	c.registerReleaseConfig()
 	c.registerSettings()
 	c.registerEdgeSync()
@@ -343,15 +348,28 @@ func New(ctx context.Context, cfg config.Core, log *slog.Logger) (*Core, error) 
 		ServiceErrorRate = float64(cfg.ServiceErrorPct) / 100
 	}
 	c.Pipe.Account = append(c.Pipe.Account, c.Users.Account, c.Users.Payments)
-	c.Mux.Handle("ping", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
+	ping := func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return buildinfo.String("core"), nil
-	})
-	c.Mux.OnEvent(app.EventProcStats, func(_ *wire.Conn, _ string, body wire.Raw) {
+	}
+	c.Mux.Handle("ping", ping)
+	c.edgeMux.Handle("ping", ping)
+	procStats := func(conn *wire.Conn, _ string, body wire.Raw) {
 		var s procstat.Stats
-		if wire.Unmarshal(body, &s) == nil {
-			c.setProc(s)
+		if wire.Unmarshal(body, &s) != nil {
+			return
 		}
-	})
+		switch conn.Proto() {
+		case wire.ProtoEdgeCore:
+			s.Name = "edge"
+		case wire.ProtoCorePanel:
+			s.Name = "panel"
+		default:
+			return
+		}
+		c.setProc(s)
+	}
+	c.Mux.OnEvent(app.EventProcStats, procStats)
+	c.edgeMux.OnEvent(app.EventProcStats, procStats)
 	c.Mux.Handle("procs", func(context.Context, *wire.Conn, wire.Raw) (any, error) {
 		return c.Procs(), nil
 	})
@@ -390,9 +408,18 @@ func (c *Core) Run(ctx context.Context) error {
 	}
 	safe.Go(c.Log, "core socket", func() { c.Srv.Serve(ln) })
 	safe.Go(c.Log, "events", func() { c.Ev.Run(ctx) })
+	botsRestored := make(chan struct{})
 	safe.Go(c.Log, "restore bots", func() {
+		defer close(botsRestored)
 		if c.backupValue(ctx, restoreWaitEdgeKey) == "" {
 			c.Runner.Restore(ctx)
+		}
+	})
+	safe.Go(c.Log, "scheduled deploys", func() {
+		select {
+		case <-botsRestored:
+			c.runScheduledDeploys(ctx)
+		case <-ctx.Done():
 		}
 	})
 	safe.Go(c.Log, "prune exports", func() { c.Exports.Run(ctx) })

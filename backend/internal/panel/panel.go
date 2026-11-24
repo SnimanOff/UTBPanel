@@ -186,9 +186,9 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 	p.Bots.OnSecretSet = secretAsks.Fulfilled
 	(&secretreq.API{Store: secretAsks, WriteError: bots.WriteCoreError,
 		Exists: func(ctx context.Context, id int64) error { return p.Core.Call(ctx, "bots.get", id, nil) },
-		CreateBot: func(ctx context.Context, name, token string, group int64) (int64, string, error) {
+		CreateBot: func(ctx context.Context, name, token string, group int64) (secretreq.TokenRequestBot, error) {
 			b, err := p.Bots.CreateBot(ctx, name, token, group)
-			return b.ID, b.Username, err
+			return secretreq.TokenRequestBot{ID: b.ID, Username: b.Username, GroupAssignmentFailed: b.GroupAssignmentFailed}, err
 		}}).Register(p.API.Mux)
 	p.Go(secretAsks.RunExpiry)
 	rules := &alerts.Rules{S: p.Metrics, Notes: notes, Bots: func(ctx context.Context) []int64 {
@@ -337,6 +337,32 @@ func New(ctx context.Context, cfg config.Panel, log *slog.Logger) (*Panel, error
 		return nil, err
 	}
 	mcpServer.Groups = p.Bots.Groups
+	mcpServer.TestBotParents = func(ctx context.Context) (map[int64]int64, error) {
+		var list []core.Bot
+		if err := p.Core.Call(ctx, "bots.list", struct{}{}, &list); err != nil {
+			return nil, err
+		}
+		parents := make(map[int64]int64)
+		for _, b := range list {
+			if b.TestFor != 0 {
+				parents[b.ID] = b.TestFor
+			}
+		}
+		return parents, nil
+	}
+	mcpServer.TrialTargets = func(ctx context.Context, botID int64) (attached, active int64, err error) {
+		var trial core.TrialInfo
+		if err := p.Core.Call(ctx, "trial.get", botID, &trial); err != nil {
+			return 0, 0, err
+		}
+		if trial.TestBot != nil {
+			attached = trial.TestBot.ID
+		}
+		if trial.Trial != nil {
+			active = trial.Trial.TestBotID
+		}
+		return attached, active, nil
+	}
 	mcpServer.DB = p.DB
 	mcpServer.Notes = notes
 	mcpServer.Secrets = secretAsks

@@ -12,14 +12,21 @@ import (
 	"github.com/SnimanOff/UTBPanel/backend/internal/audit"
 )
 
+// TokenRequestBot is the result of creating a bot from an owner's token.
+type TokenRequestBot struct {
+	ID                    int64  `json:"bot_id"`
+	Username              string `json:"username"`
+	GroupAssignmentFailed bool   `json:"group_assignment_failed,omitempty"`
+}
+
 // API serves the requests: an AI asks, the owner answers.
 type API struct {
 	Store *Store
 	// Exists checks the bot of a request.
 	Exists func(ctx context.Context, botID int64) error
 	// CreateBot makes the bot of a new-bot request from the owner's token
-	// (the core checks it with getMe); it returns the new id.
-	CreateBot func(ctx context.Context, name, token string, groupID int64) (int64, string, error)
+	// (the core checks it with getMe).
+	CreateBot func(ctx context.Context, name, token string, groupID int64) (TokenRequestBot, error)
 	// WriteError reports core errors (Telegram's answer as is).
 	WriteError func(http.ResponseWriter, error)
 }
@@ -119,15 +126,17 @@ func (a *API) Register(mux *api.Mux) {
 			return
 		}
 		// getMe failures come back to the owner; the request keeps waiting.
-		botID, username, err := a.CreateBot(r.Context(), req.BotName, in.Token, req.GroupID)
+		b, err := a.CreateBot(r.Context(), req.BotName, in.Token, req.GroupID)
 		if err != nil {
 			a.WriteError(w, err)
 			return
 		}
-		a.Store.Created(r.Context(), req.ID, botID, api.CallerFrom(r.Context()).Name)
-		audit.Annotate(r, "bot.create", req.BotName, map[string]any{"username": username, "token": "изменено", "request": req.ID})
-		audit.SetBot(r, botID)
-		api.WriteJSON(w, 201, map[string]any{"bot_id": botID, "username": username})
+		a.Store.Created(r.Context(), req.ID, b.ID, api.CallerFrom(r.Context()).Name)
+		audit.Annotate(r, "bot.create", req.BotName, map[string]any{
+			"username": b.Username, "token": "изменено", "request": req.ID, "group_assignment_failed": b.GroupAssignmentFailed,
+		})
+		audit.SetBot(r, b.ID)
+		api.WriteJSON(w, http.StatusCreated, b)
 	}))
 }
 
